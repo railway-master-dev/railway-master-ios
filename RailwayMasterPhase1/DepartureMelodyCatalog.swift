@@ -57,7 +57,7 @@ public final class DepartureMelodyCatalog {
             let direction = (state & 1) == 0 ? 1 : -1
             previous = min(scale.count - 1, max(0, previous + direction * step))
             let frequency = scale[previous] * ((index == count - 1 && (seed & 2) != 0) ? 2.0 : 1.0)
-            notes.append(.init(offset: offset, frequencyHz: frequency, duration: 0.22 + Float(index % 2) * 0.035, intensity: 0.46))
+            notes.append(.init(offset: offset, frequencyHz: frequency, duration: 0.22 + Double(index % 2) * 0.035, intensity: 0.46))
             offset += 0.18
         }
         return DepartureMelodyDefinition(notes: notes)
