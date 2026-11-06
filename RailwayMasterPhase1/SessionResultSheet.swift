@@ -263,8 +263,8 @@ struct SessionResultSheet: View {
 
     private func tracePlot(
         points: [RunTracePoint],
-        value: (RunTracePoint) -> Double,
-        limit: (RunTracePoint) -> Double?,
+        value: @escaping (RunTracePoint) -> Double,
+        limit: @escaping (RunTracePoint) -> Double?,
         tint: Color,
         title: String
     ) -> some View {
