@@ -43,7 +43,10 @@ if not errors:
         errors.append("Package.swift unexpectedly adds an external package dependency")
     if 'platforms: [.iOS(.v17)]' not in package:
         errors.append("iOS 17 deployment platform declaration missing")
-    if 'resources: [.process("Resources")]' not in package:
+    # .copy is required (not .process): .process flattens directory contents into
+    # the bundle root, losing Generated3D/HighFidelityAssets and breaking the
+    # subdirectory lookups in GeneratedRailwayAssetCatalog (CI package-tests).
+    if 'resources: [.process("Resources")]' not in package and 'resources: [.copy("Resources")]' not in package:
         errors.append("procedural GLB and station resources are not copied into the SwiftPM bundle")
     if "cubic-Hermite" not in geometry or "SceneRouteFrame" not in geometry or "tangentPerMeter" not in geometry:
         errors.append("chainage curve interpolation/tangent frame contract missing")
