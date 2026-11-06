@@ -15,6 +15,12 @@ let package = Package(
             name: "RailwayVehicleHighFidelity",
             dependencies: [.product(name: "RailwayAudioEnhancements", package: "RailwayAudioEnhancements")]
         ),
-        .testTarget(name: "RailwayVehicleHighFidelityTests", dependencies: ["RailwayVehicleHighFidelity"])
+        .testTarget(
+            name: "RailwayVehicleHighFidelityTests",
+            dependencies: [
+                "RailwayVehicleHighFidelity",
+                .product(name: "RailwayAudioEnhancements", package: "RailwayAudioEnhancements")
+            ]
+        )
     ]
 )
