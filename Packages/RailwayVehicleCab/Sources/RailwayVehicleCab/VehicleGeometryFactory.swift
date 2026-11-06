@@ -29,7 +29,13 @@ enum VehicleGeometryFactory {
         material: SimpleMaterial,
         in parent: Entity
     ) -> ModelEntity {
-        let entity = ModelEntity(mesh: .generateCylinder(height: length, radius: radius), materials: [material])
+        let mesh: MeshResource
+        if #available(iOS 18.0, *) {
+            mesh = .generateCylinder(height: length, radius: radius)
+        } else {
+            mesh = FallbackCylinderMesh.make(height: length, radius: radius)
+        }
+        let entity = ModelEntity(mesh: mesh, materials: [material])
         entity.name = name
         entity.position = position
         let yAxis = SIMD3<Float>(0, 1, 0)
@@ -67,9 +73,67 @@ enum VehicleGeometryFactory {
     }
 }
 
+/// Cylinder mesh built with a MeshDescriptor for iOS 17, where
+/// `MeshResource.generateCylinder(height:radius:)` is unavailable.
+/// Matches generateCylinder's placement: height along the Y axis, centered at the origin.
+enum FallbackCylinderMesh {
+    static func make(height: Float, radius: Float, radialSegments: Int = 24) -> MeshResource {
+        let halfHeight = height / 2
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var indices: [UInt32] = []
+
+        // Side wall with smooth radial normals.
+        for step in 0...radialSegments {
+            let theta = Float(step) / Float(radialSegments) * 2 * .pi
+            let direction = SIMD3<Float>(cos(theta), 0, sin(theta))
+            positions.append(SIMD3<Float>(direction.x * radius, -halfHeight, direction.z * radius))
+            normals.append(direction)
+            positions.append(SIMD3<Float>(direction.x * radius, halfHeight, direction.z * radius))
+            normals.append(direction)
+        }
+        for step in 0..<radialSegments {
+            let bottom0 = UInt32(step * 2)
+            let top0 = bottom0 + 1
+            let bottom1 = bottom0 + 2
+            let top1 = bottom0 + 3
+            indices.append(contentsOf: [bottom0, top0, bottom1, top0, top1, bottom1])
+        }
+
+        // End caps with flat normals: one center vertex plus a dedicated ring each.
+        for (sign, y) in [(Float(1), halfHeight), (Float(-1), -halfHeight)] {
+            let centerIndex = UInt32(positions.count)
+            positions.append(SIMD3<Float>(0, y, 0))
+            normals.append(SIMD3<Float>(0, sign, 0))
+            let ringStart = UInt32(positions.count)
+            for step in 0...radialSegments {
+                let theta = Float(step) / Float(radialSegments) * 2 * .pi
+                positions.append(SIMD3<Float>(radius * cos(theta), y, radius * sin(theta)))
+                normals.append(SIMD3<Float>(0, sign, 0))
+            }
+            for step in 0..<radialSegments {
+                let a = ringStart + UInt32(step)
+                let b = a + 1
+                if sign > 0 {
+                    indices.append(contentsOf: [centerIndex, b, a])
+                } else {
+                    indices.append(contentsOf: [centerIndex, a, b])
+                }
+            }
+        }
+
+        var descriptor = MeshDescriptor(name: "fallback-cylinder")
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.primitives = .triangles(indices)
+        // The descriptor is built entirely from the values above, so generation cannot fail.
+        return try! MeshResource.generate(from: [descriptor])
+    }
+}
+
 enum VehicleMaterialPalette {
     static func paint(_ color: UIColor, roughness: Float = 0.48, metallic: Bool = false) -> SimpleMaterial {
-        SimpleMaterial(color: color, roughness: roughness, isMetallic: metallic)
+        SimpleMaterial(color: color, roughness: .init(floatLiteral: roughness), isMetallic: metallic)
     }
 
     static let body = paint(UIColor(red: 0.78, green: 0.80, blue: 0.78, alpha: 1), roughness: 0.38, metallic: true)
