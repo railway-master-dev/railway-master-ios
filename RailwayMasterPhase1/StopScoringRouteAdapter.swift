@@ -33,7 +33,7 @@ enum StopScoringRouteAdapter {
         )
         let mainlineLengthM = plan.network.mainlineLengthKm * 1_000
         let routeLengthM = trip.profile.distanceM
-        let junctionChainageM = stationPlanByID[plan.network.branchJunctionStationID]?.chainageKm.multiplied(by: 1_000)
+        let junctionChainageM = stationPlanByID[plan.network.branchJunctionStationID]?.chainageKm * 1_000
 
         var adjustedStops = trip.stops
         var definitions: [StopScoring.StationStopDefinition] = []
