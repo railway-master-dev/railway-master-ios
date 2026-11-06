@@ -41,6 +41,21 @@ jobs:
             TestResults.xcresult
           if-no-files-found: ignore
           retention-days: 14
+  screenshots:
+    needs: build-and-test
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash Scripts/ci_run.sh screenshots
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
   package-tests:
     needs: static-checks
     runs-on: macos-15
