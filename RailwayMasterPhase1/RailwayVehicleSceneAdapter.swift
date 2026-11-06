@@ -117,7 +117,7 @@ final class RailwayVehicleSceneAdapter {
     private static func makeBar(name: String, center: SIMD3<Float>, width: Float, in parent: Entity) -> ReadoutBar {
         let entity = ModelEntity(
             mesh: .generateBox(size: SIMD3<Float>(width, 0.012, 0.012)),
-            materials: [SimpleMaterial(color: UIColor(red: 0.17, green: 0.88, blue: 0.63, alpha: 1), roughness: 0.3)]
+            materials: [SimpleMaterial(color: UIColor(red: 0.17, green: 0.88, blue: 0.63, alpha: 1), roughness: 0.3, isMetallic: false)]
         )
         entity.name = name
         entity.position = center
@@ -129,7 +129,7 @@ final class RailwayVehicleSceneAdapter {
     private static func makeIndicator(name: String, center: SIMD3<Float>, color: UIColor, in parent: Entity) -> ModelEntity {
         let entity = ModelEntity(
             mesh: .generateBox(size: SIMD3<Float>(0.035, 0.035, 0.012)),
-            materials: [SimpleMaterial(color: color, roughness: 0.25)]
+            materials: [SimpleMaterial(color: color, roughness: 0.25, isMetallic: false)]
         )
         entity.name = name
         entity.position = center
@@ -208,7 +208,7 @@ private struct SevenSegmentDigit {
             .lowerRight: (SIMD3(width * 0.5 - thickness * 0.5, -verticalLength * 0.5 - thickness * 0.15, 0), SIMD3(thickness, verticalLength, 0.012)),
             .bottom: (SIMD3(0, -half, 0), SIMD3(width, thickness, 0.012))
         ]
-        let material = SimpleMaterial(color: UIColor(red: 1.0, green: 0.73, blue: 0.24, alpha: 1), roughness: 0.25)
+        let material = SimpleMaterial(color: UIColor(red: 1.0, green: 0.73, blue: 0.24, alpha: 1), roughness: 0.25, isMetallic: false)
         var created: [Segment: ModelEntity] = [:]
         for segment in Segment.allCases {
             guard let (offset, size) = positions[segment] else { continue }
