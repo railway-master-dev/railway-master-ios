@@ -224,7 +224,7 @@ public struct TrainParameters: Codable, Sendable {
     )
 }
 
-public struct RouteSection: Codable, Sendable {
+public struct RouteSection: Codable, Equatable, Sendable {
     public let startM: Double
     public let endM: Double
     public let gradientPermille: Double
@@ -310,7 +310,7 @@ public struct RouteCondition: Sendable {
 }
 
 /// 架空の1駅間。勾配・曲線・速度制限・トンネル抵抗をJSONの区間データで定義します。
-public struct RailwayRouteProfile: Codable, Sendable {
+public struct RailwayRouteProfile: Codable, Equatable, Sendable {
     public let lineName: String
     public let departureStation: String
     public let arrivalStation: String
