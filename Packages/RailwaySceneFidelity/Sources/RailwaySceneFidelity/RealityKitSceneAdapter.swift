@@ -147,9 +147,12 @@ public final class RailwayRealityKitSceneAdapter {
 
     private func makeMaterial(for style: SceneMaterialStyle, weather: SceneSurfaceWeather) -> SimpleMaterial {
         let (color, roughness, metallic) = materialParameters(for: style, weather: weather)
-        var material = SimpleMaterial(color: color, roughness: roughness, isMetallic: metallic)
+        var material = SimpleMaterial(color: color, roughness: .init(floatLiteral: roughness), isMetallic: metallic)
         if let texture = albedoTexture(for: style) {
-            material.baseColor = .init(tint: color, texture: .init(texture))
+            // SimpleMaterial has no tint+texture color parameter; the tint is
+            // applied through tintColor, which multiplies the base texture.
+            material.baseColor = .texture(texture)
+            material.tintColor = color
         }
         return material
     }
@@ -215,8 +218,8 @@ public final class RailwayRealityKitSceneAdapter {
             blue: min(max(blue * wetDarkening * (1 - snowTint) + snowColor * snowTint, 0), 1),
             alpha: alpha
         )
-        let dryRoughness = baseRoughness * (1 - wetness * 0.72)
-        let roughness = min(max(dryRoughness * (1 - snowTint) + 0.94 * snowTint, 0.04), 1)
+        let dryRoughness = baseRoughness * (1 - Float(wetness) * 0.72)
+        let roughness = min(max(dryRoughness * (1 - Float(snowTint)) + 0.94 * Float(snowTint), 0.04), 1)
         return (color, roughness, metallic)
     }
 
