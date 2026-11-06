@@ -335,7 +335,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var renderQualitySettings = RenderQualityResolver.resolve(profile: .balanced, thermalCondition: .nominal)
     private var precipitationEntities: [ModelEntity] = []
     private var precipitationKind: RenderingWeather?
-    private var currentSample = RouteSample(distanceM: 0, x: 0, z: 0, heading: 0)
+    private var currentSample = RouteSample(distanceM: 0, x: 0, z: 0, heading: 0, bankRadians: 0)
     private var currentSimulationTime = 0.0
     private var previousRenderTime: Double?
     private var cameraWorldPosition = SIMD3<Float>(0, 0, 0)
@@ -348,30 +348,30 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var currentCabDesk = FictionalCabAndSoundCatalog.fieldChopper
     private var lastSceneFidelityBuildChainage = Double.nan
 
-    private let ballastMaterial = Self.pbr(UIColor(red: 0.25, green: 0.26, blue: 0.25, alpha: 1), roughness: 0.96)
-    private let sleeperMaterial = Self.pbr(UIColor(red: 0.34, green: 0.27, blue: 0.19, alpha: 1), roughness: 0.88)
-    private let railMaterial = Self.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
-    private let concreteMaterial = Self.pbr(UIColor(red: 0.49, green: 0.51, blue: 0.50, alpha: 1), roughness: 0.87)
-    private let poleMaterial = Self.pbr(UIColor(red: 0.34, green: 0.37, blue: 0.36, alpha: 1), metallic: 0.62, roughness: 0.42)
-    private let wireMaterial = Self.pbr(UIColor(red: 0.68, green: 0.66, blue: 0.57, alpha: 1), metallic: 0.84, roughness: 0.24)
-    private let roadMaterial = Self.pbr(UIColor(red: 0.17, green: 0.18, blue: 0.18, alpha: 1), roughness: 0.78)
-    private let glassMaterial = Self.pbr(UIColor(red: 0.12, green: 0.26, blue: 0.31, alpha: 1), metallic: 0.18, roughness: 0.20)
+    private let ballastMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.25, green: 0.26, blue: 0.25, alpha: 1), roughness: 0.96)
+    private let sleeperMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.34, green: 0.27, blue: 0.19, alpha: 1), roughness: 0.88)
+    private let railMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
+    private let concreteMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.49, green: 0.51, blue: 0.50, alpha: 1), roughness: 0.87)
+    private let poleMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.34, green: 0.37, blue: 0.36, alpha: 1), metallic: 0.62, roughness: 0.42)
+    private let wireMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.66, blue: 0.57, alpha: 1), metallic: 0.84, roughness: 0.24)
+    private let roadMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.17, green: 0.18, blue: 0.18, alpha: 1), roughness: 0.78)
+    private let glassMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.12, green: 0.26, blue: 0.31, alpha: 1), metallic: 0.18, roughness: 0.20)
     private let roofMaterials = [
-        Self.pbr(UIColor(red: 0.28, green: 0.23, blue: 0.20, alpha: 1), roughness: 0.84),
-        Self.pbr(UIColor(red: 0.34, green: 0.30, blue: 0.25, alpha: 1), roughness: 0.82),
-        Self.pbr(UIColor(red: 0.22, green: 0.26, blue: 0.28, alpha: 1), metallic: 0.12, roughness: 0.71)
+        RailwaySceneWorld.pbr(UIColor(red: 0.28, green: 0.23, blue: 0.20, alpha: 1), roughness: 0.84),
+        RailwaySceneWorld.pbr(UIColor(red: 0.34, green: 0.30, blue: 0.25, alpha: 1), roughness: 0.82),
+        RailwaySceneWorld.pbr(UIColor(red: 0.22, green: 0.26, blue: 0.28, alpha: 1), metallic: 0.12, roughness: 0.71)
     ]
     private let buildingMaterials = [
-        Self.pbr(UIColor(red: 0.68, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.89),
-        Self.pbr(UIColor(red: 0.54, green: 0.60, blue: 0.59, alpha: 1), roughness: 0.86),
-        Self.pbr(UIColor(red: 0.67, green: 0.57, blue: 0.49, alpha: 1), roughness: 0.91),
-        Self.pbr(UIColor(red: 0.58, green: 0.57, blue: 0.53, alpha: 1), roughness: 0.88),
-        Self.pbr(UIColor(red: 0.57, green: 0.63, blue: 0.65, alpha: 1), metallic: 0.06, roughness: 0.7)
+        RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.89),
+        RailwaySceneWorld.pbr(UIColor(red: 0.54, green: 0.60, blue: 0.59, alpha: 1), roughness: 0.86),
+        RailwaySceneWorld.pbr(UIColor(red: 0.67, green: 0.57, blue: 0.49, alpha: 1), roughness: 0.91),
+        RailwaySceneWorld.pbr(UIColor(red: 0.58, green: 0.57, blue: 0.53, alpha: 1), roughness: 0.88),
+        RailwaySceneWorld.pbr(UIColor(red: 0.57, green: 0.63, blue: 0.65, alpha: 1), metallic: 0.06, roughness: 0.7)
     ]
     private let foliageMaterials = [
-        Self.pbr(UIColor(red: 0.18, green: 0.31, blue: 0.20, alpha: 1), roughness: 0.98),
-        Self.pbr(UIColor(red: 0.28, green: 0.36, blue: 0.21, alpha: 1), roughness: 0.98),
-        Self.pbr(UIColor(red: 0.22, green: 0.32, blue: 0.27, alpha: 1), roughness: 0.98)
+        RailwaySceneWorld.pbr(UIColor(red: 0.18, green: 0.31, blue: 0.20, alpha: 1), roughness: 0.98),
+        RailwaySceneWorld.pbr(UIColor(red: 0.28, green: 0.36, blue: 0.21, alpha: 1), roughness: 0.98),
+        RailwaySceneWorld.pbr(UIColor(red: 0.22, green: 0.32, blue: 0.27, alpha: 1), roughness: 0.98)
     ]
 
     func prepare(
