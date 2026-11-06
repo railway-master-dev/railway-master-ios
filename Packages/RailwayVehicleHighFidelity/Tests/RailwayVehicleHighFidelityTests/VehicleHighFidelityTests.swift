@@ -1,4 +1,5 @@
 import XCTest
+import RailwayAudioEnhancements
 import RealityKit
 import simd
 @testable import RailwayVehicleHighFidelity
@@ -106,7 +107,9 @@ final class VehicleHighFidelityTests: XCTestCase {
     }
 
     func testCabIndicatorStateControlsAllFictionalAnnunciatorLenses() throws {
-        let model = RailwayVehicleHighFidelityBuilder.build()
+        // Annunciator lenses (IndicatorLens_*) are only emitted for center-monitor
+        // desks; the default fieldChopper desk uses its ChopperLamp row instead.
+        let model = RailwayVehicleHighFidelityBuilder.build(desk: FictionalCabAndSoundCatalog.vvvf)
         let atc = try XCTUnwrap(findEntity(named: "IndicatorLens_ATC", in: model.root))
         let door = try XCTUnwrap(findEntity(named: "IndicatorLens_DOOR", in: model.root))
         let fault = try XCTUnwrap(findEntity(named: "IndicatorLens_FAULT", in: model.root))
