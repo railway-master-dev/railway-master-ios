@@ -10,7 +10,10 @@ let package = Package(
     targets: [
         .target(
             name: "RailwaySceneFidelity",
-            resources: [.process("Resources")]
+            // .copy (not .process): .process flattens directory contents into the
+            // bundle root, which would lose Generated3D/HighFidelityAssets and
+            // break the subdirectory lookups in GeneratedRailwayAssetCatalog.
+            resources: [.copy("Resources")]
         ),
         .testTarget(name: "RailwaySceneFidelityTests", dependencies: ["RailwaySceneFidelity"])
     ]
