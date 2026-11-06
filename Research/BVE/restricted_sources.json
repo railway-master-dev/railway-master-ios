@@ -1,0 +1,312 @@
+[
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://sites.google.com/view/wojia/bve-top/Saiyo_honsen",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1-ZolBYnbNoXk3xSUtQ6HVdzjaMAaQiWn/view?usp=sharing",
+    "catalog_entry_label": [
+      "東海道本線 (湘南新宿ライン)",
+      "西陽本線"
+    ],
+    "restriction_categories": [],
+    "reuse_or_redistribution_terms": [
+      "・同封されているddsファイルの転載禁止",
+      "・改造等の有無にかかわらず、ストラクチャ,画像単体での公開禁止",
+      "当データはbveの路線データに組み込んでの公開は改造の有無を問わず自由です。公開の際に連絡の必要はありません。またbve用のストラクチャ単体での再配布も、何らかの改造を加えたものであれば一切問題ありません。",
+      "）。テクスチャ・データそのものの改変・再配布などは一切禁止します。",
+      "本作品の再配布はご遠慮ください。何らかの事情でうまく作品がダウンロードできない場合はまず少なくとも半日時間を置き、アクセス過多等が原因でない場合はご連絡をお願いします。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://tyandoray.blogspot.com/2024/01/bve56-ver11.html",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1DXjrbt-RBvVjwvdYMX5IZ4Mhf02phltP/view?usp=sharing",
+    "catalog_entry_label": [
+      "予讃線"
+    ],
+    "restriction_categories": [
+      "BVE外利用・転用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [
+      "改造の有無にかかわらず、無断転載・二次配布・bve以外の用途への転用は認めません。",
+      "ストラクチャデータ単体での再配布はいかなる場合においても禁止です。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1dIWgmu-CQNGxxslb9AUSQCqIDAsiXkOE",
+    "catalog_entry_label": [
+      "新宿線"
+    ],
+    "restriction_categories": [
+      "二次利用・参照利用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [
+      "無断転載や二次配布は禁止です。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://sites.google.com/view/wojia/bve-top/%E6%A8%AA%E9%A0%88%E8%B3%80%E7%B7%9A%E6%B9%98%E5%8D%97%E6%96%B0%E5%AE%BF%E3%83%A9%E3%82%A4%E3%83%B3",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1CE5ZbgR1HCE1g6SYPWZwdJVaco02_wSN/view?usp=sharing",
+    "catalog_entry_label": [
+      "東海道本線 (湘南新宿ライン)",
+      "西陽本線"
+    ],
+    "restriction_categories": [],
+    "reuse_or_redistribution_terms": [
+      "本作品の再配布はご遠慮ください。何らかの事情でうまく作品がダウンロードできない場合はまず少なくとも半日時間を置き、アクセス過多等が原因でない場合はご連絡をお願いします。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://kty-bvememo.hatenablog.jp/",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://kantanbay-bve.coresv.com/data/yodoN_250401.7z",
+    "catalog_entry_label": [
+      "予土線",
+      "篠栗線 (福北ゆたか線)"
+    ],
+    "restriction_categories": [],
+    "reuse_or_redistribution_terms": [
+      "なお、ストラクチャ単体での二次公開は禁止します。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://sites.google.com/view/touhigumi/bve/route/nambu-line",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1YYq4Fy1J4e1Jigt7VXcGELP4lolf541E/view?usp=sharing",
+    "catalog_entry_label": [
+      "南武線"
+    ],
+    "restriction_categories": [],
+    "reuse_or_redistribution_terms": [
+      "・このデータは借り物が多いため、再配布は禁止とさせていただきます。",
+      "・路線データの再配布は禁止です。データの改造、改変とパッチ公開についてはこのページ下部の内容を確認してください。",
+      "未改造に近い状態での再配布は不可とします。",
+      "開拓鉄道は著作権を一切破棄しておりません。加工を行わず、単体での二次配布は固く禁止させていただきます。",
+      "ストラクチャ単体での無改造での再配布はご遠慮ください。",
+      "ただし、この素材を単体で配布する事や、改造品単体を配布することは禁止です。",
+      "・再配布は禁止いたします。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://yokokotsukurara.jimdofree.com/%E7%99%BD%E9%83%A8%E9%AB%98%E9%80%9F%E9%89%84%E9%81%93%E7%B7%9A/",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1cGzUEpiaS0Xlgt9UqeZ26hdImYOAdb2d/view?usp=sharing",
+    "catalog_entry_label": [
+      "白部高速鉄道線"
+    ],
+    "restriction_categories": [
+      "BVE外利用・転用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "http://blog.livedoor.jp/nf4_bve/archives/37629044.html",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/open?id=1d1bwv7JdPPWYxwefoM-8uBAeEIbkFgse",
+    "catalog_entry_label": [
+      "新浜線"
+    ],
+    "restriction_categories": [],
+    "reuse_or_redistribution_terms": [
+      "データの一部または全部を複製または改変、データの二次使用、再配布は一切禁止いたします。",
+      "◆本データはフリー素材ですので、改造･公開は自由にできます。ただし、単体での公開は禁止です。",
+      "ファイルの著作権は『initg』にあります。『bveの路線に組み込む形』以外での転載は一切認められません。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://www.tokaido-kun.jp/download.html",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://pxcax9ay.user.webaccel.jp/wp-content/uploads/2017/07/225_run_Bridge.zip",
+    "catalog_entry_label": [
+      "アローラ鉄道 アローラ鉄道線"
+    ],
+    "restriction_categories": [
+      "BVE外利用・転用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://tunaleeks52149.jimdofree.com/bve-%E3%82%A2%E3%83%89%E3%82%AA%E3%83%B3-%E6%9C%88%E8%B7%AF%E6%9C%AC%E7%B7%9A-%E6%9E%B6%E7%A9%BA/%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89%E3%83%9A%E3%83%BC%E3%82%B8-%E5%9F%BA%E6%9C%AC%E3%82%BB%E3%83%83%E3%83%88/",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://www.dropbox.com/s/ssm8yrghchiiqp3/月路本線(架空)_Ver.2.1a(差分用).zip?dl=0",
+    "catalog_entry_label": [
+      "月路本線"
+    ],
+    "restriction_categories": [
+      "二次利用・参照利用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [
+      "データの一部含め、無断で転載、再配布、二次利用することは一切禁止とします。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://yokokotsukurara.jimdofree.com/%E7%99%BD%E9%83%A8%E9%AB%98%E9%80%9F%E9%89%84%E9%81%93%E7%B7%9A/",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://www.dropbox.com/s/u6q2fbg6d6rf5mn/白部高速鉄道線V2-3.zip?dl=0",
+    "catalog_entry_label": [
+      "白部高速鉄道線"
+    ],
+    "restriction_categories": [
+      "BVE外利用・転用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "route",
+    "creator": "See source page; not guessed",
+    "source_page": "https://tunaleeks52149.jimdofree.com/bve-%E3%82%A2%E3%83%89%E3%82%AA%E3%83%B3-%E6%9C%88%E8%B7%AF%E6%9C%AC%E7%B7%9A-%E6%9E%B6%E7%A9%BA/%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89%E3%83%9A%E3%83%BC%E3%82%B8-%E5%9F%BA%E6%9C%AC%E3%82%BB%E3%83%83%E3%83%88/",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%B7%AF%E7%B7%9A%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://www.dropbox.com/s/xbaoc1gcvwkjur8/月路本線(架空)_Ver.2.1a.zip?dl=0",
+    "catalog_entry_label": [
+      "月路本線"
+    ],
+    "restriction_categories": [
+      "二次利用・参照利用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [
+      "データの一部含め、無断で転載、再配布、二次利用することは一切禁止とします。",
+      "ただし、再配布は禁止いたします。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "vehicle",
+    "creator": "See source page; not guessed",
+    "source_page": "https://sites.google.com/view/shinozaki02s/addons-for-bve-trainsim/8000%E7%B3%BB%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1ecdH3CyCwRdTpF5Kv9CIooB8pAR0LRnn/view?usp=sharing",
+    "catalog_entry_label": [
+      "8000系"
+    ],
+    "restriction_categories": [
+      "二次利用・参照利用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [
+      "・本データに含まれる全てのファイルの再配布・二次利用は禁止です。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "vehicle",
+    "creator": "See source page; not guessed",
+    "source_page": "https://bve-westsyaryo.jimdofree.com/%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF/285%E7%B3%BB%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF/",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/open?id=1C_e5878YDSutnNpNZ6nZKIpx94Llt0Xw",
+    "catalog_entry_label": [
+      "285系",
+      "223系",
+      "285系",
+      "681系",
+      "智頭急行HOT7000形"
+    ],
+    "restriction_categories": [
+      "二次利用・参照利用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [
+      "無断での転載、データの二次利用は固くお断りいたします。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "vehicle",
+    "creator": "See source page; not guessed",
+    "source_page": "https://kty-bvememo.hatenablog.jp/",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://kantanbay-bve.coresv.com/data/yodoN_250401.7z",
+    "catalog_entry_label": [
+      "キハ120系",
+      "815系",
+      "817系",
+      "885系"
+    ],
+    "restriction_categories": [],
+    "reuse_or_redistribution_terms": [
+      "なお、ストラクチャ単体での二次公開は禁止します。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "vehicle",
+    "creator": "See source page; not guessed",
+    "source_page": "https://github.com/Tn-E235/bve_public_datas?tab=readme-ov-file",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1W_J3htQBnEWnmo5NalnRUDWrTQKm4AuA/view?usp=sharing",
+    "catalog_entry_label": [
+      "6000系"
+    ],
+    "restriction_categories": [],
+    "reuse_or_redistribution_terms": [
+      "2.二次配布は改造の有無を問わず禁止です。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  },
+  {
+    "category": "vehicle",
+    "creator": "See source page; not guessed",
+    "source_page": "https://sites.google.com/view/shinozaki02s/addons-for-bve-trainsim/5000%E7%B3%BB%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF",
+    "catalog_source_page": "https://wikiwiki.jp/bvets/BVE5%E5%AF%BE%E5%BF%9C%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7/%E8%BB%8A%E4%B8%A1%E3%83%87%E3%83%BC%E3%82%BF%E4%B8%80%E8%A6%A7%E8%A1%A8",
+    "download_url": "https://drive.google.com/file/d/1lkHA9wkHCkB_oj6iXOxPUacTzLZHXAvi/view?usp=sharing",
+    "catalog_entry_label": [
+      "8000系"
+    ],
+    "restriction_categories": [
+      "二次利用・参照利用の禁止"
+    ],
+    "reuse_or_redistribution_terms": [
+      "・本データに含まれるファイルの再配布・二次利用は禁止です。"
+    ],
+    "status": "not included in the analyzed-package inventory; terms preflight only; no route/vehicle configuration was parsed",
+    "archive_file_count": null
+  }
+]

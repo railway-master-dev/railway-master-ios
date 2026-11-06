@@ -1,0 +1,33 @@
+{
+  "routeID": "fictional-mainline-randomized-v1",
+  "seed": "0x6B6F6E79756E2026",
+  "routeLengthM": 60000,
+  "sectionStepM": 250,
+  "curveGeneration": {
+    "tangentLengthM": [
+      650,
+      2450
+    ],
+    "transitionLengthM": [
+      300,
+      500
+    ],
+    "circularLengthM": [
+      650,
+      2250
+    ],
+    "radiusM": [
+      650,
+      1850
+    ],
+    "cantMm": [
+      55,
+      105
+    ],
+    "direction": "seeded pseudo-random; consecutive alternation intentionally avoided; fixed seed makes runs/replays reproducible",
+    "transitionModel": "curvature ramps from 0 to 1/R and back over transition sections; radius varies progressively rather than hard switching"
+  },
+  "gradientModel": "sum of two low-frequency sine waves, direction-aware; fictional game-only placeholder",
+  "speedModel": "varied section speeds with station approach caps and curve-radius caps; verify with braking-distance and signal logic before treating as final gameplay data",
+  "disclaimer": "Synthetic route geometry only. Not surveyed, not a real railway, and not safe for real-world operating use."
+}

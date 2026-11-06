@@ -1,0 +1,111 @@
+{
+  "label": "FICTIONAL SIMULATION ONLY",
+  "warning": "架空のゲーム用データです。実在路線・実装置・実運転・安全判断・資格訓練には使用できません。",
+  "network": {
+    "id": "fictional-branch-demo",
+    "tracks": [
+      {
+        "id": "sim-main",
+        "lengthM": 1200,
+        "blocks": [
+          { "id": "b0", "trackID": "sim-main", "startM": 0, "endM": 400 },
+          { "id": "b1", "trackID": "sim-main", "startM": 400, "endM": 800 },
+          { "id": "b2", "trackID": "sim-main", "startM": 800, "endM": 1200 }
+        ]
+      }
+    ],
+    "equipment": [
+      { "id": "beacon-s", "trackID": "sim-main", "kind": "atsSBeacon", "positionM": 300 },
+      { "id": "profile-p", "trackID": "sim-main", "kind": "atsPProfileTarget", "positionM": 350, "targetPositionM": 600, "targetSpeedKmh": 0 },
+      { "id": "beacon-ps", "trackID": "sim-main", "kind": "atsPsSpeedBeacon", "positionM": 700, "targetSpeedKmh": 25, "supervisionDistanceM": 100 },
+      { "id": "command-atc", "trackID": "sim-main", "kind": "atcCommandZone", "positionM": 0, "targetSpeedKmh": 60, "zoneStartM": 0, "zoneEndM": 1200 },
+      { "id": "stop-ato", "trackID": "sim-main", "kind": "atoTarget", "positionM": 500, "targetPositionM": 1100, "targetSpeedKmh": 0 }
+    ],
+    "switches": [
+      { "id": "sw0", "trackID": "sim-main", "positionM": 820, "positions": ["main", "branch"] }
+    ],
+    "routes": [
+      { "id": "R-main", "trackID": "sim-main", "protectedBlockIDs": ["b1", "b2"], "requiredSwitchPositions": { "sw0": "main" }, "conflictsWithRouteIDs": ["R-branch"] },
+      { "id": "R-branch", "trackID": "sim-main", "protectedBlockIDs": ["b1", "b2"], "requiredSwitchPositions": { "sw0": "branch" }, "conflictsWithRouteIDs": ["R-main"] }
+    ],
+    "signals": [
+      { "id": "sig-b1", "trackID": "sim-main", "positionM": 380, "protectedBlockID": "b1", "governingRouteID": "R-main" },
+      { "id": "sig-b2", "trackID": "sim-main", "positionM": 780, "protectedBlockID": "b2", "governingRouteID": "R-main" }
+    ]
+  },
+  "systemsByTrain": {
+    "player": ["atsS", "atsP", "atsPs", "atc", "ato", "eb", "deadman"]
+  },
+  "fictionalConfiguration": {
+    "atssAcknowledgementTimeoutSeconds": 4,
+    "atspVirtualDecelerationMps2": 0.8,
+    "atsPsSpeedLimitKmh": 25,
+    "atsPsWindowM": 100,
+    "atcClearBlockSpeedCommandsKmh": { "0": 0, "1": 25, "2": 50, "3": 80 },
+    "warning": "すべて説明・テストを簡潔にするための架空ゲーム値で、実在の各社・各型式の設定値ではありません。"
+  },
+  "frames": [
+    {
+      "fixedTick": 1,
+      "timeSeconds": 0,
+      "trains": [
+        { "id": "player", "trackID": "sim-main", "frontPositionM": 250, "speedKmh": 50, "lengthM": 100, "direction": "increasingChainage" },
+        { "id": "lead", "trackID": "sim-main", "frontPositionM": 950, "speedKmh": 10, "lengthM": 100, "direction": "increasingChainage" }
+      ],
+      "switchPositions": { "sw0": "main" },
+      "routeRequests": {},
+      "operatorInputs": { "player": { "acknowledgeATSS": false, "driverActivityPulse": true, "deadmanHeld": true, "resetProtectionAtStop": false } },
+      "timetableAssignments": [
+        { "id": "schedule-1", "trainID": "player", "nextRouteID": "R-main", "plannedDepartureTimeSeconds": 30 }
+      ]
+    },
+    {
+      "fixedTick": 2,
+      "timeSeconds": 1,
+      "trains": [
+        { "id": "player", "trackID": "sim-main", "frontPositionM": 310, "speedKmh": 50, "lengthM": 100, "direction": "increasingChainage" },
+        { "id": "lead", "trackID": "sim-main", "frontPositionM": 950, "speedKmh": 10, "lengthM": 100, "direction": "increasingChainage" }
+      ],
+      "switchPositions": { "sw0": "main" },
+      "routeRequests": {},
+      "operatorInputs": { "player": { "acknowledgeATSS": false, "driverActivityPulse": false, "deadmanHeld": true, "resetProtectionAtStop": false } },
+      "timetableAssignments": [
+        { "id": "schedule-1", "trainID": "player", "nextRouteID": "R-main", "plannedDepartureTimeSeconds": 30 }
+      ]
+    },
+    {
+      "fixedTick": 3,
+      "timeSeconds": 2,
+      "trains": [
+        { "id": "player", "trackID": "sim-main", "frontPositionM": 580, "speedKmh": 50, "lengthM": 100, "direction": "increasingChainage" },
+        { "id": "lead", "trackID": "sim-main", "frontPositionM": 950, "speedKmh": 10, "lengthM": 100, "direction": "increasingChainage" }
+      ],
+      "switchPositions": { "sw0": "main" },
+      "routeRequests": {},
+      "operatorInputs": { "player": { "acknowledgeATSS": false, "driverActivityPulse": false, "deadmanHeld": true, "resetProtectionAtStop": false } },
+      "timetableAssignments": [
+        { "id": "schedule-1", "trainID": "player", "nextRouteID": "R-main", "plannedDepartureTimeSeconds": 30 }
+      ]
+    },
+    {
+      "fixedTick": 4,
+      "timeSeconds": 3,
+      "trains": [
+        { "id": "player", "trackID": "sim-main", "frontPositionM": 710, "speedKmh": 50, "lengthM": 100, "direction": "increasingChainage" },
+        { "id": "lead", "trackID": "sim-main", "frontPositionM": 950, "speedKmh": 10, "lengthM": 100, "direction": "increasingChainage" }
+      ],
+      "switchPositions": { "sw0": "main" },
+      "routeRequests": {},
+      "operatorInputs": { "player": { "acknowledgeATSS": false, "driverActivityPulse": false, "deadmanHeld": true, "resetProtectionAtStop": false } },
+      "timetableAssignments": [
+        { "id": "schedule-1", "trainID": "player", "nextRouteID": "R-main", "plannedDepartureTimeSeconds": 30 }
+      ]
+    }
+  ],
+  "expectedObservations": [
+    "PRC相当の架空プランナーがR-mainを提案するが、b2を占有する先行列車により連動モデルが拒否する。",
+    "列車位置が地上設備位置を通過するとATS-S相当の警報、ATS-Ps相当の速度指令受信イベントが別々に発生する。",
+    "ATS-P相当モデルは停止目標までの距離から連続包絡を計算し、ATC相当モデルは他列車の閉そく占有から速度指令を更新する。",
+    "ATOは目標停止位置に対する運転指令を出すだけで、物理状態を直接変更しない。CTC相当表示は同一tickの列車位置・進路結果を報告する。"
+  ]
+}

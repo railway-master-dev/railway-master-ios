@@ -1,0 +1,1698 @@
+{
+  "baseline_inventory": "/workspace/bve_research/analysis/inventory_final.csv",
+  "baseline_counts": {
+    "route": 51,
+    "vehicle": 57
+  },
+  "dedup_method": "SHA-256, separately within route and vehicle categories, including baseline inventory",
+  "results": [
+    {
+      "id": "bvestation-firr",
+      "category": "route",
+      "name": "FIRR Fictional Long Island Railroad",
+      "source_page": "https://www.bvestation.com/download/52/",
+      "archive_url": "https://www.bvestation.com/files/52/1_FIRR.7z",
+      "terms_url": "https://www.bvestation.com/download/52/",
+      "permission_scope": "CC BY-NC-SA 3.0; no hosting/repackaging elsewhere. Some objects remain copyrighted and require separate permission. Noncommercial only.",
+      "sha256": "cb0836618bba0d48d791b61599a026d1b2aca7cb69d6163832c107c49cb9787a",
+      "archive_bytes": 5042394,
+      "archive_file_count": 126,
+      "uncompressed_bytes": 12289934,
+      "static_config_file_count": 1,
+      "static_config_files": [
+        {
+          "path": "Railway/Route/FIRR/FIRR.csv",
+          "bytes": 9481,
+          "encoding": "utf-8",
+          "line_count": 541
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": false,
+        "speed_limit": false,
+        "signal": false,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": false,
+        "sound_event": false
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 2,
+        "gradient": 2,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 0,
+        "station_platform": 2,
+        "structure_object": 295,
+        "repeater": 0,
+        "sound_event": 0
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "bvestation-gline",
+      "category": "route",
+      "name": "NYCTA G Line Southbound",
+      "source_page": "https://www.bvestation.com/download/5/",
+      "archive_url": "https://www.bvestation.com/files/5/1_GtoSmith9th.7z",
+      "terms_url": "https://www.bvestation.com/download/5/",
+      "permission_scope": "CC BY-NC-SA 3.0; no hosting/repackaging elsewhere. Some route assets remain copyrighted and require separate permission. Noncommercial only.",
+      "sha256": "231e8f5dd585f4ea9339026fda48eecf861d9d844514691eb77c2d522fc153d5",
+      "archive_bytes": 19814719,
+      "archive_file_count": 1141,
+      "uncompressed_bytes": 121686259,
+      "static_config_file_count": 4,
+      "static_config_files": [
+        {
+          "path": "Railway/Route/NYCT-G(bklyn)/NYCT-G(toSmith-9th)All.csv",
+          "bytes": 169653,
+          "encoding": "utf-8",
+          "line_count": 1962
+        },
+        {
+          "path": "Railway/Route/NYCT-G(bklyn)/NYCT-G(toSmith-9th)AllExpress.csv",
+          "bytes": 169279,
+          "encoding": "utf-8",
+          "line_count": 1962
+        },
+        {
+          "path": "Railway/Route/NYCT-G(bklyn)/NYCT-G(toSmith-9th)BVE4Open.csv",
+          "bytes": 171100,
+          "encoding": "utf-8",
+          "line_count": 2026
+        },
+        {
+          "path": "Railway/Route/NYCT-G(bklyn)/NYCT-G(toSmith-9th)OpenBVEonlyRain.csv",
+          "bytes": 178793,
+          "encoding": "utf-8",
+          "line_count": 2087
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": false,
+        "speed_limit": false,
+        "signal": true,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": false,
+        "sound_event": false
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 264,
+        "gradient": 248,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 356,
+        "station_platform": 178,
+        "structure_object": 18681,
+        "repeater": 0,
+        "sound_event": 0
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "bvestation-r46",
+      "category": "vehicle",
+      "name": "R46 OpenBVE v3.0",
+      "source_page": "https://www.bvestation.com/download/17/",
+      "archive_url": "https://www.bvestation.com/files/17/1_R46%202014.7z",
+      "terms_url": "https://www.bvestation.com/download/17/",
+      "permission_scope": "Package page applies CC BY-NC-SA 3.0 to the train and contents; read embedded information and credit contributors. Noncommercial only.",
+      "sha256": "578c51b484b4240d7d6914a925143a6bf7c4cdb5fcb23cfdea615b8294d53ab8",
+      "archive_bytes": 46443080,
+      "archive_file_count": 811,
+      "uncompressed_bytes": 122210022,
+      "static_config_file_count": 22,
+      "static_config_files": [
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/train.txt",
+          "bytes": 1308,
+          "encoding": "utf-8",
+          "line_count": 42
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/train.txt",
+          "bytes": 1308,
+          "encoding": "utf-8",
+          "line_count": 42
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/ats.cfg",
+          "bytes": 11,
+          "encoding": "utf-8",
+          "line_count": 1
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/ats.cfg",
+          "bytes": 11,
+          "encoding": "utf-8",
+          "line_count": 1
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/Car Lengths/8 Car Set/extensions.cfg",
+          "bytes": 3099,
+          "encoding": "utf-8",
+          "line_count": 202
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/Car Lengths/8 Car Set/extensions.cfg",
+          "bytes": 3099,
+          "encoding": "utf-8",
+          "line_count": 202
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/extensions.cfg",
+          "bytes": 3099,
+          "encoding": "utf-8",
+          "line_count": 202
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/Car Lengths/4 Car Set/extensions.cfg",
+          "bytes": 1565,
+          "encoding": "utf-8",
+          "line_count": 101
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/Car Lengths/4 Car Set/extensions.cfg",
+          "bytes": 1565,
+          "encoding": "utf-8",
+          "line_count": 101
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/extensions.cfg",
+          "bytes": 1525,
+          "encoding": "utf-8",
+          "line_count": 101
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/Panel/Panel2.cfg",
+          "bytes": 1754,
+          "encoding": "utf-8-sig",
+          "line_count": 93
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/Panel/Panel2.cfg",
+          "bytes": 1754,
+          "encoding": "utf-8-sig",
+          "line_count": 93
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/Panel2.cfg",
+          "bytes": 11103,
+          "encoding": "utf-8-sig",
+          "line_count": 557
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/Panel2.cfg",
+          "bytes": 11103,
+          "encoding": "utf-8-sig",
+          "line_count": 557
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/sound.cfg",
+          "bytes": 1817,
+          "encoding": "cp932",
+          "line_count": 84
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/sound.cfg",
+          "bytes": 1817,
+          "encoding": "cp932",
+          "line_count": 84
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/Car Lengths/4 Car Set/train.dat",
+          "bytes": 17355,
+          "encoding": "utf-8-sig",
+          "line_count": 810
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/train.dat",
+          "bytes": 17355,
+          "encoding": "utf-8-sig",
+          "line_count": 810
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/Car Lengths/4 Car Set/train.dat",
+          "bytes": 17355,
+          "encoding": "utf-8-sig",
+          "line_count": 810
+        },
+        {
+          "path": "R46 2014/R46 2014 (4 Car)/Car Lengths/8 Car Set/train.dat",
+          "bytes": 34073,
+          "encoding": "utf-8-sig",
+          "line_count": 1189
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/Car Lengths/8 Car Set/train.dat",
+          "bytes": 34073,
+          "encoding": "utf-8-sig",
+          "line_count": 1189
+        },
+        {
+          "path": "R46 2014/R46 2014 (8 Car)/train.dat",
+          "bytes": 34073,
+          "encoding": "utf-8-sig",
+          "line_count": 1189
+        }
+      ],
+      "config_features_present": {
+        "curve": false,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": false,
+        "signal": false,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": false,
+        "sound_event": false
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 0,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 0,
+        "station_platform": 2,
+        "structure_object": 108,
+        "repeater": 0,
+        "sound_event": 0
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "hamatetsu-s01",
+      "category": "route",
+      "name": "JR Shizuoka Shizoka Main Line S01",
+      "source_page": "https://gitlab.com/hamatetsu_train/bvescenarios/-/tree/S01_Tokaido",
+      "archive_url": "https://gitlab.com/hamatetsu_train/bvescenarios/-/archive/S01_Tokaido/bvescenarios-S01_Tokaido.zip?ref_type=heads",
+      "terms_url": "https://gitlab.com/hamatetsu_train/bvescenarios/-/blob/main/README.md",
+      "permission_scope": "Explicit reference use; do not bundle/re-distribute unmodified route data. Modified derivatives are allowed with required notice; borrowed assets have separate terms.",
+      "sha256": "4f2cf45e902c4c890138b8aa8f764d4ca82e51a3efc670abcfa0f5270b8dd89c",
+      "archive_bytes": 112504873,
+      "archive_file_count": 4541,
+      "uncompressed_bytes": 391065937,
+      "static_config_file_count": 2,
+      "static_config_files": [
+        {
+          "path": "bvescenarios-S01_Tokaido/Scenarios/Hamatetsu/map_s01/Map_S01.txt",
+          "bytes": 2544,
+          "encoding": "utf-8-sig",
+          "line_count": 56
+        },
+        {
+          "path": "bvescenarios-S01_Tokaido/Scenarios/Hamatetsu/map_s01/Map_T01.txt",
+          "bytes": 2523,
+          "encoding": "utf-8-sig",
+          "line_count": 55
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": false,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 2,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 2,
+        "signal": 2,
+        "station_platform": 0,
+        "structure_object": 2,
+        "repeater": 26,
+        "sound_event": 2
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "hamatetsu-s03",
+      "category": "route",
+      "name": "JR Shizuoka Minobu Line S03",
+      "source_page": "https://gitlab.com/hamatetsu_train/bvescenarios/-/tree/S03_Minobu",
+      "archive_url": "https://gitlab.com/hamatetsu_train/bvescenarios/-/archive/S03_Minobu/bvescenarios-S03_Minobu.zip?ref_type=heads",
+      "terms_url": "https://gitlab.com/hamatetsu_train/bvescenarios/-/blob/main/README.md",
+      "permission_scope": "Explicit reference use; do not bundle/re-distribute unmodified route data. Modified derivatives are allowed with required notice; borrowed assets have separate terms.",
+      "sha256": "beac8b6f68dc1a4b0ad1b8b4990f781d8869f5d67a038d2e27ccfa6f4d313ab2",
+      "archive_bytes": 310082532,
+      "archive_file_count": 3261,
+      "uncompressed_bytes": 596072754,
+      "static_config_file_count": 1,
+      "static_config_files": [
+        {
+          "path": "bvescenarios-S03_Minobu/Scenarios/Hamatetsu/map_s03/Map_S03.txt",
+          "bytes": 2385,
+          "encoding": "utf-8-sig",
+          "line_count": 48
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": false,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": false
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 1,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 1,
+        "signal": 1,
+        "station_platform": 0,
+        "structure_object": 1,
+        "repeater": 17,
+        "sound_event": 0
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "hamatetsu-s98",
+      "category": "route",
+      "name": "JR Shizuoka Numazu Port Line S98",
+      "source_page": "https://gitlab.com/hamatetsu_train/bvescenarios/-/tree/S98_Numazu",
+      "archive_url": "https://gitlab.com/hamatetsu_train/bvescenarios/-/archive/S98_Numazu/bvescenarios-S98_Numazu.zip?ref_type=heads",
+      "terms_url": "https://gitlab.com/hamatetsu_train/bvescenarios/-/blob/main/README.md",
+      "permission_scope": "Explicit reference use; do not bundle/re-distribute unmodified route data. Modified derivatives are allowed with required notice; borrowed assets have separate terms.",
+      "sha256": "147150af0eec188d9f8fb37baf554997f8e7836a90718ae2fe3c074da0e35445",
+      "archive_bytes": 67069238,
+      "archive_file_count": 2802,
+      "uncompressed_bytes": 323479925,
+      "static_config_file_count": 1,
+      "static_config_files": [
+        {
+          "path": "bvescenarios-S98_Numazu/Scenarios/Hamatetsu/map_s98/Map_S98.txt",
+          "bytes": 1745,
+          "encoding": "utf-8-sig",
+          "line_count": 39
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": false,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 1,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 1,
+        "signal": 1,
+        "station_platform": 0,
+        "structure_object": 1,
+        "repeater": 5,
+        "sound_event": 1
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "hamatetsu-s99",
+      "category": "route",
+      "name": "JR Shizuoka Shimizu Port Line S99",
+      "source_page": "https://gitlab.com/hamatetsu_train/bvescenarios/-/tree/S99_Shimizu",
+      "archive_url": "https://gitlab.com/hamatetsu_train/bvescenarios/-/archive/S99_Shimizu/bvescenarios-S99_Shimizu.zip?ref_type=heads",
+      "terms_url": "https://gitlab.com/hamatetsu_train/bvescenarios/-/blob/main/README.md",
+      "permission_scope": "Explicit reference use; do not bundle/re-distribute unmodified route data. Modified derivatives are allowed with required notice; borrowed assets have separate terms.",
+      "sha256": "4fe42550debf8a6ae27fa2ed2bd92c036dd41aa4c3a109522b7b3341f1fb8b5b",
+      "archive_bytes": 56740812,
+      "archive_file_count": 1528,
+      "uncompressed_bytes": 295949368,
+      "static_config_file_count": 1,
+      "static_config_files": [
+        {
+          "path": "bvescenarios-S99_Shimizu/Scenarios/Hamatetsu/S99_N.txt",
+          "bytes": 3028,
+          "encoding": "utf-8-sig",
+          "line_count": 74
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 1,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 1,
+        "signal": 1,
+        "station_platform": 1,
+        "structure_object": 1,
+        "repeater": 17,
+        "sound_event": 1
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "shtr-fukutoshin",
+      "category": "route",
+      "name": "BVE Fukutoshin Line",
+      "source_page": "https://shtr-m.net/bve/fukutoshin.html",
+      "archive_url": "https://shtr-m.net/bve/data/f50_141010a.zip",
+      "terms_url": "https://shtr-m.net/bve/read_me.html",
+      "permission_scope": "Narrow route Map Include/publication and author Structures/Sounds reference permissions; not blanket package reuse or redistribution.",
+      "sha256": "9892474225c550a39c532ad5b684adde8267b0a7282e8991fb6899b405f5d5d9",
+      "archive_bytes": 28280128,
+      "archive_file_count": 1325,
+      "uncompressed_bytes": 54179382,
+      "static_config_file_count": 64,
+      "static_config_files": [
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map1.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map10.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map11.txt",
+          "bytes": 660,
+          "encoding": "cp932",
+          "line_count": 36
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map2.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map3.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map4.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map5.txt",
+          "bytes": 614,
+          "encoding": "cp932",
+          "line_count": 32
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map6.txt",
+          "bytes": 614,
+          "encoding": "cp932",
+          "line_count": 32
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map7.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map8.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0906/map9.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map1.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map10.txt",
+          "bytes": 618,
+          "encoding": "cp932",
+          "line_count": 34
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map2.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map3.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map4.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map5.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map6.txt",
+          "bytes": 577,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map7.txt",
+          "bytes": 619,
+          "encoding": "cp932",
+          "line_count": 34
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map8.txt",
+          "bytes": 618,
+          "encoding": "cp932",
+          "line_count": 34
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/0954/map9.txt",
+          "bytes": 619,
+          "encoding": "cp932",
+          "line_count": 34
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1117/map1.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1117/map2.txt",
+          "bytes": 644,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1117/map3.txt",
+          "bytes": 644,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1117/map4.txt",
+          "bytes": 644,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1117/map5.txt",
+          "bytes": 684,
+          "encoding": "cp932",
+          "line_count": 34
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1117/map6.txt",
+          "bytes": 646,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1117/map7.txt",
+          "bytes": 684,
+          "encoding": "cp932",
+          "line_count": 34
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1117/map8.txt",
+          "bytes": 646,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map1.txt",
+          "bytes": 709,
+          "encoding": "cp932",
+          "line_count": 37
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map10.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map11.txt",
+          "bytes": 687,
+          "encoding": "cp932",
+          "line_count": 36
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map12.txt",
+          "bytes": 684,
+          "encoding": "cp932",
+          "line_count": 36
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map2.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map3.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map4.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map5.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map6.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map7.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map8.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1202/map9.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map1.txt",
+          "bytes": 576,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map10.txt",
+          "bytes": 597,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map2.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map3.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map4.txt",
+          "bytes": 576,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map5.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map6.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map7.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map8.txt",
+          "bytes": 578,
+          "encoding": "cp932",
+          "line_count": 31
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1606/map9.txt",
+          "bytes": 596,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map1.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map10.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map11.txt",
+          "bytes": 684,
+          "encoding": "cp932",
+          "line_count": 36
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map12.txt",
+          "bytes": 684,
+          "encoding": "cp932",
+          "line_count": 36
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map2.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map3.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map4.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map5.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map6.txt",
+          "bytes": 643,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map7.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map8.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/1643/map9.txt",
+          "bytes": 642,
+          "encoding": "cp932",
+          "line_count": 33
+        },
+        {
+          "path": "Scenarios/shuttle/fukutoshin/route/Map0.txt",
+          "bytes": 338530,
+          "encoding": "cp932",
+          "line_count": 8777
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": true,
+        "speed_limit": false,
+        "signal": true,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 184,
+        "gradient": 58,
+        "cant": 65,
+        "speed_limit": 0,
+        "signal": 66,
+        "station_platform": 63,
+        "structure_object": 1613,
+        "repeater": 560,
+        "sound_event": 63
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "shtr-ginza2",
+      "category": "route",
+      "name": "BVE Ginza Line 2",
+      "source_page": "https://shtr-m.net/bve/ginza.html",
+      "archive_url": "https://shtr-m.net/bve/data/g5_210402.zip",
+      "terms_url": "https://shtr-m.net/bve/read_me.html",
+      "permission_scope": "Narrow route Map Include/publication and author Structures/Sounds reference permissions; not blanket package reuse or redistribution.",
+      "sha256": "64a0d052cdbc5fd40de773e52dea9b88625e46aa34125ccf859ffe02e2119a73",
+      "archive_bytes": 17024384,
+      "archive_file_count": 1399,
+      "uncompressed_bytes": 33934596,
+      "static_config_file_count": 24,
+      "static_config_files": [
+        {
+          "path": "Scenarios/shuttle/ginza2/a1649/Map.txt",
+          "bytes": 8868,
+          "encoding": "cp932",
+          "line_count": 238
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/a1715/Map_a1.txt",
+          "bytes": 10989,
+          "encoding": "cp932",
+          "line_count": 302
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/a1715/Map_a1c.txt",
+          "bytes": 11133,
+          "encoding": "cp932",
+          "line_count": 292
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/a1715/Map_a2.txt",
+          "bytes": 10384,
+          "encoding": "cp932",
+          "line_count": 273
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/a1715/Map_a3.txt",
+          "bytes": 10602,
+          "encoding": "cp932",
+          "line_count": 291
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/a1715/Map_a3c.txt",
+          "bytes": 10683,
+          "encoding": "cp932",
+          "line_count": 297
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/a1715/Map_a4.txt",
+          "bytes": 10689,
+          "encoding": "cp932",
+          "line_count": 292
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/a1715/Map_a5.txt",
+          "bytes": 8993,
+          "encoding": "cp932",
+          "line_count": 201
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/a1715/Map_a6.txt",
+          "bytes": 9711,
+          "encoding": "cp932",
+          "line_count": 228
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1649/Map.txt",
+          "bytes": 9681,
+          "encoding": "cp932",
+          "line_count": 294
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1815/Map_b1.txt",
+          "bytes": 10228,
+          "encoding": "cp932",
+          "line_count": 275
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1815/Map_b2.txt",
+          "bytes": 10040,
+          "encoding": "cp932",
+          "line_count": 277
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1815/Map_b3.txt",
+          "bytes": 10390,
+          "encoding": "cp932",
+          "line_count": 283
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1815/Map_b4.txt",
+          "bytes": 10027,
+          "encoding": "cp932",
+          "line_count": 275
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1815/Map_b4c.txt",
+          "bytes": 9820,
+          "encoding": "cp932",
+          "line_count": 250
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1815/Map_b5.txt",
+          "bytes": 10078,
+          "encoding": "cp932",
+          "line_count": 275
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1815/Map_b6.txt",
+          "bytes": 10231,
+          "encoding": "cp932",
+          "line_count": 282
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/b1815/Map_b7.txt",
+          "bytes": 10504,
+          "encoding": "cp932",
+          "line_count": 282
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/Map_a0.txt",
+          "bytes": 358062,
+          "encoding": "cp932",
+          "line_count": 9778
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/Map_a0c.txt",
+          "bytes": 415660,
+          "encoding": "cp932",
+          "line_count": 11383
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/Map_a1.txt",
+          "bytes": 56476,
+          "encoding": "cp932",
+          "line_count": 1587
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/Map_b0.txt",
+          "bytes": 357282,
+          "encoding": "cp932",
+          "line_count": 9336
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/Map_b0c.txt",
+          "bytes": 421178,
+          "encoding": "cp932",
+          "line_count": 10986
+        },
+        {
+          "path": "Scenarios/shuttle/ginza2/Map_b1.txt",
+          "bytes": 64178,
+          "encoding": "cp932",
+          "line_count": 1674
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 816,
+        "gradient": 478,
+        "cant": 0,
+        "speed_limit": 4,
+        "signal": 118,
+        "station_platform": 1685,
+        "structure_object": 5629,
+        "repeater": 4702,
+        "sound_event": 1032
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "shtr-ginza6",
+      "category": "route",
+      "name": "BVE Ginza Line 6",
+      "source_page": "https://shtr-m.net/bve/ginza6.html",
+      "archive_url": "https://shtr-m.net/bve/data/g6_210402.zip",
+      "terms_url": "https://shtr-m.net/bve/read_me.html",
+      "permission_scope": "Narrow route Map Include/publication and author Structures/Sounds reference permissions; not blanket package reuse or redistribution.",
+      "sha256": "1daec50900b8251b5ceb65e9e7f5555f21fe48464a219e0ca7275f75a0fda2dd",
+      "archive_bytes": 19927910,
+      "archive_file_count": 404,
+      "uncompressed_bytes": 22839868,
+      "static_config_file_count": 1,
+      "static_config_files": [
+        {
+          "path": "Scenarios/shuttle/ginza6/1260(1)/map.txt",
+          "bytes": 199,
+          "encoding": "cp932",
+          "line_count": 9
+        }
+      ],
+      "config_features_present": {
+        "curve": false,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": false,
+        "signal": false,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": false,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 0,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 0,
+        "station_platform": 1,
+        "structure_object": 1,
+        "repeater": 0,
+        "sound_event": 1
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "shtr-hanzomon",
+      "category": "route",
+      "name": "BVE Hanzomon Line",
+      "source_page": "https://shtr-m.net/bve/hanzomon.html",
+      "archive_url": "https://shtr-m.net/bve/data/z5_161010.zip",
+      "terms_url": "https://shtr-m.net/bve/read_me.html",
+      "permission_scope": "Narrow route Map Include/publication and author Structures/Sounds reference permissions; not blanket package reuse or redistribution.",
+      "sha256": "e643b691bbb946e1a54abfccd6001568c68de03e5dcc987c74b00ccfcc79f683",
+      "archive_bytes": 26520311,
+      "archive_file_count": 1498,
+      "uncompressed_bytes": 37283006,
+      "static_config_file_count": 32,
+      "static_config_files": [
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1056T/map1.txt",
+          "bytes": 489,
+          "encoding": "cp932",
+          "line_count": 25
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1056T/map2.txt",
+          "bytes": 489,
+          "encoding": "cp932",
+          "line_count": 25
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1056T/map3.txt",
+          "bytes": 489,
+          "encoding": "cp932",
+          "line_count": 25
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1056T/map4.txt",
+          "bytes": 489,
+          "encoding": "cp932",
+          "line_count": 25
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1367S/map1.txt",
+          "bytes": 490,
+          "encoding": "cp932",
+          "line_count": 26
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1367S/map2.txt",
+          "bytes": 490,
+          "encoding": "cp932",
+          "line_count": 26
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1367S/map3.txt",
+          "bytes": 490,
+          "encoding": "cp932",
+          "line_count": 26
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1367S/map4.txt",
+          "bytes": 490,
+          "encoding": "cp932",
+          "line_count": 26
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1936K/map1.txt",
+          "bytes": 455,
+          "encoding": "cp932",
+          "line_count": 22
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1936K/map2.txt",
+          "bytes": 455,
+          "encoding": "cp932",
+          "line_count": 22
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1936K/map3.txt",
+          "bytes": 455,
+          "encoding": "cp932",
+          "line_count": 22
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B1936K/map4.txt",
+          "bytes": 455,
+          "encoding": "cp932",
+          "line_count": 22
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B909K/map1.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B909K/map2.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B909K/map3.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B909K/map4.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B909K/map5.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B952T/map1.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B952T/map2.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B952T/map3.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B952T/map4.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B952T/map5.txt",
+          "bytes": 485,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B953S/map1.txt",
+          "bytes": 453,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B953S/map2.txt",
+          "bytes": 453,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B953S/map3.txt",
+          "bytes": 453,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/B953S/map4.txt",
+          "bytes": 453,
+          "encoding": "cp932",
+          "line_count": 23
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/route/Map0.txt",
+          "bytes": 275232,
+          "encoding": "cp932",
+          "line_count": 7814
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/route/Map1.txt",
+          "bytes": 69215,
+          "encoding": "cp932",
+          "line_count": 2189
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/route/Map1Y.txt",
+          "bytes": 15457,
+          "encoding": "cp932",
+          "line_count": 470
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/route/Map2A.txt",
+          "bytes": 7260,
+          "encoding": "cp932",
+          "line_count": 231
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/route/Map2A0.txt",
+          "bytes": 7246,
+          "encoding": "cp932",
+          "line_count": 231
+        },
+        {
+          "path": "Scenarios/shuttle/hanzomon/route/Map2C.txt",
+          "bytes": 35551,
+          "encoding": "cp932",
+          "line_count": 1151
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": true,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 295,
+        "gradient": 105,
+        "cant": 109,
+        "speed_limit": 35,
+        "signal": 61,
+        "station_platform": 45,
+        "structure_object": 1831,
+        "repeater": 1180,
+        "sound_event": 26
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "shtr-miyajima",
+      "category": "route",
+      "name": "BVE Hiroshima Electric Railway Miyajima Line",
+      "source_page": "https://shtr-m.net/bve/hrd.html",
+      "archive_url": "https://shtr-m.net/bve/data/hrd_250619.zip",
+      "terms_url": "https://shtr-m.net/bve/read_me.html",
+      "permission_scope": "Narrow route Map Include/publication and author Structures/Sounds reference permissions; third-party structures/vehicles separate.",
+      "sha256": "8847f40191d4c33012160f2bad70c9bf770cee1a8d02a075ad65930eea8c4bf2",
+      "archive_bytes": 118367593,
+      "archive_file_count": 2847,
+      "uncompressed_bytes": 174802944,
+      "static_config_file_count": 15,
+      "static_config_files": [
+        {
+          "path": "Scenarios/shuttle/hrd/route/0756/map_0756a.txt",
+          "bytes": 1007,
+          "encoding": "cp932",
+          "line_count": 39
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/0756/map_0756b.txt",
+          "bytes": 1007,
+          "encoding": "cp932",
+          "line_count": 39
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/1154/map_1154a.txt",
+          "bytes": 1112,
+          "encoding": "cp932",
+          "line_count": 43
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/1154/map_1154a2.txt",
+          "bytes": 1428,
+          "encoding": "cp932",
+          "line_count": 50
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/1154/map_1154b.txt",
+          "bytes": 1111,
+          "encoding": "cp932",
+          "line_count": 46
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/1154/map_1154b2.txt",
+          "bytes": 1181,
+          "encoding": "cp932",
+          "line_count": 45
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/1154/map_1154c.txt",
+          "bytes": 1020,
+          "encoding": "cp932",
+          "line_count": 41
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/1154/map_1154c2.txt",
+          "bytes": 1085,
+          "encoding": "cp932",
+          "line_count": 43
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/1154/map_1154d.txt",
+          "bytes": 1053,
+          "encoding": "cp932",
+          "line_count": 43
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/1154/map_1154d2.txt",
+          "bytes": 1061,
+          "encoding": "cp932",
+          "line_count": 43
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/map0.txt",
+          "bytes": 342261,
+          "encoding": "cp932",
+          "line_count": 4300
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/map1.txt",
+          "bytes": 33879,
+          "encoding": "cp932",
+          "line_count": 557
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/map11.txt",
+          "bytes": 11102,
+          "encoding": "cp932",
+          "line_count": 323
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/map12.txt",
+          "bytes": 10531,
+          "encoding": "cp932",
+          "line_count": 306
+        },
+        {
+          "path": "Scenarios/shuttle/hrd/route/map2.txt",
+          "bytes": 14500,
+          "encoding": "cp932",
+          "line_count": 210
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": true,
+        "speed_limit": false,
+        "signal": true,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 247,
+        "gradient": 240,
+        "cant": 260,
+        "speed_limit": 0,
+        "signal": 10,
+        "station_platform": 478,
+        "structure_object": 2420,
+        "repeater": 2000,
+        "sound_event": 16
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    },
+    {
+      "id": "shtr-tokyo-monorail",
+      "category": "route",
+      "name": "BVE Tokyo Monorail",
+      "source_page": "https://shtr-m.net/bve/tmk.html",
+      "archive_url": "https://shtr-m.net/bve/data/tmk170403a.zip",
+      "terms_url": "https://shtr-m.net/bve/read_me.html",
+      "permission_scope": "Narrow route Map Include/publication and author Structures/Sounds reference permissions; not blanket package reuse or redistribution.",
+      "sha256": "12c4a39d07bebb15dc51d65e3eb333543ff45b8789f21fd29d6140b517450c77",
+      "archive_bytes": 20473898,
+      "archive_file_count": 1242,
+      "uncompressed_bytes": 43273338,
+      "static_config_file_count": 18,
+      "static_config_files": [
+        {
+          "path": "Scenarios/shuttle/tmk/0807/map.txt",
+          "bytes": 245282,
+          "encoding": "cp932",
+          "line_count": 6952
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/1327H/Map.txt",
+          "bytes": 233285,
+          "encoding": "cp932",
+          "line_count": 5799
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/F1407/map.txt",
+          "bytes": 249095,
+          "encoding": "cp932",
+          "line_count": 6844
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/F1407/map01.txt",
+          "bytes": 249040,
+          "encoding": "cp932",
+          "line_count": 6839
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/F1407/map35.txt",
+          "bytes": 249040,
+          "encoding": "cp932",
+          "line_count": 6839
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/G1617/map.txt",
+          "bytes": 247155,
+          "encoding": "cp932",
+          "line_count": 6756
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/G1617/map836.txt",
+          "bytes": 247221,
+          "encoding": "cp932",
+          "line_count": 6762
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/G1617/map841.txt",
+          "bytes": 247199,
+          "encoding": "cp932",
+          "line_count": 6760
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/G1617/map851.txt",
+          "bytes": 247210,
+          "encoding": "cp932",
+          "line_count": 6761
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/1023/map.txt",
+          "bytes": 395,
+          "encoding": "cp932",
+          "line_count": 18
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/F1519/map.txt",
+          "bytes": 394,
+          "encoding": "cp932",
+          "line_count": 18
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/G1415H/map.txt",
+          "bytes": 429,
+          "encoding": "cp932",
+          "line_count": 19
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/G1415H/map_a.txt",
+          "bytes": 396,
+          "encoding": "cp932",
+          "line_count": 18
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/G1415H/map_b.txt",
+          "bytes": 396,
+          "encoding": "cp932",
+          "line_count": 18
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/G1415H/map_c.txt",
+          "bytes": 396,
+          "encoding": "cp932",
+          "line_count": 18
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/route/map_s1.txt",
+          "bytes": 14104,
+          "encoding": "utf-8",
+          "line_count": 329
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/route/map_s2.txt",
+          "bytes": 13342,
+          "encoding": "utf-8",
+          "line_count": 407
+        },
+        {
+          "path": "Scenarios/shuttle/tmk/int/route/map0.txt",
+          "bytes": 316075,
+          "encoding": "cp932",
+          "line_count": 6613
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": true,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object": true,
+        "repeater": true,
+        "sound_event": true
+      },
+      "text_keyword_hits_non_normalized": {
+        "curve": 2207,
+        "gradient": 931,
+        "cant": 1358,
+        "speed_limit": 10,
+        "signal": 34,
+        "station_platform": 774,
+        "structure_object": 7821,
+        "repeater": 8535,
+        "sound_event": 180
+      },
+      "inspection_errors": [],
+      "config_cap_applied": false,
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "asset_files_read_copied_or_executed": false,
+      "inspection_note": "Only selected plain-text Map/Route CSV or vehicle configuration files were read in memory; raw config text was not saved. No audio/image/texture/model/executable/plugin/script/macro payload was opened, interpreted, executed, played, or copied; archive bytes were read only for SHA-256 and metadata."
+    }
+  ]
+}

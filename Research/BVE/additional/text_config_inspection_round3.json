@@ -1,0 +1,3542 @@
+{
+  "baseline_inventory": "inventory_baseline_63_58.csv (relative to this file; 63 route / 58 vehicle snapshot)",
+  "baseline_counts": {
+    "route": 63,
+    "vehicle": 58
+  },
+  "deduplication": "SHA-256, separately within route and vehicle categories; dual-category archives may appear once in each category",
+  "config_limits": {
+    "max_files_per_component": 250,
+    "max_file_bytes": 20971520
+  },
+  "results": [
+    {
+      "id": "chuo-rapidline",
+      "category": "route",
+      "package": "BVE5 Chuo Rapid Line",
+      "source_page": "https://github.com/aoisupersix/bve5-chuorapidline",
+      "terms_url": "https://github.com/aoisupersix/bve5-chuorapidline/blob/master/LICENSE",
+      "archive_url": "https://codeload.github.com/aoisupersix/bve5-chuorapidline/zip/refs/heads/master",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve5-chuorapidline-master.zip",
+      "archive_bytes": 3247926,
+      "archive_sha256": "e5ca0b5ad4ca700a7685e4748f9dce00fb89fef637eff378e48ba87d758cab7b",
+      "archive_file_count": 644,
+      "uncompressed_bytes": 19613110,
+      "license_or_permission": "CC BY-NC 4.0; non-commercial/reference only",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "CC BY-NC; not suitable for commercial-app content; no BVE data copied into the app.",
+      "matched_config_candidate_count": 6,
+      "inspected_config_file_count": 6,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "bve5-chuorapidline-master/Scenarios/aoi-ChuoRapidLine/Mapfile-1370T/1370T.txt",
+          "bytes": 725,
+          "encoding": "utf-8-sig",
+          "line_count": 29
+        },
+        {
+          "path": "bve5-chuorapidline-master/Scenarios/aoi-ChuoRapidLine/Mapfile-1370T/OtherTrains.txt",
+          "bytes": 1717,
+          "encoding": "utf-8",
+          "line_count": 61
+        },
+        {
+          "path": "bve5-chuorapidline-master/Scenarios/aoi-ChuoRapidLine/Mapfile-1370T/PreTrain&Beacons.txt",
+          "bytes": 9528,
+          "encoding": "utf-8",
+          "line_count": 419
+        },
+        {
+          "path": "bve5-chuorapidline-master/Scenarios/aoi-ChuoRapidLine/Mapfile-Common/Ensen.txt",
+          "bytes": 21038,
+          "encoding": "utf-8",
+          "line_count": 577
+        },
+        {
+          "path": "bve5-chuorapidline-master/Scenarios/aoi-ChuoRapidLine/Mapfile-Common/Map.txt",
+          "bytes": 115408,
+          "encoding": "utf-8",
+          "line_count": 2960
+        },
+        {
+          "path": "bve5-chuorapidline-master/Scenarios/aoi-中央快速線-1370T.txt",
+          "bytes": 291,
+          "encoding": "utf-8-sig",
+          "line_count": 10
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object_reference": true,
+        "repeater": true,
+        "brake_performance": false,
+        "power_performance": false
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 75,
+        "gradient": 50,
+        "cant": 0,
+        "speed_limit": 11,
+        "signal": 207,
+        "station_platform": 17,
+        "structure_object_reference": 1473,
+        "repeater": 580,
+        "brake_performance": 0,
+        "power_performance": 0
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "gensokyo-railway",
+      "category": "route",
+      "package": "Gensokyo Railway fictional loop route data",
+      "source_page": "https://github.com/NewSapporoNingyo/BVE-Gensokyo-Railway",
+      "terms_url": "https://github.com/NewSapporoNingyo/BVE-Gensokyo-Railway/blob/main/LICENSE",
+      "archive_url": "https://github.com/NewSapporoNingyo/BVE-Gensokyo-Railway/releases/download/3.0.0/v300-BVE-Gensokyo-Railway.zip",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve-gensokyo-v300.zip",
+      "archive_bytes": 392532211,
+      "archive_sha256": "9ac7cc9b9c643861ef2790f88280e6452eea0eb41949ff4a9d2e5a1ff9aff30d",
+      "archive_file_count": 4905,
+      "uncompressed_bytes": 583396553,
+      "license_or_permission": "MIT for the author’s original route content only; borrowed assets have separate terms",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "Only original route-map text is inspected. The archive contains third-party materials whose redistribution the player guide prohibits; all third-party assets are excluded. Fictional Touhou derivative context is not cleared for commercial-app reuse.",
+      "matched_config_candidate_count": 91,
+      "inspected_config_file_count": 91,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map101M-ATSP_A&C.txt",
+          "bytes": 478,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map101M-ATSP_snp.txt",
+          "bytes": 478,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map101M-ATSP_swp2.txt",
+          "bytes": 479,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map101M-ATSsn_N&A&C.txt",
+          "bytes": 481,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map101M-ATSsn_snp.txt",
+          "bytes": 479,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map121M-ATSP+Ps_Ask.txt",
+          "bytes": 483,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map121M-ATSP+SN_A&C.txt",
+          "bytes": 483,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map121M-ATSP+SN_snp.txt",
+          "bytes": 483,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map121M-ATSP+SN_swp2.txt",
+          "bytes": 484,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map121M-ATSsn_N&A&C.txt",
+          "bytes": 483,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map121M-ATSsn_snp.txt",
+          "bytes": 481,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map127M-ATSP_A&C.txt",
+          "bytes": 477,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map127M-ATSP_snp.txt",
+          "bytes": 477,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map127M-ATSP_swp2.txt",
+          "bytes": 478,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map127M-ATSsn_N&A&C.txt",
+          "bytes": 480,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map127M-ATSsn_snp.txt",
+          "bytes": 478,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map15M-ATSP+SN_A&C.txt",
+          "bytes": 1115,
+          "encoding": "utf-8",
+          "line_count": 29
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map15M-ATSP+SN_swp2.txt",
+          "bytes": 1106,
+          "encoding": "utf-8",
+          "line_count": 29
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Config_Map15M-ATSsn_NoSC.txt",
+          "bytes": 1039,
+          "encoding": "utf-8",
+          "line_count": 27
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/2-MapHakureiSta_Track2.txt",
+          "bytes": 39428,
+          "encoding": "utf-8",
+          "line_count": 753
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/MapHRDepot.txt",
+          "bytes": 14408,
+          "encoding": "utf-8",
+          "line_count": 331
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/MapHakureiSta_Track2.txt",
+          "bytes": 40755,
+          "encoding": "utf-8",
+          "line_count": 783
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/MapKoumaSta_Track1.txt",
+          "bytes": 0,
+          "encoding": "utf-8",
+          "line_count": 0
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/MapMoriyaSta_Track2.txt",
+          "bytes": 18309,
+          "encoding": "utf-8",
+          "line_count": 423
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/MapNingen_Track4.txt",
+          "bytes": 30217,
+          "encoding": "utf-8",
+          "line_count": 665
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/Tilt/HpTilt_Limits_MapA.txt",
+          "bytes": 1432,
+          "encoding": "utf-8",
+          "line_count": 44
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/Tilt/HpTilt_Limits_MapA2.txt",
+          "bytes": 1661,
+          "encoding": "utf-8",
+          "line_count": 46
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/Tilt/Tilt_Limits_MapA.txt",
+          "bytes": 1294,
+          "encoding": "utf-8",
+          "line_count": 41
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/Tilt/Tilt_Limits_MapA2.txt",
+          "bytes": 1569,
+          "encoding": "utf-8",
+          "line_count": 44
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/Tilt/Tilt_MapA.txt",
+          "bytes": 1705,
+          "encoding": "utf-8",
+          "line_count": 60
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/Tilt/Tilt_MapA2.txt",
+          "bytes": 2030,
+          "encoding": "utf-8",
+          "line_count": 61
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/mapA.txt",
+          "bytes": 107920,
+          "encoding": "utf-8-sig",
+          "line_count": 2488
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/mapA2.txt",
+          "bytes": 124368,
+          "encoding": "utf-8",
+          "line_count": 2793
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Main/LoopLine/mapB.txt",
+          "bytes": 233833,
+          "encoding": "utf-8",
+          "line_count": 5225
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Map101M.txt",
+          "bytes": 1731,
+          "encoding": "utf-8",
+          "line_count": 46
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Map121M.txt",
+          "bytes": 2185,
+          "encoding": "utf-8",
+          "line_count": 56
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Map127M.txt",
+          "bytes": 1693,
+          "encoding": "utf-8",
+          "line_count": 44
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Map15M.txt",
+          "bytes": 1769,
+          "encoding": "utf-8",
+          "line_count": 49
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MapSettings/CurveSettings_HpTilt.txt",
+          "bytes": 1378,
+          "encoding": "utf-8",
+          "line_count": 56
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MapSettings/CurveSettings_Normal+10.txt",
+          "bytes": 1482,
+          "encoding": "utf-8",
+          "line_count": 55
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MapSettings/CurveSettings_Normal.txt",
+          "bytes": 1483,
+          "encoding": "utf-8",
+          "line_count": 56
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MapSettings/CurveSettings_Tilt.txt",
+          "bytes": 1382,
+          "encoding": "utf-8",
+          "line_count": 56
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MapSettings/DownSlopeLimits.txt",
+          "bytes": 120,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MapSettings/GeneralSettings.txt",
+          "bytes": 201,
+          "encoding": "utf-8",
+          "line_count": 10
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MapSettings/MapDistance_HKR2_NNS4_MRY2.txt",
+          "bytes": 490,
+          "encoding": "utf-8",
+          "line_count": 13
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot122M.txt",
+          "bytes": 440,
+          "encoding": "utf-8",
+          "line_count": 22
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot124M-forMap15M.txt",
+          "bytes": 614,
+          "encoding": "utf-8",
+          "line_count": 32
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot124M.txt",
+          "bytes": 694,
+          "encoding": "utf-8",
+          "line_count": 36
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot126M-forMap127M.txt",
+          "bytes": 695,
+          "encoding": "utf-8",
+          "line_count": 36
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot126M.txt",
+          "bytes": 266,
+          "encoding": "utf-8",
+          "line_count": 9
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot12M.txt",
+          "bytes": 267,
+          "encoding": "utf-8",
+          "line_count": 13
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot14M-forMap15M.txt",
+          "bytes": 271,
+          "encoding": "utf-8",
+          "line_count": 13
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot14M.txt",
+          "bytes": 308,
+          "encoding": "utf-8",
+          "line_count": 15
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot16M.txt",
+          "bytes": 352,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot18M.txt",
+          "bytes": 309,
+          "encoding": "utf-8",
+          "line_count": 15
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/Mapot9002M.txt",
+          "bytes": 238,
+          "encoding": "utf-8",
+          "line_count": 11
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/rumia101M.txt",
+          "bytes": 22,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/rumia121M.txt",
+          "bytes": 383,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/MoveableObj/rumia127M.txt",
+          "bytes": 383,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Other/Peoples-101M.txt",
+          "bytes": 593,
+          "encoding": "utf-8",
+          "line_count": 18
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Other/Peoples-121M.txt",
+          "bytes": 790,
+          "encoding": "utf-8",
+          "line_count": 26
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Other/Peoples-15M.txt",
+          "bytes": 1027,
+          "encoding": "utf-8",
+          "line_count": 35
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Other/arr-lights.txt",
+          "bytes": 15767,
+          "encoding": "utf-8",
+          "line_count": 346
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/Other/firstday.txt",
+          "bytes": 612,
+          "encoding": "utf-8",
+          "line_count": 19
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSP+Ps_Ask.txt",
+          "bytes": 1704,
+          "encoding": "utf-8",
+          "line_count": 28
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSP+SN_A&C.txt",
+          "bytes": 1625,
+          "encoding": "utf-8",
+          "line_count": 27
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSP+SN_A&C_NoSC.txt",
+          "bytes": 1631,
+          "encoding": "utf-8",
+          "line_count": 27
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSP+SN_snp.txt",
+          "bytes": 1588,
+          "encoding": "utf-8",
+          "line_count": 27
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSP+SN_swp2.txt",
+          "bytes": 1615,
+          "encoding": "utf-8",
+          "line_count": 27
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSP+SN_swp2_NoSC.txt",
+          "bytes": 1621,
+          "encoding": "utf-8",
+          "line_count": 27
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSsn_N&A&C.txt",
+          "bytes": 1639,
+          "encoding": "utf-8",
+          "line_count": 26
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSsn_NoSC.txt",
+          "bytes": 1106,
+          "encoding": "utf-8",
+          "line_count": 21
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-HKR_ATSsn_snp.txt",
+          "bytes": 1573,
+          "encoding": "utf-8",
+          "line_count": 26
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-MRY_ATSP_A&C.txt",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 20
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-MRY_ATSP_snp.txt",
+          "bytes": 1010,
+          "encoding": "utf-8",
+          "line_count": 20
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-MRY_ATSP_swp2.txt",
+          "bytes": 1015,
+          "encoding": "utf-8",
+          "line_count": 20
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-MRY_ATSsn_N&A&C.txt",
+          "bytes": 1039,
+          "encoding": "utf-8",
+          "line_count": 19
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/SignalMap/HKR-MRY_ATSsn_snp.txt",
+          "bytes": 995,
+          "encoding": "utf-8",
+          "line_count": 19
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/Station.txt",
+          "bytes": 544,
+          "encoding": "utf-8-sig",
+          "line_count": 8
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/Stations101M.txt",
+          "bytes": 890,
+          "encoding": "utf-8-sig",
+          "line_count": 15
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/Stations121M.txt",
+          "bytes": 1957,
+          "encoding": "utf-8-sig",
+          "line_count": 25
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/Stations127M.txt",
+          "bytes": 1072,
+          "encoding": "utf-8-sig",
+          "line_count": 15
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/Stations15M-T.txt",
+          "bytes": 1516,
+          "encoding": "utf-8-sig",
+          "line_count": 25
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/Stations15M.txt",
+          "bytes": 1409,
+          "encoding": "utf-8-sig",
+          "line_count": 25
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/StationsD721.txt",
+          "bytes": 296,
+          "encoding": "utf-8-sig",
+          "line_count": 4
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/Stations_old_123M.txt",
+          "bytes": 1842,
+          "encoding": "utf-8-sig",
+          "line_count": 25
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/StopPositions/StopPos_4car_HKR2_NNS4_MRY2.txt",
+          "bytes": 1332,
+          "encoding": "utf-8",
+          "line_count": 30
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/StopPositions/StopPos_4car_MRY2_EMYm_KMK1_HKR2.txt",
+          "bytes": 1270,
+          "encoding": "utf-8",
+          "line_count": 24
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/StopPositions/StopPos_6car_HKR2_NNS4_MRY2.txt",
+          "bytes": 1335,
+          "encoding": "utf-8",
+          "line_count": 30
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/StopPositions/StopPos_6car_MRY2_EMYm_KMK1_HKR2.txt",
+          "bytes": 1266,
+          "encoding": "utf-8",
+          "line_count": 24
+        },
+        {
+          "path": "GSRv300/GSR/Scenarios_GSR/map/StaList/StopPositions/StopPos_HKRDepot.txt",
+          "bytes": 55,
+          "encoding": "utf-8",
+          "line_count": 6
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": true,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object_reference": true,
+        "repeater": true,
+        "brake_performance": false,
+        "power_performance": false
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 376,
+        "gradient": 152,
+        "cant": 15,
+        "speed_limit": 157,
+        "signal": 324,
+        "station_platform": 307,
+        "structure_object_reference": 3151,
+        "repeater": 6947,
+        "brake_performance": 0,
+        "power_performance": 0
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "gensokyo-railway",
+      "category": "vehicle",
+      "package": "E127-series vehicle-data component (embedded)",
+      "source_page": "https://github.com/NewSapporoNingyo/BVE-Gensokyo-Railway",
+      "terms_url": "https://github.com/NewSapporoNingyo/BVE-Gensokyo-Railway/blob/main/README.md",
+      "archive_url": "https://github.com/NewSapporoNingyo/BVE-Gensokyo-Railway/releases/download/3.0.0/v300-BVE-Gensokyo-Railway.zip",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve-gensokyo-v300.zip",
+      "archive_bytes": 392532211,
+      "archive_sha256": "9ac7cc9b9c643861ef2790f88280e6452eea0eb41949ff4a9d2e5a1ff9aff30d",
+      "archive_file_count": 4905,
+      "uncompressed_bytes": 583396553,
+      "license_or_permission": "CC BY-NC 2.1 JP, as stated in the project README; non-commercial/reference only",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "README attributes the vehicle data to BVE Workshop and says it is modified; separate third-party assets in the larger archive are excluded. Not suitable for commercial-app content.",
+      "matched_config_candidate_count": 16,
+      "inspected_config_file_count": 16,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "GSRv300/trains/jre127/Notch/Brake/Current.csv",
+          "bytes": 1539,
+          "encoding": "utf-8",
+          "line_count": 95
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Brake/Current0.csv",
+          "bytes": 47,
+          "encoding": "utf-8",
+          "line_count": 4
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Brake/CurrentMax.csv",
+          "bytes": 1676,
+          "encoding": "utf-8",
+          "line_count": 102
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Brake/Force.csv",
+          "bytes": 1995,
+          "encoding": "utf-8",
+          "line_count": 140
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Brake/ForceMax.csv",
+          "bytes": 2277,
+          "encoding": "utf-8",
+          "line_count": 164
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Brake/Params.csv",
+          "bytes": 284,
+          "encoding": "utf-8",
+          "line_count": 14
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Notch.txt",
+          "bytes": 388,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Power/Current.csv",
+          "bytes": 7810,
+          "encoding": "utf-8",
+          "line_count": 164
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Power/Current0.csv",
+          "bytes": 59,
+          "encoding": "utf-8",
+          "line_count": 4
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Power/CurrentMax.csv",
+          "bytes": 10355,
+          "encoding": "utf-8",
+          "line_count": 164
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Power/Force.csv",
+          "bytes": 9467,
+          "encoding": "utf-8",
+          "line_count": 164
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Power/ForceMax.csv",
+          "bytes": 7968,
+          "encoding": "utf-8",
+          "line_count": 164
+        },
+        {
+          "path": "GSRv300/trains/jre127/Notch/Power/Params.csv",
+          "bytes": 382,
+          "encoding": "utf-8",
+          "line_count": 14
+        },
+        {
+          "path": "GSRv300/trains/jre127/Parameters/Parameters.txt",
+          "bytes": 956,
+          "encoding": "utf-8",
+          "line_count": 56
+        },
+        {
+          "path": "GSRv300/trains/jre127/Vehicle_1M1T_0.txt",
+          "bytes": 220,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "GSRv300/trains/jre127/Vehicle_1M1T_oldATS.txt",
+          "bytes": 215,
+          "encoding": "utf-8",
+          "line_count": 7
+        }
+      ],
+      "config_features_present": {
+        "curve": false,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": false,
+        "signal": false,
+        "station_platform": false,
+        "structure_object_reference": false,
+        "repeater": false,
+        "brake_performance": true,
+        "power_performance": true
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 0,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 0,
+        "station_platform": 0,
+        "structure_object_reference": 0,
+        "repeater": 0,
+        "brake_performance": 7,
+        "power_performance": 12
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "shiomi-line",
+      "category": "route",
+      "package": "Shiomiwan Railway — Shiomi Line",
+      "source_page": "https://github.com/masonzeng702550/bve5-shiomi-line",
+      "terms_url": "https://github.com/masonzeng702550/bve5-shiomi-line/blob/main/README.ja.md",
+      "archive_url": "https://codeload.github.com/masonzeng702550/bve5-shiomi-line/zip/refs/heads/main",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve5-shiomi-line-main.zip",
+      "archive_bytes": 4215029,
+      "archive_sha256": "86f4cdd4822090acfac63543d751befd8c637d3a7d5a10d97e2db39c55230b8e",
+      "archive_file_count": 276,
+      "uncompressed_bytes": 7030224,
+      "license_or_permission": "CC BY-NC 4.0 for original author-created content; borrowed materials follow their own terms",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "Non-commercial/reference only. Placeholder model/audio files and any separate borrowed materials are not inspected or reused.",
+      "matched_config_candidate_count": 27,
+      "inspected_config_file_count": 27,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/00_init.txt",
+          "bytes": 1037,
+          "encoding": "utf-8",
+          "line_count": 29
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/10_seaside_city.txt",
+          "bytes": 1738,
+          "encoding": "utf-8",
+          "line_count": 40
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/20_coast.txt",
+          "bytes": 3663,
+          "encoding": "utf-8",
+          "line_count": 100
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/30_elevated.txt",
+          "bytes": 2928,
+          "encoding": "utf-8",
+          "line_count": 78
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/40_underground.txt",
+          "bytes": 1582,
+          "encoding": "utf-8",
+          "line_count": 44
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/50_bridge.txt",
+          "bytes": 1956,
+          "encoding": "utf-8",
+          "line_count": 49
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/60_sakura.txt",
+          "bytes": 3509,
+          "encoding": "utf-8",
+          "line_count": 90
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/70_paddy.txt",
+          "bytes": 2946,
+          "encoding": "utf-8",
+          "line_count": 71
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/80_satoyama.txt",
+          "bytes": 3180,
+          "encoding": "utf-8",
+          "line_count": 82
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/90_gorge.txt",
+          "bytes": 4965,
+          "encoding": "utf-8",
+          "line_count": 154
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/95_onsen.txt",
+          "bytes": 3784,
+          "encoding": "utf-8",
+          "line_count": 96
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/env_night.txt",
+          "bytes": 1508,
+          "encoding": "utf-8",
+          "line_count": 38
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/env_rain.txt",
+          "bytes": 1411,
+          "encoding": "utf-8",
+          "line_count": 35
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/main.txt",
+          "bytes": 1633,
+          "encoding": "utf-8",
+          "line_count": 40
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/main_dyn.txt",
+          "bytes": 948,
+          "encoding": "utf-8",
+          "line_count": 34
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/main_night.txt",
+          "bytes": 1145,
+          "encoding": "utf-8",
+          "line_count": 37
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/main_rain.txt",
+          "bytes": 1158,
+          "encoding": "utf-8",
+          "line_count": 37
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/main_rapid.txt",
+          "bytes": 1066,
+          "encoding": "utf-8",
+          "line_count": 32
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/signals.txt",
+          "bytes": 4385,
+          "encoding": "utf-8",
+          "line_count": 112
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/station_pa.txt",
+          "bytes": 1186,
+          "encoding": "utf-8",
+          "line_count": 37
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/trains.txt",
+          "bytes": 1157,
+          "encoding": "utf-8",
+          "line_count": 22
+        },
+        {
+          "path": "bve5-shiomi-line-main/Shiomi/map/trains_dyn.txt",
+          "bytes": 1055,
+          "encoding": "utf-8",
+          "line_count": 26
+        },
+        {
+          "path": "bve5-shiomi-line-main/scenario/shiomi_day.txt",
+          "bytes": 641,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "bve5-shiomi-line-main/scenario/shiomi_dynamic.txt",
+          "bytes": 853,
+          "encoding": "utf-8",
+          "line_count": 18
+        },
+        {
+          "path": "bve5-shiomi-line-main/scenario/shiomi_night.txt",
+          "bytes": 647,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "bve5-shiomi-line-main/scenario/shiomi_rain.txt",
+          "bytes": 672,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "bve5-shiomi-line-main/scenario/shiomi_rapid.txt",
+          "bytes": 664,
+          "encoding": "utf-8",
+          "line_count": 16
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object_reference": true,
+        "repeater": true,
+        "brake_performance": false,
+        "power_performance": false
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 43,
+        "gradient": 46,
+        "cant": 0,
+        "speed_limit": 14,
+        "signal": 28,
+        "station_platform": 24,
+        "structure_object_reference": 114,
+        "repeater": 204,
+        "brake_performance": 0,
+        "power_performance": 0
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "random-map",
+      "category": "route",
+      "package": "bve-random-map route scenarios",
+      "source_page": "https://github.com/magicant/bve-random-map",
+      "terms_url": "https://github.com/magicant/bve-random-map/blob/master/README.md",
+      "archive_url": "https://github.com/magicant/bve-random-map/releases/download/v0.1-alpha.2/bve-random-map-release-0.1-alpha.2.zip",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve-random-map-v0.1-alpha.2.zip",
+      "archive_bytes": 4777553,
+      "archive_sha256": "1220b1ceca1388b3e75a7002d09d839b9fe3700231a699242c4314780791a8de",
+      "archive_file_count": 461,
+      "uncompressed_bytes": 7177105,
+      "license_or_permission": "CC BY 4.0 for scenario/route data; exceptions and external dependencies excluded",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "Route configs only. DLLs, sound/image assets, and external dependencies are excluded and not executed/copied.",
+      "matched_config_candidate_count": 297,
+      "inspected_config_file_count": 250,
+      "config_cap_applied": true,
+      "static_config_files": [
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_0.txt",
+          "bytes": 2396,
+          "encoding": "utf-8",
+          "line_count": 58
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_1.txt",
+          "bytes": 3729,
+          "encoding": "utf-8",
+          "line_count": 89
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_2.txt",
+          "bytes": 2224,
+          "encoding": "utf-8",
+          "line_count": 54
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_3.txt",
+          "bytes": 3514,
+          "encoding": "utf-8",
+          "line_count": 84
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_4.txt",
+          "bytes": 2654,
+          "encoding": "utf-8",
+          "line_count": 64
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_5.txt",
+          "bytes": 2740,
+          "encoding": "utf-8",
+          "line_count": 66
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_6.txt",
+          "bytes": 2525,
+          "encoding": "utf-8",
+          "line_count": 61
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_7.txt",
+          "bytes": 2955,
+          "encoding": "utf-8",
+          "line_count": 71
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_8.txt",
+          "bytes": 2955,
+          "encoding": "utf-8",
+          "line_count": 71
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/csatc_9.txt",
+          "bytes": 2697,
+          "encoding": "utf-8",
+          "line_count": 65
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_0.txt",
+          "bytes": 2398,
+          "encoding": "utf-8",
+          "line_count": 58
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_1.txt",
+          "bytes": 2871,
+          "encoding": "utf-8",
+          "line_count": 69
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_2.txt",
+          "bytes": 2828,
+          "encoding": "utf-8",
+          "line_count": 68
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_3.txt",
+          "bytes": 2656,
+          "encoding": "utf-8",
+          "line_count": 64
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_4.txt",
+          "bytes": 2570,
+          "encoding": "utf-8",
+          "line_count": 62
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_5.txt",
+          "bytes": 2785,
+          "encoding": "utf-8",
+          "line_count": 67
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_6.txt",
+          "bytes": 2656,
+          "encoding": "utf-8",
+          "line_count": 64
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_7.txt",
+          "bytes": 3387,
+          "encoding": "utf-8",
+          "line_count": 81
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_8.txt",
+          "bytes": 2355,
+          "encoding": "utf-8",
+          "line_count": 57
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/oerato_9.txt",
+          "bytes": 3129,
+          "encoding": "utf-8",
+          "line_count": 75
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_0.txt",
+          "bytes": 2693,
+          "encoding": "utf-8",
+          "line_count": 65
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_1.txt",
+          "bytes": 3682,
+          "encoding": "utf-8",
+          "line_count": 88
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_2.txt",
+          "bytes": 2908,
+          "encoding": "utf-8",
+          "line_count": 70
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_3.txt",
+          "bytes": 2994,
+          "encoding": "utf-8",
+          "line_count": 72
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_4.txt",
+          "bytes": 3381,
+          "encoding": "utf-8",
+          "line_count": 81
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_5.txt",
+          "bytes": 2779,
+          "encoding": "utf-8",
+          "line_count": 67
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_6.txt",
+          "bytes": 3381,
+          "encoding": "utf-8",
+          "line_count": 81
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_7.txt",
+          "bytes": 3209,
+          "encoding": "utf-8",
+          "line_count": 77
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_8.txt",
+          "bytes": 3682,
+          "encoding": "utf-8",
+          "line_count": 88
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/snp_9.txt",
+          "bytes": 2564,
+          "encoding": "utf-8",
+          "line_count": 62
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_0.txt",
+          "bytes": 3211,
+          "encoding": "utf-8",
+          "line_count": 77
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_1.txt",
+          "bytes": 3039,
+          "encoding": "utf-8",
+          "line_count": 73
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_2.txt",
+          "bytes": 2953,
+          "encoding": "utf-8",
+          "line_count": 71
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_3.txt",
+          "bytes": 3168,
+          "encoding": "utf-8",
+          "line_count": 76
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_4.txt",
+          "bytes": 2308,
+          "encoding": "utf-8",
+          "line_count": 56
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_5.txt",
+          "bytes": 2222,
+          "encoding": "utf-8",
+          "line_count": 54
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_6.txt",
+          "bytes": 2953,
+          "encoding": "utf-8",
+          "line_count": 71
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_7.txt",
+          "bytes": 3168,
+          "encoding": "utf-8",
+          "line_count": 76
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_8.txt",
+          "bytes": 2867,
+          "encoding": "utf-8",
+          "line_count": 69
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map/swp2_9.txt",
+          "bytes": 3297,
+          "encoding": "utf-8",
+          "line_count": 79
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/fin.txt",
+          "bytes": 2083,
+          "encoding": "utf-8",
+          "line_count": 61
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/fin_csatc.txt",
+          "bytes": 269,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/fin_oerato.txt",
+          "bytes": 281,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/fin_snp.txt",
+          "bytes": 239,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/fin_station.txt",
+          "bytes": 3899,
+          "encoding": "utf-8",
+          "line_count": 71
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/fin_swp2.txt",
+          "bytes": 240,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/gradient.txt",
+          "bytes": 1831,
+          "encoding": "utf-8",
+          "line_count": 49
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/gradient_random.txt",
+          "bytes": 1666,
+          "encoding": "utf-8",
+          "line_count": 34
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/init.txt",
+          "bytes": 3021,
+          "encoding": "utf-8",
+          "line_count": 77
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/init_csatc.txt",
+          "bytes": 1601,
+          "encoding": "utf-8",
+          "line_count": 49
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/init_oerato.txt",
+          "bytes": 1610,
+          "encoding": "utf-8",
+          "line_count": 49
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/init_snp.txt",
+          "bytes": 1738,
+          "encoding": "utf-8",
+          "line_count": 51
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/init_swp2.txt",
+          "bytes": 1858,
+          "encoding": "utf-8",
+          "line_count": 54
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/section.txt",
+          "bytes": 20558,
+          "encoding": "utf-8",
+          "line_count": 335
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/section_default.txt",
+          "bytes": 341,
+          "encoding": "utf-8",
+          "line_count": 11
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/speedlimit.txt",
+          "bytes": 5268,
+          "encoding": "utf-8",
+          "line_count": 94
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_misc/station.txt",
+          "bytes": 2203,
+          "encoding": "utf-8",
+          "line_count": 39
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_0.txt",
+          "bytes": 2928,
+          "encoding": "utf-8",
+          "line_count": 72
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_1.txt",
+          "bytes": 4272,
+          "encoding": "utf-8",
+          "line_count": 103
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_2.txt",
+          "bytes": 5005,
+          "encoding": "utf-8",
+          "line_count": 121
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_last.txt",
+          "bytes": 247,
+          "encoding": "utf-8",
+          "line_count": 10
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_mid.txt",
+          "bytes": 286,
+          "encoding": "utf-8",
+          "line_count": 11
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_nonstation.txt",
+          "bytes": 359,
+          "encoding": "utf-8",
+          "line_count": 13
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_station_0.txt",
+          "bytes": 3638,
+          "encoding": "utf-8",
+          "line_count": 90
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_station_1.txt",
+          "bytes": 3668,
+          "encoding": "utf-8",
+          "line_count": 90
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/grassland_s_station_2.txt",
+          "bytes": 3614,
+          "encoding": "utf-8",
+          "line_count": 98
+        },
+        {
+          "path": "Scenarios/magicant/randommap/map_parts/last.txt",
+          "bytes": 169,
+          "encoding": "utf-8",
+          "line_count": 9
+        },
+        {
+          "path": "Scenarios/magicant/randommap/signals/signals_csatc.csv",
+          "bytes": 243,
+          "encoding": "utf-8",
+          "line_count": 18
+        },
+        {
+          "path": "Scenarios/magicant/randommap/signals/signals_sp.csv",
+          "bytes": 2421,
+          "encoding": "utf-8",
+          "line_count": 34
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1000h_0.csv",
+          "bytes": 1033,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1005h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1010h_0.csv",
+          "bytes": 1033,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1015h_0.csv",
+          "bytes": 1033,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1020h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1025h_0.csv",
+          "bytes": 1035,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1030h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1035h_0.csv",
+          "bytes": 1029,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1040h_0.csv",
+          "bytes": 1036,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1045h_0.csv",
+          "bytes": 1029,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1050h_0.csv",
+          "bytes": 1029,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1055h_0.csv",
+          "bytes": 1036,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1100h_0.csv",
+          "bytes": 1029,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1105h_0.csv",
+          "bytes": 1038,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1110h_0.csv",
+          "bytes": 1038,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1115h_0.csv",
+          "bytes": 1029,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1120h_0.csv",
+          "bytes": 1037,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1125h_0.csv",
+          "bytes": 1021,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1130h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1135h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1140h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1145h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1150h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1155h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1200h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1205h_0.csv",
+          "bytes": 1021,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1210h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1215h_0.csv",
+          "bytes": 1021,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1220h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1225h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1230h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1235h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1240h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1245h_0.csv",
+          "bytes": 1021,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1250h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1255h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1300h_0.csv",
+          "bytes": 1024,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1305h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1310h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1315h_0.csv",
+          "bytes": 1029,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1320h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1325h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1330h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1335h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1340h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1345h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1350h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1355h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1400h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1405h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1410h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1415h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1420h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1425h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1430h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1435h_0.csv",
+          "bytes": 1028,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1440h_0.csv",
+          "bytes": 1026,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1445h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1450h_0.csv",
+          "bytes": 1028,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1455h_0.csv",
+          "bytes": 1027,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1500h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1505h_0.csv",
+          "bytes": 1027,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1510h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1515h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1520h_0.csv",
+          "bytes": 1029,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1525h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1530h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1535h_0.csv",
+          "bytes": 1029,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1540h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1545h_0.csv",
+          "bytes": 1024,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1550h_0.csv",
+          "bytes": 1024,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1555h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1600h_0.csv",
+          "bytes": 1023,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1605h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1610h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1615h_0.csv",
+          "bytes": 1023,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1620h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1625h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1630h_0.csv",
+          "bytes": 1032,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1635h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1640h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1645h_0.csv",
+          "bytes": 1034,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1650h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1655h_0.csv",
+          "bytes": 1033,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1700h_0.csv",
+          "bytes": 1033,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1705h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1710h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1715h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1720h_0.csv",
+          "bytes": 1008,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1725h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1730h_0.csv",
+          "bytes": 1008,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1735h_0.csv",
+          "bytes": 1008,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1740h_0.csv",
+          "bytes": 1015,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1745h_0.csv",
+          "bytes": 1008,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1750h_0.csv",
+          "bytes": 1008,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1755h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1800h_0.csv",
+          "bytes": 1008,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1805h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1810h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1815h_0.csv",
+          "bytes": 1008,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1820h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1825h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1830h_0.csv",
+          "bytes": 1008,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1835h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1840h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1845h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1850h_0.csv",
+          "bytes": 1025,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1855h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1900h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1905h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1910h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1915h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1920h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1925h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1930h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1935h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1940h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1945h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1950h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_1955h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2000h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2005h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2010h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2015h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2020h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2025h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2030h_0.csv",
+          "bytes": 1016,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2035h_0.csv",
+          "bytes": 1009,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2040h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2045h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2050h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2055h_0.csv",
+          "bytes": 1021,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2100h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2105h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2110h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2115h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2120h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2125h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2130h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2135h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2140h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2145h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2150h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2155h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2200h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2205h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2210h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2215h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2220h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2225h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2230h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2235h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2240h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2245h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2250h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2255h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2300h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2305h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2310h_0.csv",
+          "bytes": 1012,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2315h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2320h_0.csv",
+          "bytes": 1013,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2325h_0.csv",
+          "bytes": 1013,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2330h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2335h_0.csv",
+          "bytes": 1013,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2340h_0.csv",
+          "bytes": 1013,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2345h_0.csv",
+          "bytes": 1021,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2350h_0.csv",
+          "bytes": 1013,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_2355h_0.csv",
+          "bytes": 1022,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_500h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_505h_0.csv",
+          "bytes": 1017,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_510h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_515h_0.csv",
+          "bytes": 1018,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_520h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_525h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_530h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_535h_0.csv",
+          "bytes": 1021,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_540h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_545h_0.csv",
+          "bytes": 1019,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_550h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_555h_0.csv",
+          "bytes": 1011,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/randommap/stations/stations_600h_0.csv",
+          "bytes": 1020,
+          "encoding": "utf-8",
+          "line_count": 16
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object_reference": true,
+        "repeater": true,
+        "brake_performance": false,
+        "power_performance": false
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 11,
+        "gradient": 19,
+        "cant": 0,
+        "speed_limit": 38,
+        "signal": 261,
+        "station_platform": 189,
+        "structure_object_reference": 48,
+        "repeater": 72,
+        "brake_performance": 0,
+        "power_performance": 0
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "random-map",
+      "category": "vehicle",
+      "package": "bve-random-map clearcar2 sample vehicle",
+      "source_page": "https://github.com/magicant/bve-random-map",
+      "terms_url": "https://github.com/magicant/bve-random-map/blob/master/Scenarios/magicant/clearcar2/README.txt",
+      "archive_url": "https://github.com/magicant/bve-random-map/releases/download/v0.1-alpha.2/bve-random-map-release-0.1-alpha.2.zip",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve-random-map-v0.1-alpha.2.zip",
+      "archive_bytes": 4777553,
+      "archive_sha256": "1220b1ceca1388b3e75a7002d09d839b9fe3700231a699242c4314780791a8de",
+      "archive_file_count": 461,
+      "uncompressed_bytes": 7177105,
+      "license_or_permission": "CC BY 4.0 per the embedded clearcar2 README, excluding ATS plugin DLLs",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "Test/sample vehicle configuration; DLLs and panels/assets are excluded. No BVE content copied into the commercial app.",
+      "matched_config_candidate_count": 15,
+      "inspected_config_file_count": 15,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/brake_current.csv",
+          "bytes": 85,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/brake_current_max.csv",
+          "bytes": 72,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/brake_force.csv",
+          "bytes": 85,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/brake_force_max.csv",
+          "bytes": 70,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/brake_params.csv",
+          "bytes": 299,
+          "encoding": "utf-8",
+          "line_count": 14
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/performance.ini",
+          "bytes": 402,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/power_current.csv",
+          "bytes": 6581,
+          "encoding": "utf-8",
+          "line_count": 142
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/power_current_max.csv",
+          "bytes": 6729,
+          "encoding": "utf-8",
+          "line_count": 142
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/power_force.csv",
+          "bytes": 6028,
+          "encoding": "utf-8",
+          "line_count": 133
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/power_force_max.csv",
+          "bytes": 6249,
+          "encoding": "utf-8",
+          "line_count": 136
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/performance/power_params.csv",
+          "bytes": 410,
+          "encoding": "utf-8",
+          "line_count": 14
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/Vehicle_csatc.txt",
+          "bytes": 238,
+          "encoding": "utf-8",
+          "line_count": 9
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/Vehicle_oer.txt",
+          "bytes": 228,
+          "encoding": "utf-8",
+          "line_count": 9
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/Vehicle_snp.txt",
+          "bytes": 231,
+          "encoding": "utf-8",
+          "line_count": 9
+        },
+        {
+          "path": "Scenarios/magicant/clearcar2/Vehicle_swp2.txt",
+          "bytes": 233,
+          "encoding": "utf-8",
+          "line_count": 9
+        }
+      ],
+      "config_features_present": {
+        "curve": false,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": false,
+        "signal": false,
+        "station_platform": false,
+        "structure_object_reference": false,
+        "repeater": false,
+        "brake_performance": true,
+        "power_performance": true
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 0,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 0,
+        "station_platform": 0,
+        "structure_object_reference": 0,
+        "repeater": 0,
+        "brake_performance": 1,
+        "power_performance": 1
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "dc-trainpack",
+      "category": "vehicle",
+      "package": "BveDcTrainPack vehicle collection (Vehicle/* only)",
+      "source_page": "https://github.com/mikangogo/BveDcTrainPack",
+      "terms_url": "https://github.com/mikangogo/BveDcTrainPack/blob/master/LICENSE.md",
+      "archive_url": "https://github.com/mikangogo/BveDcTrainPack/archive/refs/heads/master.zip",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve-dc-trainpack-master.zip",
+      "archive_bytes": 349331068,
+      "archive_sha256": "dfeca09305febe6d11a818681985d2f6492ebbdcab0c213af8cf6187992784e8",
+      "archive_file_count": 1543,
+      "uncompressed_bytes": 393001461,
+      "license_or_permission": "LICENSE.md permits free copying/distribution of Vehicle/*; Notch, Panel, Plugin, Sound directories are separately reference-only/restricted",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "Only selected text configs under Vehicle/* are inspected. Restricted top-level folders and their contents are excluded. This is not an approval to incorporate any data into the app.",
+      "matched_config_candidate_count": 20,
+      "inspected_config_file_count": 20,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha181/Original/Vehicle_Kiha181_5Mm.txt",
+          "bytes": 292,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha183/Original/Vehicle_Kiha183-0_7Mm3m.txt",
+          "bytes": 306,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha183/Original/Vehicle_Kiha183-1500_6Mm3m.txt",
+          "bytes": 327,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha185/Original/Vehicle_Kiha185.txt",
+          "bytes": 348,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha20/Original/Vehicle_Kiha20.txt",
+          "bytes": 307,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha20/Original/Vehicle_Kiha52-100.txt",
+          "bytes": 319,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha35/Original/Vehicle_Kiha30.txt",
+          "bytes": 307,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha40/Modified_Jrw/Vehicle_Kiha40_Jrw_Seki.txt",
+          "bytes": 318,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha40/Modified_Jrw/Vehicle_Kiha40_Jrw_Tri.txt",
+          "bytes": 300,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha40/Modified_Jrw/Vehicle_Kiha47_Jrw_Seki.txt",
+          "bytes": 303,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha40/Modified_Jrw/Vehicle_Kiha47_Jrw_Tri.txt",
+          "bytes": 302,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha40/Original/Vehicle_Kiha40_Jre_Aki.txt",
+          "bytes": 309,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha40/Original/Vehicle_Kiha40_Jre_Miya.txt",
+          "bytes": 312,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha40/Original/Vehicle_Kiha40_Jrs_Toku.txt",
+          "bytes": 320,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha40/Original/Vehicle_Kiha47_Jrs_Toku.txt",
+          "bytes": 320,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha58/Original/Vehicle_Kiha28.txt",
+          "bytes": 309,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha58/Original/Vehicle_Kiha57.txt",
+          "bytes": 309,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha58/Original/Vehicle_Kiha58.txt",
+          "bytes": 309,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha80/Original/Vehicle_Kiha81_6Mm2m1T.txt",
+          "bytes": 301,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "BveDcTrainPack-master/Vehicle/Kiha80/Original/Vehicle_Kiha82_4Mm2m.txt",
+          "bytes": 299,
+          "encoding": "utf-8",
+          "line_count": 8
+        }
+      ],
+      "config_features_present": {
+        "curve": false,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": false,
+        "signal": false,
+        "station_platform": false,
+        "structure_object_reference": false,
+        "repeater": false,
+        "brake_performance": false,
+        "power_performance": true
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 0,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 0,
+        "station_platform": 0,
+        "structure_object_reference": 0,
+        "repeater": 0,
+        "brake_performance": 0,
+        "power_performance": 34
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "autopilot-scenario",
+      "category": "route",
+      "package": "bve-autopilot-scenario v1.19 test routes",
+      "source_page": "https://github.com/magicant/bve-autopilot-scenario",
+      "terms_url": "https://github.com/magicant/bve-autopilot-scenario/blob/v1.19/README.md",
+      "archive_url": "https://github.com/magicant/bve-autopilot-scenario/archive/refs/tags/v1.19.zip",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve-autopilot-scenario-v1.19.zip",
+      "archive_bytes": 2907918,
+      "archive_sha256": "5b60bfc91ec4c7c532ac14b045cbebec372f6b928586a476d2c8ebacceaa6d19",
+      "archive_file_count": 185,
+      "uncompressed_bytes": 3700593,
+      "license_or_permission": "CC BY 4.0 for repository scenario files, with separate excluded plugin DLLs",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "Only route-map/station/signal text data is inspected; DLLs and external dependencies are excluded.",
+      "matched_config_candidate_count": 60,
+      "inspected_config_file_count": 60,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_atc/map_main.txt",
+          "bytes": 9707,
+          "encoding": "utf-8",
+          "line_count": 329
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_atc/map_main_autodepart.txt",
+          "bytes": 154,
+          "encoding": "utf-8",
+          "line_count": 11
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_atc/map_main_oer.txt",
+          "bytes": 9894,
+          "encoding": "utf-8",
+          "line_count": 336
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_atc/map_station.txt",
+          "bytes": 1327,
+          "encoding": "utf-8",
+          "line_count": 37
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_atc/stations.csv",
+          "bytes": 488,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_basic/map_main.txt",
+          "bytes": 75,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_basic/map_main_deceleration.txt",
+          "bytes": 209,
+          "encoding": "utf-8",
+          "line_count": 11
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_basic/map_main_load.txt",
+          "bytes": 80,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_basic/map_route.txt",
+          "bytes": 1984,
+          "encoding": "utf-8",
+          "line_count": 65
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_basic/map_station.txt",
+          "bytes": 575,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_basic/stations.csv",
+          "bytes": 441,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_basic/stations_deceleration.csv",
+          "bytes": 498,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_basic/stations_load.csv",
+          "bytes": 475,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_datsp/map_main.txt",
+          "bytes": 9674,
+          "encoding": "utf-8",
+          "line_count": 305
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_datsp/map_station.txt",
+          "bytes": 791,
+          "encoding": "utf-8",
+          "line_count": 21
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_datsp/signals.csv",
+          "bytes": 175,
+          "encoding": "utf-8",
+          "line_count": 4
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_datsp/stations.csv",
+          "bytes": 495,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_metro_tasc/map_main.txt",
+          "bytes": 9464,
+          "encoding": "utf-8",
+          "line_count": 321
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_metro_tasc/map_station.txt",
+          "bytes": 1276,
+          "encoding": "utf-8",
+          "line_count": 37
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_metro_tasc/stations.csv",
+          "bytes": 488,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_orp/map_main.txt",
+          "bytes": 3629,
+          "encoding": "utf-8",
+          "line_count": 131
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_orp/map_station.txt",
+          "bytes": 702,
+          "encoding": "utf-8",
+          "line_count": 22
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_orp/stations.csv",
+          "bytes": 394,
+          "encoding": "utf-8",
+          "line_count": 6
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_overrun/map_main.txt",
+          "bytes": 1508,
+          "encoding": "utf-8",
+          "line_count": 41
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_overrun/map_station.txt",
+          "bytes": 575,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_overrun/stations.csv",
+          "bytes": 322,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_realign/map_main.txt",
+          "bytes": 886,
+          "encoding": "utf-8",
+          "line_count": 31
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_realign/map_station.txt",
+          "bytes": 575,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_realign/stations.csv",
+          "bytes": 288,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_scheduling/map_main.txt",
+          "bytes": 2628,
+          "encoding": "utf-8",
+          "line_count": 81
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_scheduling/map_station.txt",
+          "bytes": 575,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_scheduling/stations.csv",
+          "bytes": 422,
+          "encoding": "utf-8",
+          "line_count": 7
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_main.txt",
+          "bytes": 61,
+          "encoding": "utf-8",
+          "line_count": 5
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_main_autodepart.txt",
+          "bytes": 375,
+          "encoding": "utf-8",
+          "line_count": 20
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_main_no_door_open.txt",
+          "bytes": 534,
+          "encoding": "utf-8",
+          "line_count": 19
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_route.txt",
+          "bytes": 5636,
+          "encoding": "utf-8",
+          "line_count": 195
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_signal_180.txt",
+          "bytes": 252,
+          "encoding": "utf-8",
+          "line_count": 11
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_signal_280.txt",
+          "bytes": 150,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_signal_600.txt",
+          "bytes": 150,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_signal_85.txt",
+          "bytes": 434,
+          "encoding": "utf-8",
+          "line_count": 15
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/map_station.txt",
+          "bytes": 1141,
+          "encoding": "utf-8",
+          "line_count": 30
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/signals.csv",
+          "bytes": 175,
+          "encoding": "utf-8",
+          "line_count": 4
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_signal/stations.csv",
+          "bytes": 495,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_slope/map_downhill_main.txt",
+          "bytes": 148,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_slope/map_route.txt",
+          "bytes": 10847,
+          "encoding": "utf-8",
+          "line_count": 392
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_slope/map_station.txt",
+          "bytes": 984,
+          "encoding": "utf-8",
+          "line_count": 27
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_slope/map_uphill_main.txt",
+          "bytes": 143,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_slope/stations_downhill.csv",
+          "bytes": 776,
+          "encoding": "utf-8",
+          "line_count": 13
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_slope/stations_uphill.csv",
+          "bytes": 770,
+          "encoding": "utf-8",
+          "line_count": 13
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_speedlimit/map_main.txt",
+          "bytes": 7650,
+          "encoding": "utf-8",
+          "line_count": 204
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_speedlimit/map_station.txt",
+          "bytes": 575,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_speedlimit/stations.csv",
+          "bytes": 489,
+          "encoding": "utf-8",
+          "line_count": 8
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_swp2/map_main.txt",
+          "bytes": 5948,
+          "encoding": "utf-8",
+          "line_count": 201
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_swp2/map_signal_180.txt",
+          "bytes": 396,
+          "encoding": "utf-8",
+          "line_count": 17
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_swp2/map_signal_280.txt",
+          "bytes": 224,
+          "encoding": "utf-8",
+          "line_count": 11
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_swp2/map_signal_600.txt",
+          "bytes": 224,
+          "encoding": "utf-8",
+          "line_count": 11
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_swp2/map_signal_85.txt",
+          "bytes": 649,
+          "encoding": "utf-8",
+          "line_count": 24
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_swp2/map_station.txt",
+          "bytes": 1141,
+          "encoding": "utf-8",
+          "line_count": 30
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_swp2/signals.csv",
+          "bytes": 178,
+          "encoding": "utf-8",
+          "line_count": 4
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/autopilot_swp2/stations.csv",
+          "bytes": 502,
+          "encoding": "utf-8",
+          "line_count": 8
+        }
+      ],
+      "config_features_present": {
+        "curve": true,
+        "gradient": true,
+        "cant": false,
+        "speed_limit": true,
+        "signal": true,
+        "station_platform": true,
+        "structure_object_reference": true,
+        "repeater": true,
+        "brake_performance": false,
+        "power_performance": false
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 12,
+        "gradient": 58,
+        "cant": 0,
+        "speed_limit": 29,
+        "signal": 396,
+        "station_platform": 93,
+        "structure_object_reference": 433,
+        "repeater": 223,
+        "brake_performance": 0,
+        "power_performance": 0
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "autopilot-scenario",
+      "category": "vehicle",
+      "package": "bve-autopilot clearcar test vehicle",
+      "source_page": "https://github.com/magicant/bve-autopilot-scenario",
+      "terms_url": "https://github.com/magicant/bve-autopilot-scenario/blob/v1.19/Scenarios/magicant/clearcar/README.txt",
+      "archive_url": "https://github.com/magicant/bve-autopilot-scenario/archive/refs/tags/v1.19.zip",
+      "local_archive": "/workspace/bve_research/additional/downloads/bve-autopilot-scenario-v1.19.zip",
+      "archive_bytes": 2907918,
+      "archive_sha256": "5b60bfc91ec4c7c532ac14b045cbebec372f6b928586a476d2c8ebacceaa6d19",
+      "archive_file_count": 185,
+      "uncompressed_bytes": 3700593,
+      "license_or_permission": "CC BY 4.0 for the vehicle data, excluding bve-autopilot plugin DLLs",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "Test vehicle configuration only; plugin DLLs and assets are excluded. No BVE content copied into the app.",
+      "matched_config_candidate_count": 12,
+      "inspected_config_file_count": 12,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/Vehicle.txt",
+          "bytes": 253,
+          "encoding": "utf-8",
+          "line_count": 10
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/brake_current.csv",
+          "bytes": 68,
+          "encoding": "utf-8",
+          "line_count": 6
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/brake_current_max.csv",
+          "bytes": 68,
+          "encoding": "utf-8",
+          "line_count": 6
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/brake_force.csv",
+          "bytes": 74,
+          "encoding": "utf-8",
+          "line_count": 6
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/brake_force_max.csv",
+          "bytes": 74,
+          "encoding": "utf-8",
+          "line_count": 6
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/brake_params.csv",
+          "bytes": 298,
+          "encoding": "utf-8",
+          "line_count": 14
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/performance.ini",
+          "bytes": 402,
+          "encoding": "utf-8",
+          "line_count": 16
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/power_current.csv",
+          "bytes": 79,
+          "encoding": "utf-8",
+          "line_count": 3
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/power_current_max.csv",
+          "bytes": 80,
+          "encoding": "utf-8",
+          "line_count": 3
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/power_force.csv",
+          "bytes": 87,
+          "encoding": "utf-8",
+          "line_count": 3
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/power_force_max.csv",
+          "bytes": 88,
+          "encoding": "utf-8",
+          "line_count": 3
+        },
+        {
+          "path": "bve-autopilot-scenario-1.19/Scenarios/magicant/clearcar/performance/power_params.csv",
+          "bytes": 508,
+          "encoding": "utf-8",
+          "line_count": 14
+        }
+      ],
+      "config_features_present": {
+        "curve": false,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": false,
+        "signal": false,
+        "station_platform": false,
+        "structure_object_reference": false,
+        "repeater": false,
+        "brake_performance": true,
+        "power_performance": true
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 0,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 0,
+        "station_platform": 0,
+        "structure_object_reference": 0,
+        "repeater": 0,
+        "brake_performance": 1,
+        "power_performance": 1
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    },
+    {
+      "id": "p4ken-empty",
+      "category": "vehicle",
+      "package": "p4ken empty vehicle configuration template",
+      "source_page": "https://github.com/p4ken/empty",
+      "terms_url": "https://github.com/p4ken/empty/blob/master/README.md",
+      "archive_url": "https://codeload.github.com/p4ken/empty/zip/refs/heads/master",
+      "local_archive": "/workspace/bve_research/additional/downloads/p4ken-empty-master.zip",
+      "archive_bytes": 2511,
+      "archive_sha256": "0d2aafb0e79c8298efe6cf141d4c345de6cf3d5ac68d9ce059f844d4abe82375",
+      "archive_file_count": 7,
+      "uncompressed_bytes": 1507,
+      "license_or_permission": "README permits free use, modification, copying and redistribution; no commercial restriction stated",
+      "commercial_app_suitability": "not cleared for app inclusion; no BVE data/assets are to be copied into the app",
+      "commercial_boundary_note": "Configuration-only template, not a complete model/audio vehicle package. No BVE content copied into the app.",
+      "matched_config_candidate_count": 6,
+      "inspected_config_file_count": 6,
+      "config_cap_applied": false,
+      "static_config_files": [
+        {
+          "path": "empty-master/parameters/parameters.ini",
+          "bytes": 35,
+          "encoding": "utf-8",
+          "line_count": 1
+        },
+        {
+          "path": "empty-master/performance/performance.ini",
+          "bytes": 356,
+          "encoding": "utf-8",
+          "line_count": 15
+        },
+        {
+          "path": "empty-master/performance/power-current.csv",
+          "bytes": 46,
+          "encoding": "utf-8",
+          "line_count": 1
+        },
+        {
+          "path": "empty-master/performance/power-force.csv",
+          "bytes": 46,
+          "encoding": "utf-8",
+          "line_count": 1
+        },
+        {
+          "path": "empty-master/performance/power-params.csv",
+          "bytes": 267,
+          "encoding": "utf-8",
+          "line_count": 14
+        },
+        {
+          "path": "empty-master/vehicle.ini",
+          "bytes": 111,
+          "encoding": "utf-8",
+          "line_count": 4
+        }
+      ],
+      "config_features_present": {
+        "curve": false,
+        "gradient": false,
+        "cant": false,
+        "speed_limit": false,
+        "signal": false,
+        "station_platform": false,
+        "structure_object_reference": false,
+        "repeater": false,
+        "brake_performance": true,
+        "power_performance": true
+      },
+      "text_keyword_hits_not_normalized": {
+        "curve": 0,
+        "gradient": 0,
+        "cant": 0,
+        "speed_limit": 0,
+        "signal": 0,
+        "station_platform": 0,
+        "structure_object_reference": 0,
+        "repeater": 0,
+        "brake_performance": 1,
+        "power_performance": 13
+      },
+      "inspection_errors": [],
+      "status": "inspected_static_config",
+      "raw_config_text_saved": false,
+      "audio_assets_played_or_read": false,
+      "binary_plugin_script_macro_executed_or_read": false,
+      "models_images_textures_or_other_assets_read_or_copied_into_app": false
+    }
+  ]
+}

@@ -1,0 +1,201 @@
+{
+  "summary": {
+    "route": {
+      "package_count": 69,
+      "unique_archive_sha256_count": 69,
+      "file_count_total": 101706,
+      "uncompressed_bytes_total": 11352505384,
+      "archive_formats": {
+        "7z": 7,
+        "zip": 62
+      },
+      "records_with_rights_scope_notes": 69,
+      "route_definition_file_paths_recorded": 1252,
+      "feature_command_occurrence_totals_not_normalized": {
+        "cant": 2684,
+        "curve": 8556,
+        "gradient": 3490,
+        "repeater": 57060,
+        "signal": 4295,
+        "sound_event": 1331,
+        "speed_limit": 1562,
+        "station_or_platform": 3765,
+        "structure": 142690
+      },
+      "packages_with_text_command_hits": {
+        "cant": 25,
+        "curve": 41,
+        "gradient": 33,
+        "repeater": 47,
+        "signal": 34,
+        "sound_event": 36,
+        "speed_limit": 37,
+        "station_or_platform": 39,
+        "structure": 45
+      },
+      "packages_with_station_related_files": 44
+    },
+    "vehicle": {
+      "package_count": 68,
+      "unique_archive_sha256_count": 68,
+      "file_count_total": 42961,
+      "uncompressed_bytes_total": 5910341650,
+      "archive_formats": {
+        "7z": 5,
+        "gz": 1,
+        "zip": 62
+      },
+      "records_with_rights_scope_notes": 68,
+      "packages_with_sound_config": 48,
+      "sound_event_sections_present": [
+        "ATS",
+        "AirSpring",
+        "Ats",
+        "AutomaticBrake",
+        "AutomaticBrake_old",
+        "Brake",
+        "Brake Handle",
+        "BrakeHandle",
+        "Breaker",
+        "Buzzer",
+        "Compressor",
+        "Csc",
+        "Door",
+        "Engine",
+        "Exhaust",
+        "Flange",
+        "Gear",
+        "Horn",
+        "Joint",
+        "Master Controller",
+        "MasterController",
+        "Motor",
+        "Others",
+        "Pilot Lamp",
+        "PilotLamp",
+        "RadiatorNoise",
+        "Reverser",
+        "Run",
+        "Shock",
+        "Shoe",
+        "Suspension",
+        "Switch",
+        "TransferGear1",
+        "TransferGear2",
+        "TransferGear3",
+        "TransferGear4",
+        "TransferGearIn",
+        "Turbine",
+        "ats",
+        "brake",
+        "door",
+        "flange",
+        "horn",
+        "joint",
+        "motor",
+        "others",
+        "run",
+        "sound3d",
+        "structure",
+        "switch"
+      ]
+    }
+  },
+  "no_network_access": false,
+  "inventory_state": "FINAL_FORMAL_METADATA_SNAPSHOT_2026-11-06",
+  "category_internal_sha256_deduplication": "No duplicate archive SHA-256 values within either category.",
+  "unique_archive_counts_across_categories": {
+    "route": 69,
+    "vehicle": 68,
+    "shared_hashes_across_categories": 10,
+    "global_unique_archive_sha256_count": 127,
+    "shared_pairs": [
+      {
+        "sha256": "01bd4c643a4171ace108944effba1293a2de1bfb2928dc54c2b5d8681a7063dd",
+        "route_package": "160_千葉_五井.7z",
+        "vehicle_package": "090_E217系.7z"
+      },
+      {
+        "sha256": "1220b1ceca1388b3e75a7002d09d839b9fe3700231a699242c4314780791a8de",
+        "route_package": "bve-random-map route scenarios",
+        "vehicle_package": "bve-random-map clearcar2 sample vehicle"
+      },
+      {
+        "sha256": "154ddf22e948c5494e0b34b5a3101fb304f4587fa65439bdc771ebd20e239647",
+        "route_package": "032_東山線.bin",
+        "vehicle_package": "024_5050形.bin"
+      },
+      {
+        "sha256": "1e664303ba361ad40da6d6edd206fd9fa309711a0b0f1771c4de7300a288d590",
+        "route_package": "101_石勝線-野岩鉄道.bin",
+        "vehicle_package": "046_789系-キハ261系-E129系-E231系-E353系-10-300R形-2020系-5000系-7000系-800.bin"
+      },
+      {
+        "sha256": "322b71f406edcbf4b0644dc4d359d896c33dbd02404cfa86acb5a5214c585f90",
+        "route_package": "245_中目黒_上野.zip",
+        "vehicle_package": "110_13000系.zip"
+      },
+      {
+        "sha256": "5b60bfc91ec4c7c532ac14b045cbebec372f6b928586a476d2c8ebacceaa6d19",
+        "route_package": "bve-autopilot-scenario v1.19 test routes",
+        "vehicle_package": "bve-autopilot clearcar test vehicle"
+      },
+      {
+        "sha256": "7eae6002cc30de8478843d54fac0a53bd27bf658a4699f0d74afd474ace7d741",
+        "route_package": "126_石勝線-野岩鉄道.zip",
+        "vehicle_package": "051_789系-キハ261系-E129系-E231系-E353系-10-300R形-2020系-5000系-7000系-800.zip"
+      },
+      {
+        "sha256": "9ac7cc9b9c643861ef2790f88280e6452eea0eb41949ff4a9d2e5a1ff9aff30d",
+        "route_package": "Gensokyo Railway fictional loop route data",
+        "vehicle_package": "E127-series vehicle-data component (embedded)"
+      },
+      {
+        "sha256": "a48eb2c305703ac1c8a939144d335233563337e52018c6a0ff05ba81ba113a53",
+        "route_package": "244_中目黒_上野.zip",
+        "vehicle_package": "109_13000系.zip"
+      },
+      {
+        "sha256": "e4fd5d6359c1e9f079a21d15e0611929e6483f74baa3473b6cff8a4028ab903a",
+        "route_package": "042_東西線.bin",
+        "vehicle_package": "027_50系.bin"
+      }
+    ]
+  },
+  "requested_target": {
+    "route": 100,
+    "vehicle": 100,
+    "route_shortfall": 31,
+    "vehicle_shortfall": 32
+  },
+  "final_counts_are_archive_sha256_deduplicated": true,
+  "rights_summary_note": "Rights are retained per inventory record; permission scope may cover only specific text/config components, while third-party assets may have separate terms. Do not infer app inclusion permission from a license label.",
+  "baseline_excluded_after_offline_review": 12,
+  "historical_recovered_from_old_false_ai_filter": 10,
+  "additional_research": {
+    "baseline_counts_before_latest_round": {
+      "route": 63,
+      "vehicle": 58
+    },
+    "latest_additions": {
+      "route": 6,
+      "vehicle": 10,
+      "category_records": 16,
+      "unique_archives": 13
+    },
+    "final_counts": {
+      "route": 69,
+      "vehicle": 68
+    },
+    "new_static_text_configuration_files_inspected": 541,
+    "latest_addition_records_with_noncommercial_terms_or_license": 8,
+    "sgtrains_candidates_excluded_http_403": 3,
+    "osaka_tanimachi_excluded_bve_only_restriction": 1,
+    "original_download_archives_included_in_project": false,
+    "raw_config_text_saved": false,
+    "audio_image_texture_model_or_executable_payloads_opened_or_copied": false,
+    "application_reuse_permission_inferred": false,
+    "earlier_audio_sample_review_audit_caveat": "A separate earlier audio sample review had its own procedural deviations; this metadata update does not resolve or certify that separate review. No audio was read or played in the latest static text inspection."
+  },
+  "app_inclusion_status": "No BVE packages, assets, executable data, audio, images, textures, or models are included in the iOS app; bundled BVE materials are metadata and research documentation only."
+}

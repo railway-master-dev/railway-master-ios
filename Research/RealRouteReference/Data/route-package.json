@@ -1,0 +1,816 @@
+{
+  "schemaVersion": "1.0.0",
+  "packageID": "kintetsu-kyoto-toji-real-route-reference-v1",
+  "sources": [
+    {
+      "sourceID": "mlit_n02_2025",
+      "title": "国土数値情報（鉄道データ）2025年度版 N02-25",
+      "publisher": "国土交通省",
+      "url": "https://nlftp.mlit.go.jp/ksj/gml/data/N02/N02-25/N02-25_GML.zip",
+      "accessedAt": "2026-11-06",
+      "publishedAt": "2026-03-06",
+      "license": "Creative Commons Attribution 4.0 International (CC BY 4.0); https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Source: MLIT National Land Numerical Information (Railway) N02-25, 2025 dataset, https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N02-2025.html, retrieved 2026-11-06. Extracted Kyoto–Toji route-link and station-line features; route geometry vertex order reversed and local cumulative chainage calculated by Cue.",
+      "usageNotes": "Credit the Ministry of Land, Infrastructure, Transport and Tourism and the dataset page; state that the route/station subset was extracted and the route order/chainage processed. Do not imply that MLIT certifies this derivative simulator geometry.",
+      "reliabilityNotes": "The dataset contains line geometry for railway routes and stations. Metadata equivalent scale: 1:25,000; coordinate QA compares values with the referenced source and reports 0% mismatch, not a metre-level absolute survey error. It does not describe individual tracks, curve radius, cant, gradient, speed limits, signals, blocks, platform dimensions, or stop markers. N02-25 metadata dateStamp is 2026-03-06; the dataset reference date is 2025-12-31."
+    }
+  ],
+  "route": {
+    "routeID": "kintetsu_kyoto_line_kyoto_toji",
+    "name": {
+      "value": "近鉄京都線 京都—東寺",
+      "status": "VERIFIED",
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "uncertainty": null,
+      "confidence": "HIGH",
+      "note": "N02-25 route feature identifies route name 京都線 and operator 近畿日本鉄道; the two selected station features are 京都 and 東寺."
+    },
+    "datasetKind": "REAL_WORLD",
+    "description": "One station-to-station route-link geometry segment extracted from MLIT N02-25. This is a route-reference line, not a physical track-level or operations-complete simulator route.",
+    "totalLengthM": {
+      "value": 801.5,
+      "status": "ESTIMATED",
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "uncertainty": null,
+      "confidence": "LOW",
+      "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+    },
+    "mainTrackID": "kintetsu_kyoto_toji_reference_geometry",
+    "networkLengthM": {
+      "value": null,
+      "status": "UNKNOWN",
+      "sourceIDs": [],
+      "uncertainty": null,
+      "confidence": "UNRATED",
+      "note": "An N02 route-link line is not an inventory of individual tracks; physical network length is not established."
+    },
+    "officialCommercialDistanceM": {
+      "value": null,
+      "status": "UNKNOWN",
+      "sourceIDs": [],
+      "uncertainty": null,
+      "confidence": "UNRATED",
+      "note": "Not included in this CC BY route-data payload; fare distance is a separate operator measure and is documented separately in QUALITY_REPORT.md."
+    },
+    "timezone": "Asia/Tokyo",
+    "tracks": [
+      {
+        "trackID": "kintetsu_kyoto_toji_reference_geometry",
+        "name": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "Compatibility container for the N02 route-link geometry; no individual physical track identity is established."
+        },
+        "direction": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "Operational up/down direction and individual track direction are not established. Package chainage orientation is documented separately as Kyoto to Toji."
+        },
+        "gaugeMM": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "Track gauge is not asserted by the selected N02 route-link feature."
+        },
+        "centerSpacingMM": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "Track count and track-center spacing are not asserted by N02 route geometry."
+        },
+        "geometry": [
+          {
+            "chainageM": {
+              "value": 0.0,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98459,
+                "longitudeDeg": 135.75684,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 50.8,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98473,
+                "longitudeDeg": 135.75631,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 161.8,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.985,
+                "longitudeDeg": 135.75514,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 200.2,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98498,
+                "longitudeDeg": 135.75472,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 221.0,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98493,
+                "longitudeDeg": 135.7545,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 259.2,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98477,
+                "longitudeDeg": 135.75413,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 281.9,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98466,
+                "longitudeDeg": 135.75392,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 289.7,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98462,
+                "longitudeDeg": 135.75385,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 350.2,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98422,
+                "longitudeDeg": 135.7534,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 403.8,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98382,
+                "longitudeDeg": 135.75307,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 440.2,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98352,
+                "longitudeDeg": 135.75291,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 486.6,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98312,
+                "longitudeDeg": 135.75276,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 516.1,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98286,
+                "longitudeDeg": 135.75269,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 559.6,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98247,
+                "longitudeDeg": 135.75265,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 790.4,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98039,
+                "longitudeDeg": 135.7526,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          },
+          {
+            "chainageM": {
+              "value": 801.5,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Local chainage is calculated by cumulative GRS80 inverse geodesic between the published N02-25 route-line vertices and rounded to 0.1 m. Status ESTIMATED reflects that the input is generalized route geometry, not a surveyed physical track or operator chainage; physical position error is not quantified by the source."
+            },
+            "coordinate": {
+              "value": {
+                "latitudeDeg": 34.98029,
+                "longitudeDeg": 135.7526,
+                "elevationM": null
+              },
+              "status": "VERIFIED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Coordinate is the published N02-25 route-line vertex in JGD2011/(B,L); this is a national-scale line-level route representation, not an individually surveyed physical track centerline. The source metadata gives 1:25,000 equivalent scale but no metre-valued absolute-position error bound."
+            }
+          }
+        ],
+        "segments": [
+          {
+            "segmentID": "kintetsu_kyoto_toji_reference_segment_001",
+            "startChainageM": {
+              "value": 0.0,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "Start of the extracted route-link geometry at the Kyoto-side station-line boundary."
+            },
+            "endChainageM": {
+              "value": 801.5,
+              "status": "ESTIMATED",
+              "sourceIDs": [
+                "mlit_n02_2025"
+              ],
+              "uncertainty": null,
+              "confidence": "LOW",
+              "note": "End of the extracted route-link geometry at the Toji-side station-line boundary."
+            },
+            "alignment": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "N02 provides a route line, not a surveyed tangent/circular/transition-curve classification."
+            },
+            "curveRadiusM": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "No curve radius is supplied by the source. Do not infer it from this generalized line geometry."
+            },
+            "transitionLengthM": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "No transition-curve length is supplied by the source."
+            },
+            "cantMM": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "Cant is not supplied by the source."
+            },
+            "cantTransitionLengthM": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "Cant run-off length is not supplied by the source."
+            },
+            "gradientPermille": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "Rail elevation profile and gradient are not supplied by the source."
+            },
+            "speedLimitKmh": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "Authorized speed limits and restriction extents are not supplied by the source."
+            },
+            "trackStructure": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "Ballast/slab/other track structure is not supplied by the source."
+            },
+            "railProfile": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "Rail section/profile is not supplied by the source."
+            },
+            "sleeperType": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "Sleeper type is not supplied by the source."
+            },
+            "longWeldedRail": {
+              "value": null,
+              "status": "UNKNOWN",
+              "sourceIDs": [],
+              "uncertainty": null,
+              "confidence": "UNRATED",
+              "note": "Long-welded-rail status is not supplied by the source."
+            },
+            "notes": "Compatibility container only: the N02 feature represents railway route geometry, not an individual track segment. Not safe as-is for rail rendering or physics."
+          }
+        ],
+        "blockCoverageRequired": false
+      }
+    ],
+    "stations": [
+      {
+        "stationID": "kintetsu_006084",
+        "name": {
+          "value": "京都",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "uncertainty": null,
+          "confidence": "HIGH",
+          "note": "Station name and operator are recorded in the MLIT N02-25 Station feature."
+        },
+        "chainageM": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "Station-center chainage is not supplied; see org.cue.railway.segmentBoundaryChainageM for the route-link boundary only."
+        },
+        "stopPositionChainageM": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "Train stop marker/position is not supplied."
+        },
+        "location": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "The source station feature is a LineString, not a station-centre point; preserve its exact line in route_geometry.geojson instead of inventing a centroid."
+        },
+        "trackIDs": [
+          "kintetsu_kyoto_toji_reference_geometry"
+        ],
+        "platforms": [],
+        "trackLayoutNotes": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "The N02 station line does not establish platform count, track layout, platform dimensions, or equipment."
+        }
+      },
+      {
+        "stationID": "kintetsu_006099",
+        "name": {
+          "value": "東寺",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "uncertainty": null,
+          "confidence": "HIGH",
+          "note": "Station name and operator are recorded in the MLIT N02-25 Station feature."
+        },
+        "chainageM": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "Station-center chainage is not supplied; see org.cue.railway.segmentBoundaryChainageM for the route-link boundary only."
+        },
+        "stopPositionChainageM": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "Train stop marker/position is not supplied."
+        },
+        "location": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "The source station feature is a LineString, not a station-centre point; preserve its exact line in route_geometry.geojson instead of inventing a centroid."
+        },
+        "trackIDs": [
+          "kintetsu_kyoto_toji_reference_geometry"
+        ],
+        "platforms": [],
+        "trackLayoutNotes": {
+          "value": null,
+          "status": "UNKNOWN",
+          "sourceIDs": [],
+          "uncertainty": null,
+          "confidence": "UNRATED",
+          "note": "The N02 station line does not establish platform count, track layout, platform dimensions, or equipment."
+        }
+      }
+    ],
+    "speedRestrictions": [],
+    "signals": [],
+    "blocks": [],
+    "switches": [],
+    "interlockings": [],
+    "structures": [],
+    "levelCrossings": [],
+    "landmarks": [],
+    "servicePatterns": [],
+    "operatingProfiles": [],
+    "depots": [],
+    "timetables": [],
+    "scenarios": [],
+    "validationPolicy": {
+      "requireFullSpeedCoverage": false,
+      "maxGeometryGapM": 250.0,
+      "maxCoordinateJumpM": 250.0,
+      "maxHeadingChangeDegrees": 135.0,
+      "minimumThroughRunTimeSeconds": 3600.0,
+      "maximumLocalRunTimeSeconds": 9000.0
+    },
+    "extensions": {
+      "org.cue.railway.referenceGeometry": {
+        "representation": "N02 railway route-link line; not a surveyed individual track centerline",
+        "coordinateReferenceSystem": "JGD2011 / (B,L), source geometry is longitude-latitude pairs; no datum transformation performed",
+        "packageChainageOrientation": "KYOTO_TO_TOJI",
+        "chainageMethod": "Cumulative inverse geodesic on GRS80; output rounded to 0.1 m",
+        "routeSectionSourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "stationSourceProperties": {
+          "kyoto": {
+            "N02_001": "12",
+            "N02_002": "4",
+            "N02_003": "京都線",
+            "N02_004": "近畿日本鉄道",
+            "N02_005": "京都",
+            "N02_005c": "006084",
+            "N02_005g": "006079"
+          },
+          "toji": {
+            "N02_001": "12",
+            "N02_002": "4",
+            "N02_003": "京都線",
+            "N02_004": "近畿日本鉄道",
+            "N02_005": "東寺",
+            "N02_005c": "006099",
+            "N02_005g": "006099"
+          }
+        },
+        "sourceReferenceDate": "2025-12-31",
+        "sourceArchiveSHA256": "aaf76af133b2e771e538fabc4646d2e443dc1d5a67b221382a28d744e706cc9f"
+      },
+      "org.cue.railway.segmentBoundaryChainageM": {
+        "kyoto": {
+          "value": 0.0,
+          "status": "ESTIMATED",
+          "note": "N02 railway-section line begins at the Kyoto-station-line endpoint; this is not the train stopping position or station center."
+        },
+        "toji": {
+          "value": 801.5,
+          "status": "ESTIMATED",
+          "note": "N02 railway-section line ends at the Toji-station-line endpoint; this is not the train stopping position or station center."
+        }
+      },
+      "org.cue.railway.dataCompleteness": {
+        "individualTrackIdentity": "UNKNOWN",
+        "trackCountAndSpacing": "UNKNOWN",
+        "gauge": "UNKNOWN",
+        "curveRadiusAndTransition": "UNKNOWN",
+        "cant": "UNKNOWN",
+        "gradientAndRailElevation": "UNKNOWN",
+        "speedLimits": "UNKNOWN_NOT_ASSERTED_EMPTY_ARRAY",
+        "signalsAndAspects": "UNKNOWN_NOT_ASSERTED_EMPTY_ARRAY",
+        "blocksAndATS": "UNKNOWN_NOT_ASSERTED_EMPTY_ARRAY",
+        "platformsAndStopMarkers": "UNKNOWN_NOT_ASSERTED_EMPTY_ARRAY",
+        "switchesAndInterlocking": "UNKNOWN_NOT_ASSERTED_EMPTY_ARRAY",
+        "crossingsAndStructures": "UNKNOWN_NOT_ASSERTED_EMPTY_ARRAY",
+        "timetableAndScenario": "UNKNOWN_NOT_ASSERTED_EMPTY_ARRAY",
+        "safeForPhysicsOrSignalling": false
+      }
+    }
+  }
+}

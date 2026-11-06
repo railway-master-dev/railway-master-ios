@@ -1,0 +1,3534 @@
+{
+  "packageType": "RoutePackage",
+  "schemaVersion": "1.0.0",
+  "disclaimer": {
+    "fictionalOnly": true,
+    "noRealWorldImitation": true,
+    "text": "完全架空の地域本線fallback用PLACEHOLDERデータ。駅名はFictionalOperationsPlan.jsonと共通の創作名称。地理・線形・設備・数値は実測・公式情報・実運転規則ではなく、安全な運転用途に使用しない。"
+  },
+  "route": {
+    "dataStatus": "PLACEHOLDER",
+    "routeId": "fictional_regional_mainline",
+    "name": "環雲本線（架空）",
+    "operatorName": "架空運営設定",
+    "regionStyle": "fictional Japanese regional railway; no real geography",
+    "routeLengthM": 60000.0,
+    "routeLengthIntent": "complete 60 km fictional mainline; all values are placeholders",
+    "startChainageM": 0.0,
+    "endChainageM": 60000.0,
+    "trackGaugeMm": 1067.0,
+    "electrification": "fictional overhead electrification placeholder",
+    "nominalMaxSpeedKmh": 120.0,
+    "coordinateReference": "UNKNOWN"
+  },
+  "stations": [
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S01",
+      "name": "環雲中央",
+      "chainageM": 0.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S01-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 0.0,
+          "endChainageM": 85.0,
+          "lengthM": 85.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 0.0,
+          "stopMarkerChainageM": 0.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S02",
+      "name": "松原町",
+      "chainageM": 1839.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S02-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 1754.0,
+          "endChainageM": 1924.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 1839.0,
+          "stopMarkerChainageM": 1839.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S03",
+      "name": "川端町",
+      "chainageM": 3871.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S03-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 3786.0,
+          "endChainageM": 3956.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 3871.0,
+          "stopMarkerChainageM": 3871.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S04",
+      "name": "新田",
+      "chainageM": 6000.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S04-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 5915.0,
+          "endChainageM": 6085.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 6000.0,
+          "stopMarkerChainageM": 6000.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S05",
+      "name": "桜台",
+      "chainageM": 8226.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S05-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 8141.0,
+          "endChainageM": 8311.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 8226.0,
+          "stopMarkerChainageM": 8226.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S06",
+      "name": "港南町",
+      "chainageM": 10355.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S06-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 10270.0,
+          "endChainageM": 10440.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 10355.0,
+          "stopMarkerChainageM": 10355.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S07",
+      "name": "東野",
+      "chainageM": 12387.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S07-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 12302.0,
+          "endChainageM": 12472.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 12387.0,
+          "stopMarkerChainageM": 12387.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S08",
+      "name": "若葉台",
+      "chainageM": 14613.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S08-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 14528.0,
+          "endChainageM": 14698.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 14613.0,
+          "stopMarkerChainageM": 14613.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S09",
+      "name": "北原",
+      "chainageM": 16935.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S09-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 16850.0,
+          "endChainageM": 17020.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 16935.0,
+          "stopMarkerChainageM": 16935.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S10",
+      "name": "高砂町",
+      "chainageM": 19161.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S10-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 19076.0,
+          "endChainageM": 19246.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 19161.0,
+          "stopMarkerChainageM": 19161.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S11",
+      "name": "山手町",
+      "chainageM": 21290.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S11-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 21205.0,
+          "endChainageM": 21375.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 21290.0,
+          "stopMarkerChainageM": 21290.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S12",
+      "name": "環雲市",
+      "chainageM": 24194.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S12-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 24109.0,
+          "endChainageM": 24279.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 24194.0,
+          "stopMarkerChainageM": 24194.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S13",
+      "name": "南町",
+      "chainageM": 26323.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S13-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 26238.0,
+          "endChainageM": 26408.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 26323.0,
+          "stopMarkerChainageM": 26323.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S14",
+      "name": "旭ヶ丘",
+      "chainageM": 28452.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S14-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 28367.0,
+          "endChainageM": 28537.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 28452.0,
+          "stopMarkerChainageM": 28452.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S15",
+      "name": "西原町",
+      "chainageM": 30677.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S15-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 30592.0,
+          "endChainageM": 30762.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 30677.0,
+          "stopMarkerChainageM": 30677.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S16",
+      "name": "緑町",
+      "chainageM": 32903.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S16-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 32818.0,
+          "endChainageM": 32988.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 32903.0,
+          "stopMarkerChainageM": 32903.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S17",
+      "name": "桜川",
+      "chainageM": 35129.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S17-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 35044.0,
+          "endChainageM": 35214.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 35129.0,
+          "stopMarkerChainageM": 35129.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S18",
+      "name": "大森町",
+      "chainageM": 37355.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S18-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 37270.0,
+          "endChainageM": 37440.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 37355.0,
+          "stopMarkerChainageM": 37355.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S19",
+      "name": "海岸通",
+      "chainageM": 39581.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S19-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 39496.0,
+          "endChainageM": 39666.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 39581.0,
+          "stopMarkerChainageM": 39581.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S20",
+      "name": "清水町",
+      "chainageM": 41806.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S20-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 41721.0,
+          "endChainageM": 41891.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 41806.0,
+          "stopMarkerChainageM": 41806.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S21",
+      "name": "中央市場前",
+      "chainageM": 44032.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S21-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 43947.0,
+          "endChainageM": 44117.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 44032.0,
+          "stopMarkerChainageM": 44032.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S22",
+      "name": "千代田町",
+      "chainageM": 46258.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S22-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 46173.0,
+          "endChainageM": 46343.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 46258.0,
+          "stopMarkerChainageM": 46258.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S23",
+      "name": "岩倉町",
+      "chainageM": 48484.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S23-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 48399.0,
+          "endChainageM": 48569.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 48484.0,
+          "stopMarkerChainageM": 48484.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S24",
+      "name": "川西町",
+      "chainageM": 50710.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S24-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 50625.0,
+          "endChainageM": 50795.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 50710.0,
+          "stopMarkerChainageM": 50710.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S25",
+      "name": "白浜町",
+      "chainageM": 52935.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S25-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 52850.0,
+          "endChainageM": 53020.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 52935.0,
+          "stopMarkerChainageM": 52935.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S26",
+      "name": "新港町",
+      "chainageM": 55161.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S26-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 55076.0,
+          "endChainageM": 55246.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 55161.0,
+          "stopMarkerChainageM": 55161.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S27",
+      "name": "岬町",
+      "chainageM": 57387.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S27-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 57302.0,
+          "endChainageM": 57472.0,
+          "lengthM": 170.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 57387.0,
+          "stopMarkerChainageM": 57387.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S28",
+      "name": "東浜",
+      "chainageM": 60000.0,
+      "position": {
+        "dataStatus": "PLACEHOLDER",
+        "latitudeDeg": null,
+        "longitudeDeg": null,
+        "elevationM": null,
+        "coordinateStatus": "UNKNOWN"
+      },
+      "stationTrackLayout": {
+        "dataStatus": "PLACEHOLDER",
+        "trackCount": 2,
+        "arrangement": "two-track-through (fictional placeholder)",
+        "turnbackFacility": false
+      },
+      "platforms": [
+        {
+          "dataStatus": "PLACEHOLDER",
+          "platformId": "S28-P1",
+          "trackId": "T1",
+          "trackSide": "left (placeholder)",
+          "startChainageM": 59915.0,
+          "endChainageM": 60000.0,
+          "lengthM": 85.0,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "alignment": "straight (placeholder)",
+          "gradientPermille": 0.0,
+          "platformScreenDoors": false,
+          "roof": "modular canopy (placeholder)",
+          "stationBuildingPositionChainageM": 60000.0,
+          "stopMarkerChainageM": 60000.0,
+          "amenities": [
+            "stairs",
+            "elevator",
+            "lighting",
+            "departure_board"
+          ]
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "segmentId": "MAINLINE_FULL",
+      "startStationId": "S01",
+      "endStationId": "S28",
+      "startChainageM": 0.0,
+      "endChainageM": 60000.0,
+      "distanceM": 60000.0
+    }
+  ],
+  "curves": [
+    {
+      "startChainageM": 5000.0,
+      "endChainageM": 9000.0,
+      "curveRadiusM": 850.0,
+      "curveDirection": "RIGHT",
+      "cantMm": 65.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "startChainageM": 18000.0,
+      "endChainageM": 22000.0,
+      "curveRadiusM": 680.0,
+      "curveDirection": "LEFT",
+      "cantMm": 80.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "startChainageM": 33000.0,
+      "endChainageM": 37000.0,
+      "curveRadiusM": 920.0,
+      "curveDirection": "RIGHT",
+      "cantMm": 55.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "startChainageM": 48000.0,
+      "endChainageM": 52000.0,
+      "curveRadiusM": 720.0,
+      "curveDirection": "LEFT",
+      "cantMm": 70.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    }
+  ],
+  "gradients": [
+    {
+      "startChainageM": 0.0,
+      "endChainageM": 20000.0,
+      "gradientPermille": 2.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "startChainageM": 20000.0,
+      "endChainageM": 40000.0,
+      "gradientPermille": -3.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "startChainageM": 40000.0,
+      "endChainageM": 60000.0,
+      "gradientPermille": 1.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    }
+  ],
+  "speedRestrictions": [
+    {
+      "startChainageM": 0.0,
+      "endChainageM": 18000.0,
+      "limitKmh": 90.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "startChainageM": 18000.0,
+      "endChainageM": 42000.0,
+      "limitKmh": 120.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "startChainageM": 42000.0,
+      "endChainageM": 60000.0,
+      "limitKmh": 100.0,
+      "trackIds": [
+        "T1",
+        "T2"
+      ]
+    }
+  ],
+  "blocks": [
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-001",
+      "trackId": "T1",
+      "startChainageM": 0.0,
+      "endChainageM": 500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-002",
+      "trackId": "T1",
+      "startChainageM": 500.0,
+      "endChainageM": 1000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-003",
+      "trackId": "T1",
+      "startChainageM": 1000.0,
+      "endChainageM": 1500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-004",
+      "trackId": "T1",
+      "startChainageM": 1500.0,
+      "endChainageM": 2000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-005",
+      "trackId": "T1",
+      "startChainageM": 2000.0,
+      "endChainageM": 2500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-006",
+      "trackId": "T1",
+      "startChainageM": 2500.0,
+      "endChainageM": 3000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-007",
+      "trackId": "T1",
+      "startChainageM": 3000.0,
+      "endChainageM": 3500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-008",
+      "trackId": "T1",
+      "startChainageM": 3500.0,
+      "endChainageM": 4000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-009",
+      "trackId": "T1",
+      "startChainageM": 4000.0,
+      "endChainageM": 4500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-010",
+      "trackId": "T1",
+      "startChainageM": 4500.0,
+      "endChainageM": 5000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-011",
+      "trackId": "T1",
+      "startChainageM": 5000.0,
+      "endChainageM": 5500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-012",
+      "trackId": "T1",
+      "startChainageM": 5500.0,
+      "endChainageM": 6000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-013",
+      "trackId": "T1",
+      "startChainageM": 6000.0,
+      "endChainageM": 6500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-014",
+      "trackId": "T1",
+      "startChainageM": 6500.0,
+      "endChainageM": 7000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-015",
+      "trackId": "T1",
+      "startChainageM": 7000.0,
+      "endChainageM": 7500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-016",
+      "trackId": "T1",
+      "startChainageM": 7500.0,
+      "endChainageM": 8000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-017",
+      "trackId": "T1",
+      "startChainageM": 8000.0,
+      "endChainageM": 8500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-018",
+      "trackId": "T1",
+      "startChainageM": 8500.0,
+      "endChainageM": 9000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-019",
+      "trackId": "T1",
+      "startChainageM": 9000.0,
+      "endChainageM": 9500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-020",
+      "trackId": "T1",
+      "startChainageM": 9500.0,
+      "endChainageM": 10000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-021",
+      "trackId": "T1",
+      "startChainageM": 10000.0,
+      "endChainageM": 10500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-022",
+      "trackId": "T1",
+      "startChainageM": 10500.0,
+      "endChainageM": 11000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-023",
+      "trackId": "T1",
+      "startChainageM": 11000.0,
+      "endChainageM": 11500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-024",
+      "trackId": "T1",
+      "startChainageM": 11500.0,
+      "endChainageM": 12000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-025",
+      "trackId": "T1",
+      "startChainageM": 12000.0,
+      "endChainageM": 12500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-026",
+      "trackId": "T1",
+      "startChainageM": 12500.0,
+      "endChainageM": 13000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-027",
+      "trackId": "T1",
+      "startChainageM": 13000.0,
+      "endChainageM": 13500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-028",
+      "trackId": "T1",
+      "startChainageM": 13500.0,
+      "endChainageM": 14000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-029",
+      "trackId": "T1",
+      "startChainageM": 14000.0,
+      "endChainageM": 14500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-030",
+      "trackId": "T1",
+      "startChainageM": 14500.0,
+      "endChainageM": 15000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-031",
+      "trackId": "T1",
+      "startChainageM": 15000.0,
+      "endChainageM": 15500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-032",
+      "trackId": "T1",
+      "startChainageM": 15500.0,
+      "endChainageM": 16000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-033",
+      "trackId": "T1",
+      "startChainageM": 16000.0,
+      "endChainageM": 16500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-034",
+      "trackId": "T1",
+      "startChainageM": 16500.0,
+      "endChainageM": 17000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-035",
+      "trackId": "T1",
+      "startChainageM": 17000.0,
+      "endChainageM": 17500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-036",
+      "trackId": "T1",
+      "startChainageM": 17500.0,
+      "endChainageM": 18000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-037",
+      "trackId": "T1",
+      "startChainageM": 18000.0,
+      "endChainageM": 18500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-038",
+      "trackId": "T1",
+      "startChainageM": 18500.0,
+      "endChainageM": 19000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-039",
+      "trackId": "T1",
+      "startChainageM": 19000.0,
+      "endChainageM": 19500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-040",
+      "trackId": "T1",
+      "startChainageM": 19500.0,
+      "endChainageM": 20000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-041",
+      "trackId": "T1",
+      "startChainageM": 20000.0,
+      "endChainageM": 20500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-042",
+      "trackId": "T1",
+      "startChainageM": 20500.0,
+      "endChainageM": 21000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-043",
+      "trackId": "T1",
+      "startChainageM": 21000.0,
+      "endChainageM": 21500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-044",
+      "trackId": "T1",
+      "startChainageM": 21500.0,
+      "endChainageM": 22000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-045",
+      "trackId": "T1",
+      "startChainageM": 22000.0,
+      "endChainageM": 22500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-046",
+      "trackId": "T1",
+      "startChainageM": 22500.0,
+      "endChainageM": 23000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-047",
+      "trackId": "T1",
+      "startChainageM": 23000.0,
+      "endChainageM": 23500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-048",
+      "trackId": "T1",
+      "startChainageM": 23500.0,
+      "endChainageM": 24000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-049",
+      "trackId": "T1",
+      "startChainageM": 24000.0,
+      "endChainageM": 24500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-050",
+      "trackId": "T1",
+      "startChainageM": 24500.0,
+      "endChainageM": 25000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-051",
+      "trackId": "T1",
+      "startChainageM": 25000.0,
+      "endChainageM": 25500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-052",
+      "trackId": "T1",
+      "startChainageM": 25500.0,
+      "endChainageM": 26000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-053",
+      "trackId": "T1",
+      "startChainageM": 26000.0,
+      "endChainageM": 26500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-054",
+      "trackId": "T1",
+      "startChainageM": 26500.0,
+      "endChainageM": 27000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-055",
+      "trackId": "T1",
+      "startChainageM": 27000.0,
+      "endChainageM": 27500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-056",
+      "trackId": "T1",
+      "startChainageM": 27500.0,
+      "endChainageM": 28000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-057",
+      "trackId": "T1",
+      "startChainageM": 28000.0,
+      "endChainageM": 28500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-058",
+      "trackId": "T1",
+      "startChainageM": 28500.0,
+      "endChainageM": 29000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-059",
+      "trackId": "T1",
+      "startChainageM": 29000.0,
+      "endChainageM": 29500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-060",
+      "trackId": "T1",
+      "startChainageM": 29500.0,
+      "endChainageM": 30000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-061",
+      "trackId": "T1",
+      "startChainageM": 30000.0,
+      "endChainageM": 30500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-062",
+      "trackId": "T1",
+      "startChainageM": 30500.0,
+      "endChainageM": 31000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-063",
+      "trackId": "T1",
+      "startChainageM": 31000.0,
+      "endChainageM": 31500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-064",
+      "trackId": "T1",
+      "startChainageM": 31500.0,
+      "endChainageM": 32000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-065",
+      "trackId": "T1",
+      "startChainageM": 32000.0,
+      "endChainageM": 32500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-066",
+      "trackId": "T1",
+      "startChainageM": 32500.0,
+      "endChainageM": 33000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-067",
+      "trackId": "T1",
+      "startChainageM": 33000.0,
+      "endChainageM": 33500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-068",
+      "trackId": "T1",
+      "startChainageM": 33500.0,
+      "endChainageM": 34000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-069",
+      "trackId": "T1",
+      "startChainageM": 34000.0,
+      "endChainageM": 34500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-070",
+      "trackId": "T1",
+      "startChainageM": 34500.0,
+      "endChainageM": 35000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-071",
+      "trackId": "T1",
+      "startChainageM": 35000.0,
+      "endChainageM": 35500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-072",
+      "trackId": "T1",
+      "startChainageM": 35500.0,
+      "endChainageM": 36000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-073",
+      "trackId": "T1",
+      "startChainageM": 36000.0,
+      "endChainageM": 36500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-074",
+      "trackId": "T1",
+      "startChainageM": 36500.0,
+      "endChainageM": 37000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-075",
+      "trackId": "T1",
+      "startChainageM": 37000.0,
+      "endChainageM": 37500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-076",
+      "trackId": "T1",
+      "startChainageM": 37500.0,
+      "endChainageM": 38000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-077",
+      "trackId": "T1",
+      "startChainageM": 38000.0,
+      "endChainageM": 38500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-078",
+      "trackId": "T1",
+      "startChainageM": 38500.0,
+      "endChainageM": 39000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-079",
+      "trackId": "T1",
+      "startChainageM": 39000.0,
+      "endChainageM": 39500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-080",
+      "trackId": "T1",
+      "startChainageM": 39500.0,
+      "endChainageM": 40000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-081",
+      "trackId": "T1",
+      "startChainageM": 40000.0,
+      "endChainageM": 40500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-082",
+      "trackId": "T1",
+      "startChainageM": 40500.0,
+      "endChainageM": 41000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-083",
+      "trackId": "T1",
+      "startChainageM": 41000.0,
+      "endChainageM": 41500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-084",
+      "trackId": "T1",
+      "startChainageM": 41500.0,
+      "endChainageM": 42000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-085",
+      "trackId": "T1",
+      "startChainageM": 42000.0,
+      "endChainageM": 42500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-086",
+      "trackId": "T1",
+      "startChainageM": 42500.0,
+      "endChainageM": 43000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-087",
+      "trackId": "T1",
+      "startChainageM": 43000.0,
+      "endChainageM": 43500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-088",
+      "trackId": "T1",
+      "startChainageM": 43500.0,
+      "endChainageM": 44000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-089",
+      "trackId": "T1",
+      "startChainageM": 44000.0,
+      "endChainageM": 44500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-090",
+      "trackId": "T1",
+      "startChainageM": 44500.0,
+      "endChainageM": 45000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-091",
+      "trackId": "T1",
+      "startChainageM": 45000.0,
+      "endChainageM": 45500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-092",
+      "trackId": "T1",
+      "startChainageM": 45500.0,
+      "endChainageM": 46000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-093",
+      "trackId": "T1",
+      "startChainageM": 46000.0,
+      "endChainageM": 46500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-094",
+      "trackId": "T1",
+      "startChainageM": 46500.0,
+      "endChainageM": 47000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-095",
+      "trackId": "T1",
+      "startChainageM": 47000.0,
+      "endChainageM": 47500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-096",
+      "trackId": "T1",
+      "startChainageM": 47500.0,
+      "endChainageM": 48000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-097",
+      "trackId": "T1",
+      "startChainageM": 48000.0,
+      "endChainageM": 48500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-098",
+      "trackId": "T1",
+      "startChainageM": 48500.0,
+      "endChainageM": 49000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-099",
+      "trackId": "T1",
+      "startChainageM": 49000.0,
+      "endChainageM": 49500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-100",
+      "trackId": "T1",
+      "startChainageM": 49500.0,
+      "endChainageM": 50000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-101",
+      "trackId": "T1",
+      "startChainageM": 50000.0,
+      "endChainageM": 50500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-102",
+      "trackId": "T1",
+      "startChainageM": 50500.0,
+      "endChainageM": 51000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-103",
+      "trackId": "T1",
+      "startChainageM": 51000.0,
+      "endChainageM": 51500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-104",
+      "trackId": "T1",
+      "startChainageM": 51500.0,
+      "endChainageM": 52000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-105",
+      "trackId": "T1",
+      "startChainageM": 52000.0,
+      "endChainageM": 52500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-106",
+      "trackId": "T1",
+      "startChainageM": 52500.0,
+      "endChainageM": 53000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-107",
+      "trackId": "T1",
+      "startChainageM": 53000.0,
+      "endChainageM": 53500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-108",
+      "trackId": "T1",
+      "startChainageM": 53500.0,
+      "endChainageM": 54000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-109",
+      "trackId": "T1",
+      "startChainageM": 54000.0,
+      "endChainageM": 54500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-110",
+      "trackId": "T1",
+      "startChainageM": 54500.0,
+      "endChainageM": 55000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-111",
+      "trackId": "T1",
+      "startChainageM": 55000.0,
+      "endChainageM": 55500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-112",
+      "trackId": "T1",
+      "startChainageM": 55500.0,
+      "endChainageM": 56000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-113",
+      "trackId": "T1",
+      "startChainageM": 56000.0,
+      "endChainageM": 56500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-114",
+      "trackId": "T1",
+      "startChainageM": 56500.0,
+      "endChainageM": 57000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-115",
+      "trackId": "T1",
+      "startChainageM": 57000.0,
+      "endChainageM": 57500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-116",
+      "trackId": "T1",
+      "startChainageM": 57500.0,
+      "endChainageM": 58000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-117",
+      "trackId": "T1",
+      "startChainageM": 58000.0,
+      "endChainageM": 58500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-118",
+      "trackId": "T1",
+      "startChainageM": 58500.0,
+      "endChainageM": 59000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-119",
+      "trackId": "T1",
+      "startChainageM": 59000.0,
+      "endChainageM": 59500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T1-120",
+      "trackId": "T1",
+      "startChainageM": 59500.0,
+      "endChainageM": 60000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-001",
+      "trackId": "T2",
+      "startChainageM": 0.0,
+      "endChainageM": 500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-002",
+      "trackId": "T2",
+      "startChainageM": 500.0,
+      "endChainageM": 1000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-003",
+      "trackId": "T2",
+      "startChainageM": 1000.0,
+      "endChainageM": 1500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-004",
+      "trackId": "T2",
+      "startChainageM": 1500.0,
+      "endChainageM": 2000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-005",
+      "trackId": "T2",
+      "startChainageM": 2000.0,
+      "endChainageM": 2500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-006",
+      "trackId": "T2",
+      "startChainageM": 2500.0,
+      "endChainageM": 3000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-007",
+      "trackId": "T2",
+      "startChainageM": 3000.0,
+      "endChainageM": 3500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-008",
+      "trackId": "T2",
+      "startChainageM": 3500.0,
+      "endChainageM": 4000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-009",
+      "trackId": "T2",
+      "startChainageM": 4000.0,
+      "endChainageM": 4500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-010",
+      "trackId": "T2",
+      "startChainageM": 4500.0,
+      "endChainageM": 5000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-011",
+      "trackId": "T2",
+      "startChainageM": 5000.0,
+      "endChainageM": 5500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-012",
+      "trackId": "T2",
+      "startChainageM": 5500.0,
+      "endChainageM": 6000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-013",
+      "trackId": "T2",
+      "startChainageM": 6000.0,
+      "endChainageM": 6500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-014",
+      "trackId": "T2",
+      "startChainageM": 6500.0,
+      "endChainageM": 7000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-015",
+      "trackId": "T2",
+      "startChainageM": 7000.0,
+      "endChainageM": 7500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-016",
+      "trackId": "T2",
+      "startChainageM": 7500.0,
+      "endChainageM": 8000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-017",
+      "trackId": "T2",
+      "startChainageM": 8000.0,
+      "endChainageM": 8500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-018",
+      "trackId": "T2",
+      "startChainageM": 8500.0,
+      "endChainageM": 9000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-019",
+      "trackId": "T2",
+      "startChainageM": 9000.0,
+      "endChainageM": 9500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-020",
+      "trackId": "T2",
+      "startChainageM": 9500.0,
+      "endChainageM": 10000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-021",
+      "trackId": "T2",
+      "startChainageM": 10000.0,
+      "endChainageM": 10500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-022",
+      "trackId": "T2",
+      "startChainageM": 10500.0,
+      "endChainageM": 11000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-023",
+      "trackId": "T2",
+      "startChainageM": 11000.0,
+      "endChainageM": 11500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-024",
+      "trackId": "T2",
+      "startChainageM": 11500.0,
+      "endChainageM": 12000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-025",
+      "trackId": "T2",
+      "startChainageM": 12000.0,
+      "endChainageM": 12500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-026",
+      "trackId": "T2",
+      "startChainageM": 12500.0,
+      "endChainageM": 13000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-027",
+      "trackId": "T2",
+      "startChainageM": 13000.0,
+      "endChainageM": 13500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-028",
+      "trackId": "T2",
+      "startChainageM": 13500.0,
+      "endChainageM": 14000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-029",
+      "trackId": "T2",
+      "startChainageM": 14000.0,
+      "endChainageM": 14500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-030",
+      "trackId": "T2",
+      "startChainageM": 14500.0,
+      "endChainageM": 15000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-031",
+      "trackId": "T2",
+      "startChainageM": 15000.0,
+      "endChainageM": 15500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-032",
+      "trackId": "T2",
+      "startChainageM": 15500.0,
+      "endChainageM": 16000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-033",
+      "trackId": "T2",
+      "startChainageM": 16000.0,
+      "endChainageM": 16500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-034",
+      "trackId": "T2",
+      "startChainageM": 16500.0,
+      "endChainageM": 17000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-035",
+      "trackId": "T2",
+      "startChainageM": 17000.0,
+      "endChainageM": 17500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-036",
+      "trackId": "T2",
+      "startChainageM": 17500.0,
+      "endChainageM": 18000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-037",
+      "trackId": "T2",
+      "startChainageM": 18000.0,
+      "endChainageM": 18500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-038",
+      "trackId": "T2",
+      "startChainageM": 18500.0,
+      "endChainageM": 19000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-039",
+      "trackId": "T2",
+      "startChainageM": 19000.0,
+      "endChainageM": 19500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-040",
+      "trackId": "T2",
+      "startChainageM": 19500.0,
+      "endChainageM": 20000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-041",
+      "trackId": "T2",
+      "startChainageM": 20000.0,
+      "endChainageM": 20500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-042",
+      "trackId": "T2",
+      "startChainageM": 20500.0,
+      "endChainageM": 21000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-043",
+      "trackId": "T2",
+      "startChainageM": 21000.0,
+      "endChainageM": 21500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-044",
+      "trackId": "T2",
+      "startChainageM": 21500.0,
+      "endChainageM": 22000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-045",
+      "trackId": "T2",
+      "startChainageM": 22000.0,
+      "endChainageM": 22500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-046",
+      "trackId": "T2",
+      "startChainageM": 22500.0,
+      "endChainageM": 23000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-047",
+      "trackId": "T2",
+      "startChainageM": 23000.0,
+      "endChainageM": 23500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-048",
+      "trackId": "T2",
+      "startChainageM": 23500.0,
+      "endChainageM": 24000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-049",
+      "trackId": "T2",
+      "startChainageM": 24000.0,
+      "endChainageM": 24500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-050",
+      "trackId": "T2",
+      "startChainageM": 24500.0,
+      "endChainageM": 25000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-051",
+      "trackId": "T2",
+      "startChainageM": 25000.0,
+      "endChainageM": 25500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-052",
+      "trackId": "T2",
+      "startChainageM": 25500.0,
+      "endChainageM": 26000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-053",
+      "trackId": "T2",
+      "startChainageM": 26000.0,
+      "endChainageM": 26500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-054",
+      "trackId": "T2",
+      "startChainageM": 26500.0,
+      "endChainageM": 27000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-055",
+      "trackId": "T2",
+      "startChainageM": 27000.0,
+      "endChainageM": 27500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-056",
+      "trackId": "T2",
+      "startChainageM": 27500.0,
+      "endChainageM": 28000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-057",
+      "trackId": "T2",
+      "startChainageM": 28000.0,
+      "endChainageM": 28500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-058",
+      "trackId": "T2",
+      "startChainageM": 28500.0,
+      "endChainageM": 29000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-059",
+      "trackId": "T2",
+      "startChainageM": 29000.0,
+      "endChainageM": 29500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-060",
+      "trackId": "T2",
+      "startChainageM": 29500.0,
+      "endChainageM": 30000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-061",
+      "trackId": "T2",
+      "startChainageM": 30000.0,
+      "endChainageM": 30500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-062",
+      "trackId": "T2",
+      "startChainageM": 30500.0,
+      "endChainageM": 31000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-063",
+      "trackId": "T2",
+      "startChainageM": 31000.0,
+      "endChainageM": 31500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-064",
+      "trackId": "T2",
+      "startChainageM": 31500.0,
+      "endChainageM": 32000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-065",
+      "trackId": "T2",
+      "startChainageM": 32000.0,
+      "endChainageM": 32500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-066",
+      "trackId": "T2",
+      "startChainageM": 32500.0,
+      "endChainageM": 33000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-067",
+      "trackId": "T2",
+      "startChainageM": 33000.0,
+      "endChainageM": 33500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-068",
+      "trackId": "T2",
+      "startChainageM": 33500.0,
+      "endChainageM": 34000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-069",
+      "trackId": "T2",
+      "startChainageM": 34000.0,
+      "endChainageM": 34500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-070",
+      "trackId": "T2",
+      "startChainageM": 34500.0,
+      "endChainageM": 35000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-071",
+      "trackId": "T2",
+      "startChainageM": 35000.0,
+      "endChainageM": 35500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-072",
+      "trackId": "T2",
+      "startChainageM": 35500.0,
+      "endChainageM": 36000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-073",
+      "trackId": "T2",
+      "startChainageM": 36000.0,
+      "endChainageM": 36500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-074",
+      "trackId": "T2",
+      "startChainageM": 36500.0,
+      "endChainageM": 37000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-075",
+      "trackId": "T2",
+      "startChainageM": 37000.0,
+      "endChainageM": 37500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-076",
+      "trackId": "T2",
+      "startChainageM": 37500.0,
+      "endChainageM": 38000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-077",
+      "trackId": "T2",
+      "startChainageM": 38000.0,
+      "endChainageM": 38500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-078",
+      "trackId": "T2",
+      "startChainageM": 38500.0,
+      "endChainageM": 39000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-079",
+      "trackId": "T2",
+      "startChainageM": 39000.0,
+      "endChainageM": 39500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-080",
+      "trackId": "T2",
+      "startChainageM": 39500.0,
+      "endChainageM": 40000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-081",
+      "trackId": "T2",
+      "startChainageM": 40000.0,
+      "endChainageM": 40500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-082",
+      "trackId": "T2",
+      "startChainageM": 40500.0,
+      "endChainageM": 41000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-083",
+      "trackId": "T2",
+      "startChainageM": 41000.0,
+      "endChainageM": 41500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-084",
+      "trackId": "T2",
+      "startChainageM": 41500.0,
+      "endChainageM": 42000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-085",
+      "trackId": "T2",
+      "startChainageM": 42000.0,
+      "endChainageM": 42500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-086",
+      "trackId": "T2",
+      "startChainageM": 42500.0,
+      "endChainageM": 43000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-087",
+      "trackId": "T2",
+      "startChainageM": 43000.0,
+      "endChainageM": 43500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-088",
+      "trackId": "T2",
+      "startChainageM": 43500.0,
+      "endChainageM": 44000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-089",
+      "trackId": "T2",
+      "startChainageM": 44000.0,
+      "endChainageM": 44500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-090",
+      "trackId": "T2",
+      "startChainageM": 44500.0,
+      "endChainageM": 45000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-091",
+      "trackId": "T2",
+      "startChainageM": 45000.0,
+      "endChainageM": 45500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-092",
+      "trackId": "T2",
+      "startChainageM": 45500.0,
+      "endChainageM": 46000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-093",
+      "trackId": "T2",
+      "startChainageM": 46000.0,
+      "endChainageM": 46500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-094",
+      "trackId": "T2",
+      "startChainageM": 46500.0,
+      "endChainageM": 47000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-095",
+      "trackId": "T2",
+      "startChainageM": 47000.0,
+      "endChainageM": 47500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-096",
+      "trackId": "T2",
+      "startChainageM": 47500.0,
+      "endChainageM": 48000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-097",
+      "trackId": "T2",
+      "startChainageM": 48000.0,
+      "endChainageM": 48500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-098",
+      "trackId": "T2",
+      "startChainageM": 48500.0,
+      "endChainageM": 49000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-099",
+      "trackId": "T2",
+      "startChainageM": 49000.0,
+      "endChainageM": 49500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-100",
+      "trackId": "T2",
+      "startChainageM": 49500.0,
+      "endChainageM": 50000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-101",
+      "trackId": "T2",
+      "startChainageM": 50000.0,
+      "endChainageM": 50500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-102",
+      "trackId": "T2",
+      "startChainageM": 50500.0,
+      "endChainageM": 51000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-103",
+      "trackId": "T2",
+      "startChainageM": 51000.0,
+      "endChainageM": 51500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-104",
+      "trackId": "T2",
+      "startChainageM": 51500.0,
+      "endChainageM": 52000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-105",
+      "trackId": "T2",
+      "startChainageM": 52000.0,
+      "endChainageM": 52500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-106",
+      "trackId": "T2",
+      "startChainageM": 52500.0,
+      "endChainageM": 53000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-107",
+      "trackId": "T2",
+      "startChainageM": 53000.0,
+      "endChainageM": 53500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-108",
+      "trackId": "T2",
+      "startChainageM": 53500.0,
+      "endChainageM": 54000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-109",
+      "trackId": "T2",
+      "startChainageM": 54000.0,
+      "endChainageM": 54500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-110",
+      "trackId": "T2",
+      "startChainageM": 54500.0,
+      "endChainageM": 55000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-111",
+      "trackId": "T2",
+      "startChainageM": 55000.0,
+      "endChainageM": 55500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-112",
+      "trackId": "T2",
+      "startChainageM": 55500.0,
+      "endChainageM": 56000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-113",
+      "trackId": "T2",
+      "startChainageM": 56000.0,
+      "endChainageM": 56500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-114",
+      "trackId": "T2",
+      "startChainageM": 56500.0,
+      "endChainageM": 57000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-115",
+      "trackId": "T2",
+      "startChainageM": 57000.0,
+      "endChainageM": 57500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-116",
+      "trackId": "T2",
+      "startChainageM": 57500.0,
+      "endChainageM": 58000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-117",
+      "trackId": "T2",
+      "startChainageM": 58000.0,
+      "endChainageM": 58500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-118",
+      "trackId": "T2",
+      "startChainageM": 58500.0,
+      "endChainageM": 59000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-119",
+      "trackId": "T2",
+      "startChainageM": 59000.0,
+      "endChainageM": 59500.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "blockId": "FULL-T2-120",
+      "trackId": "T2",
+      "startChainageM": 59500.0,
+      "endChainageM": 60000.0,
+      "occupancyModel": "single-train exclusive (fictional placeholder)",
+      "trackCircuitType": "generic conceptual block"
+    }
+  ]
+}

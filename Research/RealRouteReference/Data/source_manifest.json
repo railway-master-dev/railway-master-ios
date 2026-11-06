@@ -1,0 +1,50 @@
+{
+  "dataset": {
+    "name": "国土数値情報（鉄道データ）2025年度版 N02-25",
+    "publisher": "国土交通省",
+    "pageURL": "https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N02-2025.html",
+    "downloadURL": "https://nlftp.mlit.go.jp/ksj/gml/data/N02/N02-25/N02-25_GML.zip",
+    "retrievedAt": "2026-11-06",
+    "dataReferenceDate": "2025-12-31",
+    "metadataDateStamp": "2026-03-06",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "archiveSHA256": "aaf76af133b2e771e538fabc4646d2e443dc1d5a67b221382a28d744e706cc9f",
+    "coordinateReferenceSystem": "JGD2011 / (B,L)",
+    "metadataEquivalentScale": "1:25,000"
+  },
+  "extraction": {
+    "routeFeatureProperties": {
+      "N02_001": "12",
+      "N02_002": "4",
+      "N02_003": "京都線",
+      "N02_004": "近畿日本鉄道"
+    },
+    "stationFeatures": {
+      "kyoto": {
+        "N02_001": "12",
+        "N02_002": "4",
+        "N02_003": "京都線",
+        "N02_004": "近畿日本鉄道",
+        "N02_005": "京都",
+        "N02_005c": "006084",
+        "N02_005g": "006079"
+      },
+      "toji": {
+        "N02_001": "12",
+        "N02_002": "4",
+        "N02_003": "京都線",
+        "N02_004": "近畿日本鉄道",
+        "N02_005": "東寺",
+        "N02_005c": "006099",
+        "N02_005g": "006099"
+      }
+    },
+    "routeVertexCount": 16,
+    "routeLengthM": 801.5,
+    "routeLengthStatus": "ESTIMATED",
+    "routeLengthMethod": "Cumulative inverse geodesic on GRS80 between published source vertices; route order reversed to Kyoto -> Toji; rounded to 0.1 m",
+    "positionErrorMetres": null,
+    "positionErrorNote": "No metre-valued absolute positioning error bound was found in N02-25 metadata; the 0% coordinate QA refers to matching the referenced source, not ground-truth track survey accuracy."
+  }
+}

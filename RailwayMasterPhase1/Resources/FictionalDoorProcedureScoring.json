@@ -1,0 +1,35 @@
+{
+  "fictionalDatasetNotice": "All station IDs, expected sides, procedure IDs and scores in this file are invented PLACEHOLDER gameplay data. They are not real railway information, operating rules or training procedures.",
+  "schemaVersion": 1,
+  "routeScenarios": {
+    "fictional-throughBranch-local-up": [
+      {
+        "stationID": "S02",
+        "displayName": "松原町（架空）",
+        "expectedDoorSide": { "status": "known", "value": "right" },
+        "procedureRequirements": {
+          "status": "known",
+          "value": [
+            {
+              "stepID": "fictional.conductor-confirm-closure",
+              "role": "conductor",
+              "title": "架空ゲーム内・閉扉確認の記録"
+            }
+          ]
+        }
+      },
+      {
+        "stationID": "S03",
+        "displayName": "川端町（架空）",
+        "expectedDoorSide": { "status": "known", "value": "left" },
+        "procedureRequirements": { "status": "known", "value": [] }
+      },
+      {
+        "stationID": "B01",
+        "displayName": "枝川町（架空・資料未収集）",
+        "expectedDoorSide": { "status": "unknown", "reason": "sourceDoesNotSpecify" },
+        "procedureRequirements": { "status": "missing" }
+      }
+    ]
+  }
+}

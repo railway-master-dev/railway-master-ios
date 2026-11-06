@@ -1,0 +1,1781 @@
+{
+  "schemaVersion": "1.0.0",
+  "datasetKind": "FICTIONAL_PLACEHOLDER",
+  "description": "32 synthetic fictional stations with side, island, 3-platform and 4-platform topologies; canonical route chainages remain placeholders.",
+  "stationCount": 32,
+  "source": "FictionalOperationsPlan.json station IDs and chainages; platform layouts newly authored procedural placeholders.",
+  "stations": [
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S01",
+      "name": "環雲中央",
+      "lineId": "MAIN",
+      "chainageM": 0.0,
+      "archetype": "terminal_3platform",
+      "stationRole": "terminal",
+      "trackCount": 4,
+      "platformCount": 3,
+      "platforms": [
+        {
+          "platformId": "S01-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 180,
+          "widthM": 8.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S01-P2",
+          "platformType": "island",
+          "trackIds": [
+            "T2",
+            "T3"
+          ],
+          "side": "between_tracks",
+          "lengthM": 180,
+          "widthM": 9.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S01-P3",
+          "platformType": "side",
+          "trackId": "T4",
+          "side": "right",
+          "lengthM": 160,
+          "widthM": 7.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "urban_concourse",
+        "footprintM": [
+          22,
+          8
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": true,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 4,
+        "crossovers": true,
+        "turnback": true,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S02",
+      "name": "松原町",
+      "lineId": "MAIN",
+      "chainageM": 1839.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S02-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 140,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S02-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 140,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          8
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "rural"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S03",
+      "name": "川端町",
+      "lineId": "MAIN",
+      "chainageM": 3871.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S03-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 130,
+          "widthM": 7.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          22,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "hillside"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S04",
+      "name": "新田",
+      "lineId": "MAIN",
+      "chainageM": 6000.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S04-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 100,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S04-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 100,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S05",
+      "name": "桜台",
+      "lineId": "MAIN",
+      "chainageM": 8226.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S05-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 120,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "hillside"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S06",
+      "name": "港南町",
+      "lineId": "MAIN",
+      "chainageM": 10355.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S06-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 100,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S06-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 100,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          34,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": true,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "rural"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S07",
+      "name": "東野",
+      "lineId": "MAIN",
+      "chainageM": 12387.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S07-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 120,
+          "widthM": 7.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          34,
+          8
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": true,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S08",
+      "name": "若葉台",
+      "lineId": "MAIN",
+      "chainageM": 14613.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S08-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 120,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S08-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 120,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          18,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "rural"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S09",
+      "name": "北原",
+      "lineId": "MAIN",
+      "chainageM": 16935.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S09-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 110,
+          "widthM": 7.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          22,
+          8
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "river"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S10",
+      "name": "高砂町",
+      "lineId": "MAIN",
+      "chainageM": 19161.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S10-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 110,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S10-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 110,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          8
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": true,
+        "hasUnderpass": true
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S11",
+      "name": "山手町",
+      "lineId": "MAIN",
+      "chainageM": 21290.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S11-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 140,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "river"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S12",
+      "name": "環雲市",
+      "lineId": "MAIN",
+      "chainageM": 24194.0,
+      "archetype": "major_5track_4platform",
+      "stationRole": "major",
+      "trackCount": 5,
+      "platformCount": 4,
+      "platforms": [
+        {
+          "platformId": "S12-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 180,
+          "widthM": 5.2,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S12-P2",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 180,
+          "widthM": 7.2,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S12-P3",
+          "platformType": "island",
+          "trackIds": [
+            "T3",
+            "T4"
+          ],
+          "side": "between_tracks",
+          "lengthM": 180,
+          "widthM": 7.2,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S12-P4",
+          "platformType": "side",
+          "trackId": "T5",
+          "side": "right",
+          "lengthM": 160,
+          "widthM": 5.2,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "urban_concourse",
+        "footprintM": [
+          34,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": true,
+        "hasFootbridge": true,
+        "hasUnderpass": true
+      },
+      "trackFeatures": {
+        "turnoutCount": 6,
+        "crossovers": true,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "river"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S13",
+      "name": "南町",
+      "lineId": "MAIN",
+      "chainageM": 26323.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S13-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 100,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S13-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 100,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S14",
+      "name": "旭ヶ丘",
+      "lineId": "MAIN",
+      "chainageM": 28452.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S14-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 120,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "hillside"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S15",
+      "name": "西原町",
+      "lineId": "MAIN",
+      "chainageM": 30677.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S15-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 100,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S15-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 100,
+          "widthM": 5.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          34,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": true,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "rural"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S16",
+      "name": "緑町",
+      "lineId": "MAIN",
+      "chainageM": 32903.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S16-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 120,
+          "widthM": 7.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          34,
+          8
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": true,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S17",
+      "name": "桜川",
+      "lineId": "MAIN",
+      "chainageM": 35129.0,
+      "archetype": "passing_3track_2platform",
+      "stationRole": "passing",
+      "trackCount": 3,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S17-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 150,
+          "widthM": 5.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S17-P2",
+          "platformType": "island",
+          "trackIds": [
+            "T2",
+            "T3"
+          ],
+          "side": "between_tracks",
+          "lengthM": 150,
+          "widthM": 6.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "regional_station",
+        "footprintM": [
+          34,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 2,
+        "crossovers": true,
+        "turnback": false,
+        "passingLoop": true,
+        "junction": false
+      },
+      "environmentStyle": "coastal"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S18",
+      "name": "大森町",
+      "lineId": "MAIN",
+      "chainageM": 37355.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S18-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 110,
+          "widthM": 5.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S18-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 110,
+          "widthM": 5.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          18,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S19",
+      "name": "海岸通",
+      "lineId": "MAIN",
+      "chainageM": 39581.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S19-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 130,
+          "widthM": 7.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          18,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "hillside"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S20",
+      "name": "清水町",
+      "lineId": "MAIN",
+      "chainageM": 41806.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S20-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 140,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S20-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 140,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          8
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "rural"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S21",
+      "name": "中央市場前",
+      "lineId": "MAIN",
+      "chainageM": 44032.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S21-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 130,
+          "widthM": 7.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          22,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "hillside"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S22",
+      "name": "千代田町",
+      "lineId": "MAIN",
+      "chainageM": 46258.0,
+      "archetype": "passing_3track_2platform",
+      "stationRole": "passing",
+      "trackCount": 3,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S22-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 150,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S22-P2",
+          "platformType": "island",
+          "trackIds": [
+            "T2",
+            "T3"
+          ],
+          "side": "between_tracks",
+          "lengthM": 150,
+          "widthM": 5.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "regional_station",
+        "footprintM": [
+          18,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 2,
+        "crossovers": true,
+        "turnback": false,
+        "passingLoop": true,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S23",
+      "name": "岩倉町",
+      "lineId": "MAIN",
+      "chainageM": 48484.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S23-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 120,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S23-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 120,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "industrial"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S24",
+      "name": "川西町",
+      "lineId": "MAIN",
+      "chainageM": 50710.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S24-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 100,
+          "widthM": 6.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          28,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "rural"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S25",
+      "name": "白浜町",
+      "lineId": "MAIN",
+      "chainageM": 52935.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S25-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 120,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S25-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 120,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          18,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S26",
+      "name": "新港町",
+      "lineId": "MAIN",
+      "chainageM": 55161.0,
+      "archetype": "island_platform",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "S26-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 120,
+          "widthM": 7.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          22,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": false,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "industrial"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S27",
+      "name": "岬町",
+      "lineId": "MAIN",
+      "chainageM": 57387.0,
+      "archetype": "side_platforms",
+      "stationRole": "local",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "S27-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 110,
+          "widthM": 5.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S27-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 110,
+          "widthM": 5.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "compact_station",
+        "footprintM": [
+          18,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": false,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "S28",
+      "name": "東浜",
+      "lineId": "MAIN",
+      "chainageM": 60000.0,
+      "archetype": "junction_3platform",
+      "stationRole": "junction",
+      "trackCount": 4,
+      "platformCount": 3,
+      "platforms": [
+        {
+          "platformId": "S28-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 180,
+          "widthM": 8.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S28-P2",
+          "platformType": "island",
+          "trackIds": [
+            "T2",
+            "T3"
+          ],
+          "side": "between_tracks",
+          "lengthM": 180,
+          "widthM": 9.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "S28-P3",
+          "platformType": "side",
+          "trackId": "T4",
+          "side": "right",
+          "lengthM": 160,
+          "widthM": 7.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "regional_station",
+        "footprintM": [
+          34,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": true,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 4,
+        "crossovers": true,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": true
+      },
+      "environmentStyle": "suburban"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "B01",
+      "name": "枝川町",
+      "lineId": "BRANCH",
+      "chainageM": 2000.0,
+      "archetype": "side_platforms",
+      "stationRole": "branch",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "B01-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 140,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "B01-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 140,
+          "widthM": 6.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "regional_station",
+        "footprintM": [
+          34,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": true,
+        "hasFootbridge": false,
+        "hasUnderpass": true
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "industrial"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "B02",
+      "name": "深沢",
+      "lineId": "BRANCH",
+      "chainageM": 4000.0,
+      "archetype": "island_platform",
+      "stationRole": "branch",
+      "trackCount": 2,
+      "platformCount": 1,
+      "platforms": [
+        {
+          "platformId": "B02-P1",
+          "platformType": "island",
+          "trackIds": [
+            "T1",
+            "T2"
+          ],
+          "side": "between_tracks",
+          "lengthM": 100,
+          "widthM": 7.0,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "regional_station",
+        "footprintM": [
+          34,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": false,
+        "hasElevator": true,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "coastal"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "B03",
+      "name": "水沢町",
+      "lineId": "BRANCH",
+      "chainageM": 6000.0,
+      "archetype": "side_platforms",
+      "stationRole": "branch",
+      "trackCount": 2,
+      "platformCount": 2,
+      "platforms": [
+        {
+          "platformId": "B03-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 100,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "short_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "B03-P2",
+          "platformType": "side",
+          "trackId": "T2",
+          "side": "right",
+          "lengthM": 100,
+          "widthM": 4.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "regional_station",
+        "footprintM": [
+          18,
+          10
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": true,
+        "hasFootbridge": false,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 0,
+        "crossovers": false,
+        "turnback": false,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "river"
+    },
+    {
+      "dataStatus": "PLACEHOLDER",
+      "stationId": "B04",
+      "name": "山里",
+      "lineId": "BRANCH",
+      "chainageM": 8000.0,
+      "archetype": "branch_terminal",
+      "stationRole": "terminal",
+      "trackCount": 4,
+      "platformCount": 3,
+      "platforms": [
+        {
+          "platformId": "B04-P1",
+          "platformType": "side",
+          "trackId": "T1",
+          "side": "left",
+          "lengthM": 180,
+          "widthM": 8.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "B04-P2",
+          "platformType": "island",
+          "trackIds": [
+            "T2",
+            "T3"
+          ],
+          "side": "between_tracks",
+          "lengthM": 180,
+          "widthM": 9.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "full_canopy",
+          "tactilePaving": true
+        },
+        {
+          "platformId": "B04-P3",
+          "platformType": "side",
+          "trackId": "T4",
+          "side": "right",
+          "lengthM": 160,
+          "widthM": 7.5,
+          "heightAboveRailM": 1.1,
+          "roofType": "modular_canopy",
+          "tactilePaving": true
+        }
+      ],
+      "stationBuilding": {
+        "style": "urban_concourse",
+        "footprintM": [
+          22,
+          12
+        ],
+        "hasTicketGate": true,
+        "hasStaffRoom": true,
+        "hasToilets": true,
+        "hasElevator": true,
+        "hasFootbridge": true,
+        "hasUnderpass": false
+      },
+      "trackFeatures": {
+        "turnoutCount": 4,
+        "crossovers": true,
+        "turnback": true,
+        "passingLoop": false,
+        "junction": false
+      },
+      "environmentStyle": "river"
+    }
+  ]
+}

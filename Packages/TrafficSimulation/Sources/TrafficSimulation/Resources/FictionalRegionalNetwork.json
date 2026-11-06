@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "scenarioID": "fictional-70km-network-placeholder-v1",
+  "routeID": "fictional-mainline-placeholder",
+  "routeLengthM": 60000,
+  "routePaths": [
+    { "id": "mainline", "lengthM": 60000, "kind": "mainline", "dataStatus": "PLACEHOLDER" },
+    { "id": "branch", "lengthM": 8000, "kind": "branch", "connectsToPathID": "mainline", "junctionPositionM": 36000, "dataStatus": "PLACEHOLDER" },
+    { "id": "depot-spur", "lengthM": 2000, "kind": "depotSpur", "connectsToPathID": "mainline", "junctionPositionM": 0, "dataStatus": "PLACEHOLDER" }
+  ],
+  "dataStatus": "PLACEHOLDER",
+  "fixedTimeStepSeconds": 0.008333333333333333,
+  "minimumTrainGapM": 35,
+  "minimumRoadVehicleGapM": 7,
+  "passingVisualizationDistanceM": 55,
+  "tracks": [
+    { "id": "main-up", "routePathID": "mainline", "parallelGroupID": "mainline", "direction": 1, "lateralOffsetM": -2.1 },
+    { "id": "main-down", "routePathID": "mainline", "parallelGroupID": "mainline", "direction": -1, "lateralOffsetM": 2.1 },
+    { "id": "branch-up", "routePathID": "branch", "parallelGroupID": "branch", "direction": 1, "lateralOffsetM": -2.1 },
+    { "id": "branch-down", "routePathID": "branch", "parallelGroupID": "branch", "direction": -1, "lateralOffsetM": 2.1 },
+    { "id": "depot-in", "routePathID": "depot-spur", "parallelGroupID": "depot-spur", "direction": 1, "lateralOffsetM": -2.1 },
+    { "id": "depot-out", "routePathID": "depot-spur", "parallelGroupID": "depot-spur", "direction": -1, "lateralOffsetM": 2.1 }
+  ],
+  "roads": [
+    { "id": "road-up", "routePathID": "mainline", "parallelGroupID": "parallel-road", "direction": 1, "lateralOffsetM": -7 },
+    { "id": "road-down", "routePathID": "mainline", "parallelGroupID": "parallel-road", "direction": -1, "lateralOffsetM": 7 }
+  ],
+  "platforms": [
+    { "id": "mid-platform-up", "stationID": "placeholder-mid-station", "trackID": "main-up", "chainageM": 30000, "lengthM": 220, "lateralOffsetM": -4.4 },
+    { "id": "mid-platform-down", "stationID": "placeholder-mid-station", "trackID": "main-down", "chainageM": 30000, "lengthM": 220, "lateralOffsetM": 4.4 },
+    { "id": "branch-platform", "stationID": "placeholder-branch-station", "trackID": "branch-up", "chainageM": 4000, "lengthM": 140, "lateralOffsetM": -4.4 }
+  ],
+  "trains": [
+    {
+      "id": "local-up-morning-01", "trackID": "main-up", "departureTimeSeconds": 21600,
+      "startPositionM": 0, "destinationPositionM": 60000, "maximumSpeedMps": 8.2,
+      "accelerationMps2": 0.24, "brakingDecelerationMps2": 0.3, "lengthM": 120,
+      "stops": [
+        { "positionM": 5000, "dwellSeconds": 30 }, { "positionM": 10000, "dwellSeconds": 30 },
+        { "positionM": 15000, "dwellSeconds": 30 }, { "positionM": 20000, "dwellSeconds": 30 },
+        { "positionM": 25000, "dwellSeconds": 30 }, { "positionM": 30000, "dwellSeconds": 30 },
+        { "positionM": 35000, "dwellSeconds": 30 }, { "positionM": 40000, "dwellSeconds": 30 },
+        { "positionM": 45000, "dwellSeconds": 30 }, { "positionM": 50000, "dwellSeconds": 30 },
+        { "positionM": 55000, "dwellSeconds": 30 }
+      ],
+      "serviceType": "local", "servicePeriod": "morningRush", "operationKind": "passengerService", "scheduledTripDurationSeconds": 9000
+    },
+    {
+      "id": "rapid-down-morning-01", "trackID": "main-down", "departureTimeSeconds": 21900,
+      "startPositionM": 60000, "destinationPositionM": 0, "maximumSpeedMps": 18,
+      "accelerationMps2": 0.45, "brakingDecelerationMps2": 0.55, "lengthM": 110,
+      "stops": [{ "positionM": 40000, "dwellSeconds": 45 }, { "positionM": 20000, "dwellSeconds": 45 }],
+      "serviceType": "rapid", "servicePeriod": "morningRush", "operationKind": "passengerService", "scheduledTripDurationSeconds": 4200
+    },
+    {
+      "id": "semi-express-up-day-01", "trackID": "main-up", "departureTimeSeconds": 43200,
+      "startPositionM": 0, "destinationPositionM": 60000, "maximumSpeedMps": 19,
+      "accelerationMps2": 0.48, "brakingDecelerationMps2": 0.58, "lengthM": 115,
+      "stops": [{ "positionM": 20000, "dwellSeconds": 50 }, { "positionM": 40000, "dwellSeconds": 50 }],
+      "serviceType": "semiExpress", "servicePeriod": "daytime", "operationKind": "passengerService", "scheduledTripDurationSeconds": 3900
+    },
+    {
+      "id": "express-down-day-01", "trackID": "main-down", "departureTimeSeconds": 43800,
+      "startPositionM": 60000, "destinationPositionM": 0, "maximumSpeedMps": 20,
+      "accelerationMps2": 0.5, "brakingDecelerationMps2": 0.6, "lengthM": 115,
+      "stops": [{ "positionM": 30000, "dwellSeconds": 90 }],
+      "serviceType": "express", "servicePeriod": "daytime", "operationKind": "passengerService", "scheduledTripDurationSeconds": 3800
+    },
+    {
+      "id": "rapid-express-up-night-01", "trackID": "main-up", "departureTimeSeconds": 72000,
+      "startPositionM": 0, "destinationPositionM": 60000, "maximumSpeedMps": 21,
+      "accelerationMps2": 0.55, "brakingDecelerationMps2": 0.65, "lengthM": 120,
+      "stops": [],
+      "serviceType": "rapidExpress", "servicePeriod": "night", "operationKind": "passengerService", "scheduledTripDurationSeconds": 3600
+    },
+    {
+      "id": "limited-express-down-night-01", "trackID": "main-down", "departureTimeSeconds": 72600,
+      "startPositionM": 60000, "destinationPositionM": 0, "maximumSpeedMps": 22,
+      "accelerationMps2": 0.58, "brakingDecelerationMps2": 0.68, "lengthM": 120,
+      "stops": [],
+      "serviceType": "limitedExpress", "servicePeriod": "night", "operationKind": "passengerService", "scheduledTripDurationSeconds": 3600
+    },
+    {
+      "id": "branch-local-day-01", "trackID": "branch-up", "departureTimeSeconds": 50400,
+      "startPositionM": 0, "destinationPositionM": 8000, "maximumSpeedMps": 4.8,
+      "accelerationMps2": 0.2, "brakingDecelerationMps2": 0.25, "lengthM": 75,
+      "stops": [{ "positionM": 4000, "dwellSeconds": 60 }],
+      "serviceType": "local", "servicePeriod": "daytime", "operationKind": "passengerService", "scheduledTripDurationSeconds": 3600
+    },
+    {
+      "id": "depot-exit-morning-01", "trackID": "depot-out", "departureTimeSeconds": 19800,
+      "startPositionM": 2000, "destinationPositionM": 0, "maximumSpeedMps": 4.5,
+      "accelerationMps2": 0.2, "brakingDecelerationMps2": 0.3, "lengthM": 80,
+      "stops": [], "serviceType": "local", "servicePeriod": "morningRush", "operationKind": "depotExit"
+    },
+    {
+      "id": "depot-entry-night-01", "trackID": "depot-in", "departureTimeSeconds": 81900,
+      "startPositionM": 0, "destinationPositionM": 2000, "maximumSpeedMps": 4.5,
+      "accelerationMps2": 0.2, "brakingDecelerationMps2": 0.3, "lengthM": 80,
+      "stops": [], "serviceType": "local", "servicePeriod": "night", "operationKind": "depotEntry"
+    },
+    {
+      "id": "depot-shunt-night-01", "trackID": "depot-out", "departureTimeSeconds": 82800,
+      "startPositionM": 2000, "destinationPositionM": 500, "maximumSpeedMps": 3,
+      "accelerationMps2": 0.15, "brakingDecelerationMps2": 0.22, "lengthM": 80,
+      "stops": [], "serviceType": "local", "servicePeriod": "night", "operationKind": "depotShunting"
+    }
+  ],
+  "roadVehicles": [
+    { "id": "road-up-vehicle-01", "roadID": "road-up", "departureTimeSeconds": 21600, "startPositionM": 0, "destinationPositionM": 60000, "targetSpeedMps": 20, "accelerationMps2": 1.2, "lengthM": 4.6 },
+    { "id": "road-up-vehicle-02", "roadID": "road-up", "departureTimeSeconds": 21630, "startPositionM": 0, "destinationPositionM": 60000, "targetSpeedMps": 18, "accelerationMps2": 1.1, "lengthM": 4.3 },
+    { "id": "road-down-vehicle-01", "roadID": "road-down", "departureTimeSeconds": 43200, "startPositionM": 60000, "destinationPositionM": 0, "targetSpeedMps": 19, "accelerationMps2": 1.2, "lengthM": 4.5 }
+  ],
+  "passengerTrips": [
+    { "id": "mid-platform-walk-01", "platformID": "mid-platform-up", "startTimeSeconds": 21720, "startOffsetM": 12, "destinationOffsetM": 205, "walkingSpeedMps": 1.1 },
+    { "id": "mid-platform-walk-02", "platformID": "mid-platform-down", "startTimeSeconds": 43320, "startOffsetM": 205, "destinationOffsetM": 28, "walkingSpeedMps": 0.95 },
+    { "id": "branch-platform-walk-01", "platformID": "branch-platform", "startTimeSeconds": 50490, "startOffsetM": 10, "destinationOffsetM": 128, "walkingSpeedMps": 1.05 }
+  ]
+}

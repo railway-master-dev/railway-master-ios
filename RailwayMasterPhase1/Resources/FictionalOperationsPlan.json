@@ -1,0 +1,1142 @@
+{
+  "schemaVersion": "1.0.0",
+  "disclaimer": "架空の地域ネットワーク・運行計画PLACEHOLDERです。全距離・駅名・設備・ダイヤはゲーム設計用の仮値で、実路線・実運行会社・実保安装置を表しません。ネットワーク正本は本線60 km＋支線8 km＋車庫引込線2 km＝計70 kmです。旅客列車の支線経由距離は68 kmで、車庫線を旅客距離へ加算しません。実運行・安全判断には使用できません。",
+  "network": {
+    "identifier": "fictional_regional_network_60_8_2_v2",
+    "name": "環雲地域ネットワーク（本線60 km＋支線8 km＋車庫線2 km・架空）",
+    "dataStatus": "PLACEHOLDER",
+    "totalRouteLengthKm": 70.0,
+    "mainlineLengthKm": 60.0,
+    "branchLengthKm": 8.0,
+    "mainlineID": "MAIN",
+    "branchID": "BRANCH",
+    "branchJunctionStationID": "S28",
+    "mainlineTermini": [
+      "S01",
+      "S28"
+    ],
+    "branchTerminalStationID": "B04",
+    "depotSpurLengthKm": 2.0,
+    "depotSpurID": "DEPOT_SPUR",
+    "depotStationID": "S01",
+    "canonicalTopologyID": "fictional-mainline-placeholder",
+    "reconciliationNote": "The canonical fictional topology is 60 km mainline + 8 km branch + 2 km depot spur. RouteData, signalling package sample, traffic network and the 32-station operations plan now share these lengths and station IDs. The passenger through route is 68 km. Every route, station, geometry, timetable and operating value remains PLACEHOLDER."
+  },
+  "stations": [
+    {
+      "stationId": "S01",
+      "name": "環雲中央",
+      "lineId": "MAIN",
+      "chainageKm": 0.0,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S02",
+      "name": "松原町",
+      "lineId": "MAIN",
+      "chainageKm": 1.839,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S03",
+      "name": "川端町",
+      "lineId": "MAIN",
+      "chainageKm": 3.871,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S04",
+      "name": "新田",
+      "lineId": "MAIN",
+      "chainageKm": 6.0,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S05",
+      "name": "桜台",
+      "lineId": "MAIN",
+      "chainageKm": 8.226,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S06",
+      "name": "港南町",
+      "lineId": "MAIN",
+      "chainageKm": 10.355,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S07",
+      "name": "東野",
+      "lineId": "MAIN",
+      "chainageKm": 12.387,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S08",
+      "name": "若葉台",
+      "lineId": "MAIN",
+      "chainageKm": 14.613,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S09",
+      "name": "北原",
+      "lineId": "MAIN",
+      "chainageKm": 16.935,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S10",
+      "name": "高砂町",
+      "lineId": "MAIN",
+      "chainageKm": 19.161,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S11",
+      "name": "山手町",
+      "lineId": "MAIN",
+      "chainageKm": 21.29,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S12",
+      "name": "環雲市",
+      "lineId": "MAIN",
+      "chainageKm": 24.194,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S13",
+      "name": "南町",
+      "lineId": "MAIN",
+      "chainageKm": 26.323,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S14",
+      "name": "旭ヶ丘",
+      "lineId": "MAIN",
+      "chainageKm": 28.452,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S15",
+      "name": "西原町",
+      "lineId": "MAIN",
+      "chainageKm": 30.677,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S16",
+      "name": "緑町",
+      "lineId": "MAIN",
+      "chainageKm": 32.903,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S17",
+      "name": "桜川",
+      "lineId": "MAIN",
+      "chainageKm": 35.129,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S18",
+      "name": "大森町",
+      "lineId": "MAIN",
+      "chainageKm": 37.355,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S19",
+      "name": "海岸通",
+      "lineId": "MAIN",
+      "chainageKm": 39.581,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S20",
+      "name": "清水町",
+      "lineId": "MAIN",
+      "chainageKm": 41.806,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S21",
+      "name": "中央市場前",
+      "lineId": "MAIN",
+      "chainageKm": 44.032,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S22",
+      "name": "千代田町",
+      "lineId": "MAIN",
+      "chainageKm": 46.258,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S23",
+      "name": "岩倉町",
+      "lineId": "MAIN",
+      "chainageKm": 48.484,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S24",
+      "name": "川西町",
+      "lineId": "MAIN",
+      "chainageKm": 50.71,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S25",
+      "name": "白浜町",
+      "lineId": "MAIN",
+      "chainageKm": 52.935,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S26",
+      "name": "新港町",
+      "lineId": "MAIN",
+      "chainageKm": 55.161,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S27",
+      "name": "岬町",
+      "lineId": "MAIN",
+      "chainageKm": 57.387,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "S28",
+      "name": "東浜",
+      "lineId": "MAIN",
+      "chainageKm": 60.0,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "B01",
+      "name": "枝川町",
+      "lineId": "BRANCH",
+      "chainageKm": 2.0,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "B02",
+      "name": "深沢",
+      "lineId": "BRANCH",
+      "chainageKm": 4.0,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "B03",
+      "name": "水沢町",
+      "lineId": "BRANCH",
+      "chainageKm": 6.0,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "stationId": "B04",
+      "name": "山里",
+      "lineId": "BRANCH",
+      "chainageKm": 8.0,
+      "dataStatus": "PLACEHOLDER"
+    }
+  ],
+  "services": [
+    {
+      "category": "local",
+      "routeDistanceKm": 68.0,
+      "plannedDurationMinutes": 150,
+      "stopStationIDs": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S05",
+        "S06",
+        "S07",
+        "S08",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26",
+        "S27",
+        "S28",
+        "B01",
+        "B02",
+        "B03",
+        "B04"
+      ],
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "routeDistanceKm": 68.0,
+      "plannedDurationMinutes": 125,
+      "stopStationIDs": [
+        "S01",
+        "S04",
+        "S07",
+        "S10",
+        "S12",
+        "S16",
+        "S20",
+        "S24",
+        "S28",
+        "B02",
+        "B04"
+      ],
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "routeDistanceKm": 68.0,
+      "plannedDurationMinutes": 140,
+      "stopStationIDs": [
+        "S01",
+        "S03",
+        "S05",
+        "S07",
+        "S09",
+        "S11",
+        "S13",
+        "S15",
+        "S17",
+        "S19",
+        "S21",
+        "S23",
+        "S25",
+        "S27",
+        "S28",
+        "B02",
+        "B04"
+      ],
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "routeDistanceKm": 68.0,
+      "plannedDurationMinutes": 100,
+      "stopStationIDs": [
+        "S01",
+        "S07",
+        "S12",
+        "S16",
+        "S20",
+        "S24",
+        "S28",
+        "B02",
+        "B04"
+      ],
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "routeDistanceKm": 68.0,
+      "plannedDurationMinutes": 80,
+      "stopStationIDs": [
+        "S01",
+        "S11",
+        "S16",
+        "S21",
+        "S26",
+        "S28",
+        "B04"
+      ],
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "routeDistanceKm": 68.0,
+      "plannedDurationMinutes": 60,
+      "stopStationIDs": [
+        "S01",
+        "S10",
+        "S19",
+        "S28",
+        "B04"
+      ],
+      "dataStatus": "PLACEHOLDER"
+    }
+  ],
+  "timetablePatterns": [
+    {
+      "category": "local",
+      "direction": "down",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 150,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "local",
+      "direction": "down",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 150,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "local",
+      "direction": "down",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 150,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "local",
+      "direction": "down",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 150,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "local",
+      "direction": "up",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 150,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "local",
+      "direction": "up",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 150,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "local",
+      "direction": "up",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 150,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "local",
+      "direction": "up",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 150,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "direction": "down",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 125,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "direction": "down",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 20,
+      "plannedDurationMinutes": 125,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "direction": "down",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 125,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "direction": "down",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 25,
+      "plannedDurationMinutes": 125,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "direction": "up",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 125,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "direction": "up",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 20,
+      "plannedDurationMinutes": 125,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "direction": "up",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 125,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapid",
+      "direction": "up",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 25,
+      "plannedDurationMinutes": 125,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "direction": "down",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 140,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "direction": "down",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 140,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "direction": "down",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 140,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "direction": "down",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 25,
+      "plannedDurationMinutes": 140,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "direction": "up",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 10,
+      "plannedDurationMinutes": 140,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "direction": "up",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 140,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "direction": "up",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 140,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "semiExpress",
+      "direction": "up",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 25,
+      "plannedDurationMinutes": 140,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "direction": "down",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 100,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "direction": "down",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 25,
+      "plannedDurationMinutes": 100,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "direction": "down",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 20,
+      "plannedDurationMinutes": 100,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "direction": "down",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 40,
+      "plannedDurationMinutes": 100,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "direction": "up",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 15,
+      "plannedDurationMinutes": 100,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "direction": "up",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 25,
+      "plannedDurationMinutes": 100,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "direction": "up",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 20,
+      "plannedDurationMinutes": 100,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "express",
+      "direction": "up",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 40,
+      "plannedDurationMinutes": 100,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "direction": "down",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 20,
+      "plannedDurationMinutes": 80,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "direction": "down",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 35,
+      "plannedDurationMinutes": 80,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "direction": "down",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 25,
+      "plannedDurationMinutes": 80,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "direction": "down",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 50,
+      "plannedDurationMinutes": 80,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "direction": "up",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 20,
+      "plannedDurationMinutes": 80,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "direction": "up",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 35,
+      "plannedDurationMinutes": 80,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "direction": "up",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 25,
+      "plannedDurationMinutes": 80,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "rapidExpress",
+      "direction": "up",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 50,
+      "plannedDurationMinutes": 80,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "direction": "down",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 30,
+      "plannedDurationMinutes": 60,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "direction": "down",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 50,
+      "plannedDurationMinutes": 60,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "direction": "down",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 40,
+      "plannedDurationMinutes": 60,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "direction": "down",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 75,
+      "plannedDurationMinutes": 60,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "direction": "up",
+      "daypart": "morningRush",
+      "firstDeparture": "06:00",
+      "lastDeparture": "09:00",
+      "intervalMinutes": 30,
+      "plannedDurationMinutes": 60,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "direction": "up",
+      "daypart": "daytime",
+      "firstDeparture": "09:00",
+      "lastDeparture": "17:00",
+      "intervalMinutes": 50,
+      "plannedDurationMinutes": 60,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "direction": "up",
+      "daypart": "evening",
+      "firstDeparture": "17:00",
+      "lastDeparture": "22:00",
+      "intervalMinutes": 40,
+      "plannedDurationMinutes": 60,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "category": "limitedExpress",
+      "direction": "up",
+      "daypart": "night",
+      "firstDeparture": "22:00",
+      "lastDeparture": "24:00",
+      "intervalMinutes": 75,
+      "plannedDurationMinutes": 60,
+      "calendar": "WEEKDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER"
+    }
+  ],
+  "depotProcedures": [
+    {
+      "procedureId": "local-down-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "local",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "local-down-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "local",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": 160,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "local-up-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "local",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "local-up-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "local",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": 160,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "rapid-down-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "rapid",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "rapid-down-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "rapid",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": 135,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "rapid-up-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "rapid",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "rapid-up-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "rapid",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": 135,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "semiExpress-down-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "semiExpress",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "semiExpress-down-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "semiExpress",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": 150,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "semiExpress-up-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "semiExpress",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "semiExpress-up-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "semiExpress",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": 150,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "express-down-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "express",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "express-down-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "express",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": 110,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "express-up-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "express",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "express-up-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "express",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": 110,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "rapidExpress-down-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "rapidExpress",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "rapidExpress-down-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "rapidExpress",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": 90,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "rapidExpress-up-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "rapidExpress",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "rapidExpress-up-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "rapidExpress",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": 90,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "limitedExpress-down-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "limitedExpress",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "limitedExpress-down-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "limitedExpress",
+      "direction": "down",
+      "timeOffsetMinutesFromPassengerDeparture": 70,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "limitedExpress-up-OUT",
+      "kind": "exitDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "limitedExpress",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": -15,
+      "dataStatus": "PLACEHOLDER"
+    },
+    {
+      "procedureId": "limitedExpress-up-IN",
+      "kind": "enterDepot",
+      "depotId": "DEPOT-NORTH",
+      "relatedServiceCategory": "limitedExpress",
+      "direction": "up",
+      "timeOffsetMinutesFromPassengerDeparture": 70,
+      "dataStatus": "PLACEHOLDER"
+    }
+  ],
+  "networkReconciliation": {
+    "canonicalTopologyID": "fictional-mainline-placeholder",
+    "totalPhysicalTrackKm": 70.0,
+    "componentsKm": {
+      "mainline": 60.0,
+      "branch": 8.0,
+      "depotSpur": 2.0
+    },
+    "passengerThroughRouteKm": 68.0,
+    "dataStatus": "PLACEHOLDER",
+    "note": "RouteData, RailwaySignalling and TrafficSimulation have been aligned to the same 60+8+2 km fictional PLACEHOLDER topology and 32-station inventory. Passenger service covers 60 km mainline plus the 8 km branch; the depot spur is a separate 2 km physical line."
+  }
+}

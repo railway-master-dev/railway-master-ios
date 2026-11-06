@@ -1,0 +1,223 @@
+{
+  "dataset": {
+    "sourceID": "mlit_n02_2025",
+    "title": "国土数値情報（鉄道データ）2025年度版 N02-25",
+    "publisher": "国土交通省",
+    "sourcePageURL": "https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N02-2025.html",
+    "downloadURL": "https://nlftp.mlit.go.jp/ksj/gml/data/N02/N02-25/N02-25_GML.zip",
+    "productSpecificationURL": "https://nlftp.mlit.go.jp/ksj/gml/product_spec/KS-PS-N02-v3_1.pdf",
+    "termsURL": "https://nlftp.mlit.go.jp/ksj/other/agreement_01.html",
+    "retrievedAt": "2026-11-06",
+    "dataReferenceDate": "2025-12-31",
+    "metadataDateStamp": "2026-03-06",
+    "license": "Creative Commons Attribution 4.0 International (CC BY 4.0); the MLIT page also states open data conditions for 2020 onward.",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceArchiveSHA256": "aaf76af133b2e771e538fabc4646d2e443dc1d5a67b221382a28d744e706cc9f",
+    "coordinateReferenceSystem": "JGD2011 / (B, L)",
+    "geoJSONCoordinateOrder": "[longitude, latitude]",
+    "coordinateTransformation": "None. Source JGD2011 geographic coordinates are preserved without datum or projection transformation.",
+    "metadataEquivalentScale": "1:25,000",
+    "sourceGeometryDescription": "Generalized route/station line features; not individual surveyed physical track centerlines.",
+    "sourceCoordinateQualityNote": "MLIT product-page quality rate is a comparison against referenced source data and is not a stated ground-survey metre error bound.",
+    "sourceFeatureNames": {
+      "route": "N02-25_RailroadSection.geojson",
+      "station": "N02-25_Station.geojson"
+    }
+  },
+  "extraction": {
+    "routeFilter": {
+      "N02_004": "近畿日本鉄道",
+      "N02_003": "京都線"
+    },
+    "routeFeatureCount": 52,
+    "stationFeatureCount": 26,
+    "routeSourceRecordIndices": [
+      1961,
+      1956,
+      1950,
+      1955,
+      1957,
+      1960,
+      1953,
+      1959,
+      1947,
+      1949,
+      1954,
+      1948,
+      1952,
+      1958,
+      1951,
+      1945,
+      1946,
+      1993,
+      1980,
+      1974,
+      1994,
+      1962,
+      1964,
+      1971,
+      1984,
+      1991,
+      1995,
+      1972,
+      1966,
+      1967,
+      1975,
+      1981,
+      1992,
+      1977,
+      1970,
+      1983,
+      1985,
+      1986,
+      1968,
+      1982,
+      1988,
+      1965,
+      1969,
+      1976,
+      1963,
+      1973,
+      1987,
+      1989,
+      1990,
+      1978,
+      1979,
+      1996
+    ],
+    "stationSourceRecordIndicesInRouteOrder": [
+      1007,
+      1008,
+      1024,
+      1021,
+      1017,
+      1023,
+      1019,
+      1018,
+      1016,
+      1022,
+      1009,
+      1011,
+      1025,
+      1031,
+      1012,
+      1020,
+      1030,
+      1015,
+      1026,
+      1013,
+      1028,
+      1014,
+      1010,
+      1027,
+      1029,
+      1032
+    ],
+    "routeVertexCount": 466,
+    "routeReferenceLineLengthM": 35140.556,
+    "routeReferenceLineLengthStatus": "ESTIMATED",
+    "coordinateTransformation": "None",
+    "distanceAlgorithm": "Vincenty inverse geodesic on GRS80 (a=6378137.0 m, 1/f=298.257222101)",
+    "distanceRounding": "0.001 m in output; extra decimals do not imply source positional accuracy",
+    "stationOrderMeasureMethod": "Median nearest route-vertex measure for source station-line vertices; ordering aid only.",
+    "statusCaution": "No metre-valued absolute position error bound is reported by this extraction; source-coordinate QA is not ground-truth track survey accuracy."
+  },
+  "fieldProvenance": {
+    "packageLocalIdentifier": {
+      "sourceIDs": [],
+      "status": "PLACEHOLDER",
+      "confidence": "UNRATED",
+      "note": "The packageID and routeID are local identifiers created for this separate research package; they are not MLIT or operator route identifiers."
+    },
+    "routeNameOperatorAndClass": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "HIGH",
+      "sourceFields": [
+        "N02_001",
+        "N02_003",
+        "N02_004"
+      ],
+      "note": "Values are copied from the selected N02-25 route feature attributes."
+    },
+    "stationNamesAndDatasetCodes": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "HIGH",
+      "sourceFields": [
+        "N02_005",
+        "N02_005c",
+        "N02_005g"
+      ],
+      "note": "Names and dataset codes are copied from N02-25 station feature attributes; codes are not operator station identifiers."
+    },
+    "extractedFeatureAndVertexCounts": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "HIGH",
+      "note": "Counts are exact counts of the route/station features and route vertices selected from the pinned source archive; they are not railway engineering measurements."
+    },
+    "sourceRecordIndices": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "HIGH",
+      "note": "Zero-based feature positions in the pinned N02-25 GeoJSON collections, retained for provenance and reproducibility."
+    },
+    "routeCoordinates": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "LOW",
+      "note": "Coordinates preserve N02-25 source vertices in JGD2011/(B,L); low confidence describes their use as physical track alignment because the source line is generalized and no ground-survey error bound is given."
+    },
+    "stationLineGeometry": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "LOW",
+      "note": "Original source station LineStrings are preserved; they are not station-center points, platform shapes, or stop markers."
+    },
+    "segmentOrientationAndContinuity": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "ESTIMATED",
+      "confidence": "LOW",
+      "note": "The source line segments are ordered/oriented using shared endpoints to make a Kyoto-to-Yamato-Saidaiji reference chain."
+    },
+    "localVertexChainageAndReferenceLength": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "ESTIMATED",
+      "confidence": "LOW",
+      "note": "Derived from GRS80 inverse-geodesic distances between published vertices; not official railway chainage or measured track length."
+    },
+    "stationOrderReferenceMeasure": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "ESTIMATED",
+      "confidence": "LOW",
+      "note": "Median nearest-route-vertex measure of the source station-line vertices; used only to order stations, not as station-center chainage."
+    },
+    "operationalAndTrackEngineeringFields": {
+      "sourceIDs": [],
+      "status": "UNKNOWN",
+      "confidence": "UNRATED",
+      "note": "Physical track, operations, platforms, signals, restrictions, structures, and timetable values are absent from this extraction and must not be inferred."
+    }
+  },
+  "attribution": "出典：国土交通省「国土数値情報（鉄道データ）2025年度版 N02-25」(https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N02-2025.html)（2026-11-06取得）。近鉄京都線・京都—大和西大寺の路線・駅線形を抽出し、線分順序を連結方向に整理、GRS80測地距離による局所参照chainageと駅順用測定値を付加して加工。CC BY 4.0。",
+  "usageNotes": "Attribute MLIT and the dataset page, and state that this subset was extracted and processed. Do not imply MLIT authored, surveyed, or certified the derivative simulator geometry."
+}

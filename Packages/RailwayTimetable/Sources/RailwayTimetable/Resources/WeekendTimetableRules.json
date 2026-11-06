@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0.0",
+  "dataStatus": "PLACEHOLDER",
+  "sourceNetworkPackageID": "fictional_regional_network_60_8_2_route_data_v2",
+  "disclaimer": "土曜・休日の全時刻・運転間隔とゲーム用運転整理値は架空のPLACEHOLDERです。曜日名の意味を除き、実在鉄道の運行・安全判断・設備を表しません。平日パターンはFictionalOperationsPlan.jsonから取り込み、このファイルでは重複定義しません。",
+  "weekendCalendars": [
+    {
+      "calendar": "SATURDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER",
+      "windows": [
+        {"direction":"down","daypart":"morningRush","startTime":"06:00","endTime":"09:00","headwayMinutesByCategory":{"local":12,"rapid":15,"semiExpress":18,"express":20,"rapidExpress":30,"limitedExpress":45},"dataStatus":"PLACEHOLDER"},
+        {"direction":"down","daypart":"daytime","startTime":"09:00","endTime":"17:00","headwayMinutesByCategory":{"local":12,"rapid":20,"semiExpress":20,"express":30,"rapidExpress":40,"limitedExpress":60},"dataStatus":"PLACEHOLDER"},
+        {"direction":"down","daypart":"evening","startTime":"17:00","endTime":"22:00","headwayMinutesByCategory":{"local":12,"rapid":20,"semiExpress":20,"express":25,"rapidExpress":35,"limitedExpress":55},"dataStatus":"PLACEHOLDER"},
+        {"direction":"down","daypart":"night","startTime":"22:00","endTime":"24:00","headwayMinutesByCategory":{"local":20,"rapid":30,"semiExpress":30,"express":50,"rapidExpress":60,"limitedExpress":90},"dataStatus":"PLACEHOLDER"},
+        {"direction":"up","daypart":"morningRush","startTime":"06:00","endTime":"09:00","headwayMinutesByCategory":{"local":12,"rapid":15,"semiExpress":18,"express":20,"rapidExpress":30,"limitedExpress":45},"dataStatus":"PLACEHOLDER"},
+        {"direction":"up","daypart":"daytime","startTime":"09:00","endTime":"17:00","headwayMinutesByCategory":{"local":12,"rapid":20,"semiExpress":20,"express":30,"rapidExpress":40,"limitedExpress":60},"dataStatus":"PLACEHOLDER"},
+        {"direction":"up","daypart":"evening","startTime":"17:00","endTime":"22:00","headwayMinutesByCategory":{"local":12,"rapid":20,"semiExpress":20,"express":25,"rapidExpress":35,"limitedExpress":55},"dataStatus":"PLACEHOLDER"},
+        {"direction":"up","daypart":"night","startTime":"22:00","endTime":"24:00","headwayMinutesByCategory":{"local":20,"rapid":30,"semiExpress":30,"express":50,"rapidExpress":60,"limitedExpress":90},"dataStatus":"PLACEHOLDER"}
+      ]
+    },
+    {
+      "calendar": "HOLIDAY_PLACEHOLDER",
+      "dataStatus": "PLACEHOLDER",
+      "windows": [
+        {"direction":"down","daypart":"morningRush","startTime":"06:00","endTime":"09:00","headwayMinutesByCategory":{"local":15,"rapid":20,"semiExpress":25,"express":25,"rapidExpress":40,"limitedExpress":60},"dataStatus":"PLACEHOLDER"},
+        {"direction":"down","daypart":"daytime","startTime":"09:00","endTime":"17:00","headwayMinutesByCategory":{"local":15,"rapid":20,"semiExpress":25,"express":30,"rapidExpress":45,"limitedExpress":60},"dataStatus":"PLACEHOLDER"},
+        {"direction":"down","daypart":"evening","startTime":"17:00","endTime":"22:00","headwayMinutesByCategory":{"local":15,"rapid":20,"semiExpress":25,"express":30,"rapidExpress":45,"limitedExpress":60},"dataStatus":"PLACEHOLDER"},
+        {"direction":"down","daypart":"night","startTime":"22:00","endTime":"24:00","headwayMinutesByCategory":{"local":25,"rapid":35,"semiExpress":40,"express":60,"rapidExpress":75,"limitedExpress":90},"dataStatus":"PLACEHOLDER"},
+        {"direction":"up","daypart":"morningRush","startTime":"06:00","endTime":"09:00","headwayMinutesByCategory":{"local":15,"rapid":20,"semiExpress":25,"express":25,"rapidExpress":40,"limitedExpress":60},"dataStatus":"PLACEHOLDER"},
+        {"direction":"up","daypart":"daytime","startTime":"09:00","endTime":"17:00","headwayMinutesByCategory":{"local":15,"rapid":20,"semiExpress":25,"express":30,"rapidExpress":45,"limitedExpress":60},"dataStatus":"PLACEHOLDER"},
+        {"direction":"up","daypart":"evening","startTime":"17:00","endTime":"22:00","headwayMinutesByCategory":{"local":15,"rapid":20,"semiExpress":25,"express":30,"rapidExpress":45,"limitedExpress":60},"dataStatus":"PLACEHOLDER"},
+        {"direction":"up","daypart":"night","startTime":"22:00","endTime":"24:00","headwayMinutesByCategory":{"local":25,"rapid":35,"semiExpress":40,"express":60,"rapidExpress":75,"limitedExpress":90},"dataStatus":"PLACEHOLDER"}
+      ]
+    }
+  ],
+  "gameOperationsModel": {
+    "virtualMinimumSameDirectionHeadwaySeconds": 180,
+    "recoverySecondsAtDwell": 20,
+    "recoverySecondsWhenSkippingStop": 45,
+    "scopeNote": "単純な同方向・始発時刻ベースのゲーム用遅延伝播と停車時分の吸収だけを表す。閉そく、信号、進路、対向列車、保安設備、現実の運転整理を再現・保証しない。候補駅に待避設備があることも意味しない。",
+    "dataStatus": "PLACEHOLDER"
+  }
+}

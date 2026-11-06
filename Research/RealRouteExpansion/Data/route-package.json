@@ -1,0 +1,1959 @@
+{
+  "schemaVersion": "1.0.0",
+  "packageID": "kintetsu-kyoto-yamato-saidaiji-real-route-expansion-v1",
+  "datasetKind": "REAL_WORLD_REFERENCE_ONLY",
+  "notForDrivingPhysicsOrSignalling": true,
+  "sources": [
+    {
+      "sourceID": "mlit_n02_2025",
+      "title": "国土数値情報（鉄道データ）2025年度版 N02-25",
+      "publisher": "国土交通省",
+      "sourcePageURL": "https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N02-2025.html",
+      "downloadURL": "https://nlftp.mlit.go.jp/ksj/gml/data/N02/N02-25/N02-25_GML.zip",
+      "productSpecificationURL": "https://nlftp.mlit.go.jp/ksj/gml/product_spec/KS-PS-N02-v3_1.pdf",
+      "termsURL": "https://nlftp.mlit.go.jp/ksj/other/agreement_01.html",
+      "retrievedAt": "2026-11-06",
+      "dataReferenceDate": "2025-12-31",
+      "metadataDateStamp": "2026-03-06",
+      "license": "Creative Commons Attribution 4.0 International (CC BY 4.0); the MLIT page also states open data conditions for 2020 onward.",
+      "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+      "sourceArchiveSHA256": "aaf76af133b2e771e538fabc4646d2e443dc1d5a67b221382a28d744e706cc9f",
+      "coordinateReferenceSystem": "JGD2011 / (B, L)",
+      "geoJSONCoordinateOrder": "[longitude, latitude]",
+      "coordinateTransformation": "None. Source JGD2011 geographic coordinates are preserved without datum or projection transformation.",
+      "metadataEquivalentScale": "1:25,000",
+      "sourceGeometryDescription": "Generalized route/station line features; not individual surveyed physical track centerlines.",
+      "sourceCoordinateQualityNote": "MLIT product-page quality rate is a comparison against referenced source data and is not a stated ground-survey metre error bound.",
+      "sourceFeatureNames": {
+        "route": "N02-25_RailroadSection.geojson",
+        "station": "N02-25_Station.geojson"
+      }
+    }
+  ],
+  "route": {
+    "routeID": "kintetsu_kyoto_line_kyoto_yamato_saidaiji_reference",
+    "name": {
+      "value": "近鉄京都線 京都—大和西大寺",
+      "status": "VERIFIED",
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "confidence": "HIGH",
+      "uncertainty": null,
+      "note": "Route name, operator, and selected station names are present in the N02-25 route/station records."
+    },
+    "operator": {
+      "value": "近畿日本鉄道",
+      "status": "VERIFIED",
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "confidence": "HIGH",
+      "uncertainty": null,
+      "note": "N02-25 route attribute N02_004."
+    },
+    "sourceRouteName": {
+      "value": "京都線",
+      "status": "VERIFIED",
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "confidence": "HIGH",
+      "uncertainty": null,
+      "note": "N02-25 route attribute N02_003."
+    },
+    "railwayClass": {
+      "value": "12",
+      "status": "VERIFIED",
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "confidence": "HIGH",
+      "uncertainty": null,
+      "note": "N02-25 railway-class attribute N02_001; code 12 is ordinary railway per the official code list."
+    },
+    "datasetKind": "REAL_WORLD_REFERENCE_ONLY",
+    "description": "The route line is preserved from MLIT N02-25 and joined by exact shared endpoints. Only direction, local chainage, station ordering measures, and package IDs are derived. This is a generalized map-scale reference line; it is not a measured individual rail or a driving route.",
+    "orientation": "京都 → 大和西大寺",
+    "geometryFile": "route_geometry.geojson",
+    "segmentsFile": "route_segments.geojson",
+    "routeGeometryFeatureID": "kintetsu-kyoto-yamato-saidaiji-route-reference-line",
+    "sourceRouteFeatureCount": 52,
+    "routeVertexCount": 466,
+    "routeReferenceLineLengthM": {
+      "value": 35140.556,
+      "status": "ESTIMATED",
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "confidence": "LOW",
+      "uncertainty": null,
+      "note": "Cumulative GRS80 ellipsoidal inverse-geodesic distance between published route-line vertices, rounded to 0.001 m. This is not track survey length or operator mileage; absolute position/generalization error is not quantified."
+    },
+    "officialRailwayChainageM": {
+      "value": null,
+      "status": "UNKNOWN",
+      "sourceIDs": [],
+      "confidence": "UNRATED",
+      "uncertainty": null,
+      "note": "No official station chainage or operational kilometer-post data is included in the selected source."
+    },
+    "physicalTrackLengthM": {
+      "value": null,
+      "status": "UNKNOWN",
+      "sourceIDs": [],
+      "confidence": "UNRATED",
+      "uncertainty": null,
+      "note": "The generalized route reference line is not measured rail length."
+    },
+    "stationCount": 26,
+    "stations": [
+      {
+        "stationID": "station-006084",
+        "routeOrder": 1,
+        "name": {
+          "value": "京都",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006084",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006084",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 397.254,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            0.0,
+            404.558
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "京都",
+          "N02_005c": "006084",
+          "N02_005g": "006079"
+        }
+      },
+      {
+        "stationID": "station-006099",
+        "routeOrder": 2,
+        "name": {
+          "value": "東寺",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006099",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006099",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 1239.854,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            1206.014,
+            1273.694
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "東寺",
+          "N02_005c": "006099",
+          "N02_005g": "006099"
+        }
+      },
+      {
+        "stationID": "station-006120",
+        "routeOrder": 3,
+        "name": {
+          "value": "十条",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006120",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006120",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 1904.519,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            1856.252,
+            1952.787
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "十条",
+          "N02_005c": "006120",
+          "N02_005g": "006120"
+        }
+      },
+      {
+        "stationID": "station-006149",
+        "routeOrder": 4,
+        "name": {
+          "value": "上鳥羽口",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006149",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006149",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 2905.839,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            2859.737,
+            2951.941
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "上鳥羽口",
+          "N02_005c": "006149",
+          "N02_005g": "006149"
+        }
+      },
+      {
+        "stationID": "station-006173",
+        "routeOrder": 5,
+        "name": {
+          "value": "竹田",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006173",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006173",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 3986.723,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            3873.531,
+            4099.915
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "竹田",
+          "N02_005c": "006173",
+          "N02_005g": "006172"
+        }
+      },
+      {
+        "stationID": "station-006203",
+        "routeOrder": 6,
+        "name": {
+          "value": "伏見",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006203",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006203",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 5298.629,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            5246.374,
+            5350.884
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "伏見",
+          "N02_005c": "006203",
+          "N02_005g": "006203"
+        }
+      },
+      {
+        "stationID": "station-006219",
+        "routeOrder": 7,
+        "name": {
+          "value": "近鉄丹波橋",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006219",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006219",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 6367.314,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            6324.6,
+            6410.028
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "近鉄丹波橋",
+          "N02_005c": "006219",
+          "N02_005g": "006219"
+        }
+      },
+      {
+        "stationID": "station-006225",
+        "routeOrder": 8,
+        "name": {
+          "value": "桃山御陵前",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006225",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006225",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 6907.985,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            6875.8,
+            6940.171
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "桃山御陵前",
+          "N02_005c": "006225",
+          "N02_005g": "006225"
+        }
+      },
+      {
+        "stationID": "station-006275",
+        "routeOrder": 9,
+        "name": {
+          "value": "向島",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006275",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006275",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 9048.011,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            8991.541,
+            9104.48
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "向島",
+          "N02_005c": "006275",
+          "N02_005g": "006275"
+        }
+      },
+      {
+        "stationID": "station-006324",
+        "routeOrder": 10,
+        "name": {
+          "value": "小倉",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006324",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006324",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 11803.167,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            11751.512,
+            11854.822
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "小倉",
+          "N02_005c": "006324",
+          "N02_005g": "006324"
+        }
+      },
+      {
+        "stationID": "station-006355",
+        "routeOrder": 11,
+        "name": {
+          "value": "伊勢田",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006355",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006355",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 13034.865,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            12989.463,
+            13080.267
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "伊勢田",
+          "N02_005c": "006355",
+          "N02_005g": "006355"
+        }
+      },
+      {
+        "stationID": "station-006378",
+        "routeOrder": 12,
+        "name": {
+          "value": "大久保",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006378",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006378",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 13888.762,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            13818.441,
+            13959.082
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "大久保",
+          "N02_005c": "006378",
+          "N02_005g": "006378"
+        }
+      },
+      {
+        "stationID": "station-006400",
+        "routeOrder": 13,
+        "name": {
+          "value": "久津川",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006400",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006400",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 14982.076,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            14943.193,
+            15020.959
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "久津川",
+          "N02_005c": "006400",
+          "N02_005g": "006400"
+        }
+      },
+      {
+        "stationID": "station-006431",
+        "routeOrder": 14,
+        "name": {
+          "value": "寺田",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006431",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006431",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 16301.702,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            16263.365,
+            16340.039
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "寺田",
+          "N02_005c": "006431",
+          "N02_005g": "006431"
+        }
+      },
+      {
+        "stationID": "station-006464",
+        "routeOrder": 15,
+        "name": {
+          "value": "富野荘",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006464",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006464",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 17763.657,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            17714.671,
+            17812.643
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "富野荘",
+          "N02_005c": "006464",
+          "N02_005g": "006464"
+        }
+      },
+      {
+        "stationID": "station-006538",
+        "routeOrder": 16,
+        "name": {
+          "value": "新田辺",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006538",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006538",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 19925.524,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            19872.867,
+            19999.21
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "新田辺",
+          "N02_005c": "006538",
+          "N02_005g": "006538"
+        }
+      },
+      {
+        "stationID": "station-006593",
+        "routeOrder": 17,
+        "name": {
+          "value": "興戸",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006593",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006593",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 21474.228,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            21435.784,
+            21512.671
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "興戸",
+          "N02_005c": "006593",
+          "N02_005g": "006593"
+        }
+      },
+      {
+        "stationID": "station-006634",
+        "routeOrder": 18,
+        "name": {
+          "value": "三山木",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006634",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006634",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 22746.921,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            22706.312,
+            22787.531
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "三山木",
+          "N02_005c": "006634",
+          "N02_005g": "006634"
+        }
+      },
+      {
+        "stationID": "station-006671",
+        "routeOrder": 19,
+        "name": {
+          "value": "近鉄宮津",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006671",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006671",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 23537.435,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            23481.424,
+            23593.446
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "近鉄宮津",
+          "N02_005c": "006671",
+          "N02_005g": "006671"
+        }
+      },
+      {
+        "stationID": "station-006711",
+        "routeOrder": 20,
+        "name": {
+          "value": "狛田",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006711",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006711",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 24791.27,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            24749.727,
+            24832.814
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "狛田",
+          "N02_005c": "006711",
+          "N02_005g": "006711"
+        }
+      },
+      {
+        "stationID": "station-006795",
+        "routeOrder": 21,
+        "name": {
+          "value": "新祝園",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006795",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006795",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 27042.168,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            26953.4,
+            27135.516
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "新祝園",
+          "N02_005c": "006795",
+          "N02_005g": "006795"
+        }
+      },
+      {
+        "stationID": "station-006848",
+        "routeOrder": 22,
+        "name": {
+          "value": "木津川台",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006848",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006848",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 28601.647,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            28546.149,
+            28670.732
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "木津川台",
+          "N02_005c": "006848",
+          "N02_005g": "006848"
+        }
+      },
+      {
+        "stationID": "station-006888",
+        "routeOrder": 23,
+        "name": {
+          "value": "山田川",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006888",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006888",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 29609.72,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            29561.311,
+            29664.7
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "山田川",
+          "N02_005c": "006888",
+          "N02_005g": "006888"
+        }
+      },
+      {
+        "stationID": "station-006955",
+        "routeOrder": 24,
+        "name": {
+          "value": "高の原",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "006955",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-006955",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 31191.023,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            31122.237,
+            31259.809
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "高の原",
+          "N02_005c": "006955",
+          "N02_005g": "006955"
+        }
+      },
+      {
+        "stationID": "station-007072",
+        "routeOrder": 25,
+        "name": {
+          "value": "平城",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "007072",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-007072",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 33891.302,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            33820.117,
+            33962.487
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "平城",
+          "N02_005c": "007072",
+          "N02_005g": "007072"
+        }
+      },
+      {
+        "stationID": "station-007118",
+        "routeOrder": 26,
+        "name": {
+          "value": "大和西大寺",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station-name attribute; this does not identify a particular platform, stop point, or station center."
+        },
+        "stationCode": {
+          "value": "007118",
+          "status": "VERIFIED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "HIGH",
+          "uncertainty": null,
+          "note": "Published N02-25 station code. It is a dataset key, not a railway operator station code."
+        },
+        "sourceGeometry": {
+          "file": "route_geometry.geojson",
+          "featureID": "station-007118",
+          "geometryRole": "SOURCE_STATION_LINE_NOT_CENTER_POINT_OR_PLATFORM",
+          "status": "VERIFIED_SOURCE_VALUE"
+        },
+        "routeOrderReferencePositionM": {
+          "value": 35038.112,
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Median of the nearest route-vertex chainages for the vertices of the published station LineString. It is an ordering aid only, not a station-center position, official chainage, or stop marker."
+        },
+        "stationLineRouteMeasureRangeM": {
+          "value": [
+            34935.667,
+            35140.556
+          ],
+          "status": "ESTIMATED",
+          "sourceIDs": [
+            "mlit_n02_2025"
+          ],
+          "confidence": "LOW",
+          "uncertainty": null,
+          "note": "Range of route-reference measures nearest to the published station-line vertices; not platform endpoints or station limits."
+        },
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "大和西大寺",
+          "N02_005c": "007118",
+          "N02_005g": "007117"
+        }
+      }
+    ],
+    "operationalData": {
+      "physicalTrackCenterline": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Physical individual track centerline is not supplied by N02 route reference geometry."
+      },
+      "trackCountAndAlignment": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Number and alignment of individual running tracks are not established by this package."
+      },
+      "trackGaugeMM": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Track gauge is not part of the selected N02 source attributes."
+      },
+      "curveRadiusM": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Curve radii and transition curves are not supplied."
+      },
+      "cantMM": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Cant and cant run-off are not supplied."
+      },
+      "gradientPermille": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Longitudinal gradients and vertical curves are not supplied."
+      },
+      "elevationM": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Rail elevation is not supplied by the selected source features."
+      },
+      "speedRestrictions": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Route-, direction-, vehicle-, and time-specific speed restrictions are not supplied."
+      },
+      "signalsAndBlocks": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Signals, interlocking, block boundaries, and aspects are not supplied."
+      },
+      "protectionSystems": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "ATS/ATC and wayside protection equipment are not supplied."
+      },
+      "platformsAndStopPoints": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Platform geometry, platform lengths, and stopping points are not supplied; station lines are not platforms."
+      },
+      "switchesAndYards": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Turnouts, crossovers, yards, and station track layout are not supplied."
+      },
+      "bridgesTunnelsCrossings": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Structure identities and exact chainage are not supplied in the selected extraction."
+      },
+      "timetable": {
+        "value": null,
+        "status": "UNKNOWN",
+        "sourceIDs": [],
+        "confidence": "UNRATED",
+        "uncertainty": null,
+        "note": "Timetables and operating plans are not supplied."
+      }
+    },
+    "provenanceNote": "The route line is preserved from MLIT N02-25 and joined by exact shared endpoints. Only direction, local chainage, station ordering measures, and package IDs are derived. This is a generalized map-scale reference line; it is not a measured individual rail or a driving route."
+  },
+  "processing": {
+    "routeSelection": "Filtered N02-25_RailroadSection and N02-25_Station by operator='近畿日本鉄道', route='京都線'; traversed the resulting one-component, unbranched, open endpoint chain from the endpoint matching 京都 to the endpoint matching 大和西大寺.",
+    "routeOrientation": "Source route segments were reversed only when needed to form a continuous Kyoto-to-Yamato-Saidaiji chain; coordinates themselves were not transformed.",
+    "chainageComputation": "GRS80 ellipsoid inverse-geodesic between each consecutive published source vertex. Unit: metre. Values are local route-reference measures, not official railway chainage.",
+    "stationOrdering": "Stations sorted by the median of nearest route-vertex measures for each source station-line vertex. The derived measure is only an ordering aid; source station LineStrings are retained and not converted to center points or platforms.",
+    "provenance": "Original N02 attributes and source record indices are included in each extracted feature. New IDs are package identifiers, not MLIT feature IDs."
+  },
+  "unknownFields": [
+    "physicalTrackCenterline",
+    "trackCountAndAlignment",
+    "trackGaugeMM",
+    "curveRadiusM",
+    "cantMM",
+    "gradientPermille",
+    "elevationM",
+    "speedRestrictions",
+    "signalsAndBlocks",
+    "protectionSystems",
+    "platformsAndStopPoints",
+    "switchesAndYards",
+    "bridgesTunnelsCrossings",
+    "timetable"
+  ],
+  "fieldProvenance": {
+    "packageLocalIdentifier": {
+      "sourceIDs": [],
+      "status": "PLACEHOLDER",
+      "confidence": "UNRATED",
+      "note": "The packageID and routeID are local identifiers created for this separate research package; they are not MLIT or operator route identifiers."
+    },
+    "routeNameOperatorAndClass": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "HIGH",
+      "sourceFields": [
+        "N02_001",
+        "N02_003",
+        "N02_004"
+      ],
+      "note": "Values are copied from the selected N02-25 route feature attributes."
+    },
+    "stationNamesAndDatasetCodes": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "HIGH",
+      "sourceFields": [
+        "N02_005",
+        "N02_005c",
+        "N02_005g"
+      ],
+      "note": "Names and dataset codes are copied from N02-25 station feature attributes; codes are not operator station identifiers."
+    },
+    "extractedFeatureAndVertexCounts": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "HIGH",
+      "note": "Counts are exact counts of the route/station features and route vertices selected from the pinned source archive; they are not railway engineering measurements."
+    },
+    "sourceRecordIndices": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "HIGH",
+      "note": "Zero-based feature positions in the pinned N02-25 GeoJSON collections, retained for provenance and reproducibility."
+    },
+    "routeCoordinates": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "LOW",
+      "note": "Coordinates preserve N02-25 source vertices in JGD2011/(B,L); low confidence describes their use as physical track alignment because the source line is generalized and no ground-survey error bound is given."
+    },
+    "stationLineGeometry": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "VERIFIED",
+      "confidence": "LOW",
+      "note": "Original source station LineStrings are preserved; they are not station-center points, platform shapes, or stop markers."
+    },
+    "segmentOrientationAndContinuity": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "ESTIMATED",
+      "confidence": "LOW",
+      "note": "The source line segments are ordered/oriented using shared endpoints to make a Kyoto-to-Yamato-Saidaiji reference chain."
+    },
+    "localVertexChainageAndReferenceLength": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "ESTIMATED",
+      "confidence": "LOW",
+      "note": "Derived from GRS80 inverse-geodesic distances between published vertices; not official railway chainage or measured track length."
+    },
+    "stationOrderReferenceMeasure": {
+      "sourceIDs": [
+        "mlit_n02_2025"
+      ],
+      "status": "ESTIMATED",
+      "confidence": "LOW",
+      "note": "Median nearest-route-vertex measure of the source station-line vertices; used only to order stations, not as station-center chainage."
+    },
+    "operationalAndTrackEngineeringFields": {
+      "sourceIDs": [],
+      "status": "UNKNOWN",
+      "confidence": "UNRATED",
+      "note": "Physical track, operations, platforms, signals, restrictions, structures, and timetable values are absent from this extraction and must not be inferred."
+    }
+  }
+}

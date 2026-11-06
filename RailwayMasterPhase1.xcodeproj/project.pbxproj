@@ -1,0 +1,426 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* RailwayMasterPhase1App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* RailwayMasterPhase1App.swift */; };
+		A10000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ContentView.swift */; };
+		A10000000000000000000003 /* TrainPhysics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* TrainPhysics.swift */; };
+		A10000000000000000000004 /* SimulatorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* SimulatorModel.swift */; };
+		A10000000000000000000005 /* TrainPhysicsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* TrainPhysicsTests.swift */; };
+		A10000000000000000000006 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* XCTest.framework */; };
+		A10000000000000000000007 /* RailwaySceneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* RailwaySceneView.swift */; };
+					A1000000000000000000000A /* RouteData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* RouteData.swift */; };
+			A1000000000000000000000B /* OperationsSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* OperationsSystem.swift */; };
+			A1000000000000000000000C /* RailwayAudioEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* RailwayAudioEngine.swift */; };
+			A1000000000000000000000D /* DrivingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* DrivingSession.swift */; };
+			A1000000000000000000000E /* RoutePackage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* RoutePackage.swift */; };
+			A1000000000000000000000F /* FictionalRegionalMainline.json in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* FictionalRegionalMainline.json */; };
+			A10000000000000000000010 /* ServiceOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* ServiceOperations.swift */; };
+			A10000000000000000000011 /* FictionalOperationsPlan.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* FictionalOperationsPlan.json */; };
+			A10000000000000000000012 /* ServicePlanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* ServicePlanSheet.swift */; };
+			A10000000000000000000013 /* AudioModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* AudioModels.swift */; };
+		A10000000000000000000014 /* ProceduralAudioDSP.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* ProceduralAudioDSP.swift */; };
+		A10000000000000000000015 /* DepartureMelodyCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* DepartureMelodyCatalog.swift */; };
+		A10000000000000000000016 /* TrafficNetworkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001F /* TrafficNetworkSheet.swift */; };
+		A10000000000000000000017 /* RegionalNetworkIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* RegionalNetworkIntegration.swift */; };
+		A10000000000000000000018 /* RegionalNetworkAuditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* RegionalNetworkAuditSheet.swift */; };
+		A10000000000000000000019 /* SoundControlSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* SoundControlSheet.swift */; };
+		A10000000000000000000021 /* RailwayRouteData in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000001 /* RailwayRouteData */; };
+		A10000000000000000000022 /* RailwaySignalling in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000002 /* RailwaySignalling */; };
+		A10000000000000000000023 /* TrafficSimulation in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000003 /* TrafficSimulation */; };
+		A1000000000000000000001A /* RegionalIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* RegionalIntegrationTests.swift */; };
+		A10000000000000000000024 /* RailwayRouteData in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000004 /* RailwayRouteData test dependency */; };
+		A10000000000000000000025 /* RailwaySignalling in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000005 /* RailwaySignalling test dependency */; };
+		A10000000000000000000026 /* TrafficSimulation in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000006 /* TrafficSimulation test dependency */; };
+		A1000000000000000000001B /* SessionResultSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* SessionResultSheet.swift */; };
+		A1000000000000000000001C /* RailwayTractionSoundProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* RailwayTractionSoundProfile.swift */; };
+			A10000000000000000000027 /* EnvironmentQualitySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* EnvironmentQualitySheet.swift */; };
+		A10000000000000000000028 /* FictionalVehicleProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* FictionalVehicleProfile.swift */; };
+		A10000000000000000000029 /* MaintenanceGameplayCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000028 /* MaintenanceGameplayCoordinator.swift */; };
+		A1000000000000000000002A /* MaintenanceGameplaySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000029 /* MaintenanceGameplaySheet.swift */; };
+		A1000000000000000000002B /* OperationsGameplayCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002A /* OperationsGameplayCoordinator.swift */; };
+		A1000000000000000000002C /* OperationsGameplaySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002B /* OperationsGameplaySheet.swift */; };
+		A1000000000000000000002D /* RailwayVehicleSceneAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002C /* RailwayVehicleSceneAdapter.swift */; };
+		A1000000000000000000002E /* RegionalRouteFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002D /* RegionalRouteFactory.swift */; };
+		A1000000000000000000002F /* RegionalRouteSelectionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002E /* RegionalRouteSelectionSheet.swift */; };
+		A10000000000000000000030 /* VehicleLibrarySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002F /* VehicleLibrarySheet.swift */; };
+		A10000000000000000000031 /* VehicleProfileSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000030 /* VehicleProfileSheet.swift */; };
+			A10000000000000000000032 /* EnvironmentConditions in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000007 /* EnvironmentConditions */; };
+		A10000000000000000000033 /* RailwayMaintenance in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000008 /* RailwayMaintenance */; };
+		A10000000000000000000034 /* RailwayOperations in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000009 /* RailwayOperations */; };
+		A10000000000000000000035 /* RailwayRendering in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000000A /* RailwayRendering */; };
+		A10000000000000000000036 /* RailwayVehicleCab in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000000B /* RailwayVehicleCab */; };
+		A10000000000000000000037 /* StopScoring in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000000C /* StopScoring */; };
+		A10000000000000000000038 /* StopScoring test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000000D /* StopScoring test dependency */; };
+		A10000000000000000000039 /* StopScoringRouteAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* StopScoringRouteAdapter.swift */; };
+		A1000000000000000000003A /* StopScoringSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* StopScoringSheet.swift */; };
+	A1000000000000000000003B /* RailwayTimetable in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000000E /* RailwayTimetable */; };
+A1000000000000000000003C /* RailwayTrainPhysics in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000000F /* RailwayTrainPhysics */; };
+A1000000000000000000003D /* RailwayTimetable test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000010 /* RailwayTimetable test dependency */; };
+A1000000000000000000003E /* RailwayTrainPhysics test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000011 /* RailwayTrainPhysics test dependency */; };
+A1000000000000000000003F /* RegionalTimetableAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000033 /* RegionalTimetableAdapter.swift */; };
+A10000000000000000000040 /* TimetableControlSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000034 /* TimetableControlSheet.swift */; };
+A10000000000000000000041 /* TrainPhysicsProfileAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000035 /* TrainPhysicsProfileAdapter.swift */; };
+A10000000000000000000042 /* TrainPhysicsDetailsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000036 /* TrainPhysicsDetailsSheet.swift */; };
+A10000000000000000000043 /* GameSystemsIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000037 /* GameSystemsIntegrationTests.swift */; };
+		A10000000000000000000044 /* RailwayGameModes in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000012 /* RailwayGameModes */; };
+		A10000000000000000000045 /* RailwayGameModes test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000013 /* RailwayGameModes test dependency */; };
+			A10000000000000000000046 /* GameModeSessionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000038 /* GameModeSessionSheet.swift */; };
+		A10000000000000000000047 /* RegionalGameModeAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000039 /* RegionalGameModeAdapter.swift */; };
+
+		A10000000000000000000048 /* SessionSaveSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003A /* SessionSaveSheet.swift */; };
+		A10000000000000000000049 /* SimulatorRuntimeSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003B /* SimulatorRuntimeSnapshot.swift */; };
+		A1000000000000000000004A /* DoorProcedureScoringRouteAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003C /* DoorProcedureScoringRouteAdapter.swift */; };
+		A1000000000000000000004B /* DoorProcedureScoringSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003D /* DoorProcedureScoringSheet.swift */; };
+		A1000000000000000000004C /* FictionalDoorProcedureScoring.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003E /* FictionalDoorProcedureScoring.json */; };
+		A1000000000000000000004D /* DoorProcedureScoring in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000015 /* DoorProcedureScoring */; };
+		A1000000000000000000004E /* RailwaySessionPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000014 /* RailwaySessionPersistence */; };
+	A1000000000000000000004F /* ScenarioProgressSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000003F /* ScenarioProgressSheet.swift */; };
+	A10000000000000000000050 /* PackageIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000040 /* PackageIntegrationTests.swift */; };
+	A10000000000000000000051 /* RailwayAudioEnhancements in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000016 /* RailwayAudioEnhancements */; };
+	A10000000000000000000052 /* CrewWorkflow in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000017 /* CrewWorkflow */; };
+	A10000000000000000000053 /* IncidentMaintenance in Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000018 /* IncidentMaintenance */; };
+	A10000000000000000000054 /* RailwayAudioEnhancements test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000019 /* RailwayAudioEnhancements test dependency */; };
+	A10000000000000000000055 /* CrewWorkflow test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000001A /* CrewWorkflow test dependency */; };
+	A10000000000000000000056 /* IncidentMaintenance test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000001B /* IncidentMaintenance test dependency */; };
+		A10000000000000000000057 /* RailwaySceneFidelity in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000001C /* RailwaySceneFidelity */; };
+	A10000000000000000000058 /* RailwaySceneFidelity test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000001D /* RailwaySceneFidelity test dependency */; };
+A10000000000000000000059 /* RailwayVehicleHighFidelity in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000001E /* RailwayVehicleHighFidelity */; };
+A1000000000000000000005A /* ProtectionSystems in Frameworks */ = {isa = PBXBuildFile; productRef = A1100000000000000000001F /* ProtectionSystems */; };
+A1000000000000000000005B /* RailwayVehicleHighFidelity test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000020 /* RailwayVehicleHighFidelity test dependency */; };
+A1000000000000000000005C /* ProtectionSystems test dependency in Test Frameworks */ = {isa = PBXBuildFile; productRef = A11000000000000000000021 /* ProtectionSystems test dependency */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A30000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A40000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000001;
+			remoteInfo = RailwayMasterPhase1;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* RailwayMasterPhase1App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RailwayMasterPhase1App.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* TrainPhysics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainPhysics.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* SimulatorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatorModel.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* TrainPhysicsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainPhysicsTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000008 /* RailwayMasterPhase1.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RailwayMasterPhase1.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000009 /* RailwayMasterPhase1Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RailwayMasterPhase1Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000010 /* RailwaySceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RailwaySceneView.swift; sourceTree = "<group>"; };
+					A20000000000000000000013 /* RouteData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteData.swift; sourceTree = "<group>"; };
+			A20000000000000000000014 /* OperationsSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsSystem.swift; sourceTree = "<group>"; };
+			A20000000000000000000015 /* RailwayAudioEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RailwayAudioEngine.swift; sourceTree = "<group>"; };
+			A20000000000000000000016 /* DrivingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingSession.swift; sourceTree = "<group>"; };
+			A20000000000000000000017 /* RoutePackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePackage.swift; sourceTree = "<group>"; };
+			A20000000000000000000018 /* FictionalRegionalMainline.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/FictionalRegionalMainline.json; sourceTree = "<group>"; };
+			A20000000000000000000019 /* ServiceOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceOperations.swift; sourceTree = "<group>"; };
+			A2000000000000000000001A /* FictionalOperationsPlan.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/FictionalOperationsPlan.json; sourceTree = "<group>"; };
+			A2000000000000000000001B /* ServicePlanSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicePlanSheet.swift; sourceTree = "<group>"; };
+			A2000000000000000000001C /* AudioModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioModels.swift; sourceTree = "<group>"; };
+		A2000000000000000000001D /* ProceduralAudioDSP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProceduralAudioDSP.swift; sourceTree = "<group>"; };
+		A2000000000000000000001E /* DepartureMelodyCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepartureMelodyCatalog.swift; sourceTree = "<group>"; };
+		A2000000000000000000001F /* TrafficNetworkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrafficNetworkSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000020 /* RegionalNetworkIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalNetworkIntegration.swift; sourceTree = "<group>"; };
+		A20000000000000000000021 /* RegionalNetworkAuditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalNetworkAuditSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* SoundControlSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundControlSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* RegionalIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalIntegrationTests.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* SessionResultSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionResultSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000025 /* RailwayTractionSoundProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RailwayTractionSoundProfile.swift; sourceTree = "<group>"; };
+			A20000000000000000000026 /* EnvironmentQualitySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentQualitySheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000027 /* FictionalVehicleProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FictionalVehicleProfile.swift; sourceTree = "<group>"; };
+		A20000000000000000000028 /* MaintenanceGameplayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceGameplayCoordinator.swift; sourceTree = "<group>"; };
+		A20000000000000000000029 /* MaintenanceGameplaySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaintenanceGameplaySheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000002A /* OperationsGameplayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsGameplayCoordinator.swift; sourceTree = "<group>"; };
+		A2000000000000000000002B /* OperationsGameplaySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationsGameplaySheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000002C /* RailwayVehicleSceneAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RailwayVehicleSceneAdapter.swift; sourceTree = "<group>"; };
+		A2000000000000000000002D /* RegionalRouteFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalRouteFactory.swift; sourceTree = "<group>"; };
+		A2000000000000000000002E /* RegionalRouteSelectionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalRouteSelectionSheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000002F /* VehicleLibrarySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VehicleLibrarySheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000030 /* VehicleProfileSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VehicleProfileSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000031 /* StopScoringRouteAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopScoringRouteAdapter.swift; sourceTree = "<group>"; };
+		A20000000000000000000032 /* StopScoringSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StopScoringSheet.swift; sourceTree = "<group>"; };
+	A20000000000000000000033 /* RegionalTimetableAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalTimetableAdapter.swift; sourceTree = "<group>"; };
+A20000000000000000000034 /* TimetableControlSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimetableControlSheet.swift; sourceTree = "<group>"; };
+A20000000000000000000035 /* TrainPhysicsProfileAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainPhysicsProfileAdapter.swift; sourceTree = "<group>"; };
+A20000000000000000000036 /* TrainPhysicsDetailsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrainPhysicsDetailsSheet.swift; sourceTree = "<group>"; };
+A20000000000000000000037 /* GameSystemsIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSystemsIntegrationTests.swift; sourceTree = "<group>"; };
+	A20000000000000000000038 /* GameModeSessionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModeSessionSheet.swift; sourceTree = "<group>"; };
+	A20000000000000000000039 /* RegionalGameModeAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionalGameModeAdapter.swift; sourceTree = "<group>"; };
+
+		A2000000000000000000003A /* SessionSaveSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSaveSheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000003B /* SimulatorRuntimeSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatorRuntimeSnapshot.swift; sourceTree = "<group>"; };
+		A2000000000000000000003C /* DoorProcedureScoringRouteAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoorProcedureScoringRouteAdapter.swift; sourceTree = "<group>"; };
+		A2000000000000000000003D /* DoorProcedureScoringSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoorProcedureScoringSheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000003E /* FictionalDoorProcedureScoring.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/FictionalDoorProcedureScoring.json; sourceTree = "<group>"; };
+	A2000000000000000000003F /* ScenarioProgressSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScenarioProgressSheet.swift; sourceTree = "<group>"; };
+	A20000000000000000000040 /* PackageIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageIntegrationTests.swift; sourceTree = "<group>"; };
+	/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A60000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000021 /* RailwayRouteData in Frameworks */, A10000000000000000000022 /* RailwaySignalling in Frameworks */, A10000000000000000000023 /* TrafficSimulation in Frameworks */, A10000000000000000000032 /* EnvironmentConditions in Frameworks */, A10000000000000000000033 /* RailwayMaintenance in Frameworks */, A10000000000000000000034 /* RailwayOperations in Frameworks */, A10000000000000000000035 /* RailwayRendering in Frameworks */, A10000000000000000000036 /* RailwayVehicleCab in Frameworks */, A10000000000000000000037 /* StopScoring in Frameworks */, A1000000000000000000003B /* RailwayTimetable in Frameworks */, A1000000000000000000003C /* RailwayTrainPhysics in Frameworks */, A10000000000000000000044 /* RailwayGameModes in Frameworks */, A1000000000000000000004D /* DoorProcedureScoring in Frameworks */, A1000000000000000000004E /* RailwaySessionPersistence in Frameworks */, A10000000000000000000051 /* RailwayAudioEnhancements in Frameworks */, A10000000000000000000052 /* CrewWorkflow in Frameworks */, A10000000000000000000053 /* IncidentMaintenance in Frameworks */, A10000000000000000000057 /* RailwaySceneFidelity in Frameworks */, A10000000000000000000059 /* RailwayVehicleHighFidelity in Frameworks */, A1000000000000000000005A /* ProtectionSystems in Frameworks */); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000006 /* XCTest.framework in Frameworks */, A10000000000000000000024 /* RailwayRouteData in Test Frameworks */, A10000000000000000000025 /* RailwaySignalling in Test Frameworks */, A10000000000000000000026 /* TrafficSimulation in Test Frameworks */, A10000000000000000000038 /* StopScoring test dependency in Test Frameworks */, A1000000000000000000003D /* RailwayTimetable test dependency in Test Frameworks */, A1000000000000000000003E /* RailwayTrainPhysics test dependency in Test Frameworks */, A10000000000000000000045 /* RailwayGameModes test dependency in Test Frameworks */, A10000000000000000000054 /* RailwayAudioEnhancements test dependency in Test Frameworks */, A10000000000000000000055 /* CrewWorkflow test dependency in Test Frameworks */, A10000000000000000000056 /* IncidentMaintenance test dependency in Test Frameworks */, A10000000000000000000058 /* RailwaySceneFidelity test dependency in Test Frameworks */, A1000000000000000000005B /* RailwayVehicleHighFidelity test dependency in Test Frameworks */, A1000000000000000000005C /* ProtectionSystems test dependency in Test Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A70000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A70000000000000000000002 /* RailwayMasterPhase1 */,
+				A70000000000000000000003 /* RailwayMasterPhase1Tests */,
+				A70000000000000000000004 /* Products */,
+				A20000000000000000000006 /* XCTest.framework */,
+			);
+			sourceTree = "<group>";
+		};
+		A70000000000000000000002 /* RailwayMasterPhase1 */ = {
+			isa = PBXGroup;
+			path = RailwayMasterPhase1;
+			sourceTree = "<group>";
+			children = (
+				A20000000000000000000001 /* RailwayMasterPhase1App.swift */,
+				A20000000000000000000002 /* ContentView.swift */,
+					A20000000000000000000003 /* TrainPhysics.swift */,
+					A20000000000000000000004 /* SimulatorModel.swift */,
+						A20000000000000000000010 /* RailwaySceneView.swift */,
+						A20000000000000000000013 /* RouteData.swift */,
+						A20000000000000000000014 /* OperationsSystem.swift */,
+							A20000000000000000000015 /* RailwayAudioEngine.swift */,
+							A20000000000000000000016 /* DrivingSession.swift */,
+							A20000000000000000000017 /* RoutePackage.swift */,
+							A20000000000000000000019 /* ServiceOperations.swift */,
+							A2000000000000000000001B /* ServicePlanSheet.swift */,
+										A20000000000000000000018 /* FictionalRegionalMainline.json */,
+							A2000000000000000000001A /* FictionalOperationsPlan.json */,
+					A2000000000000000000001C /* AudioModels.swift */,
+					A2000000000000000000001D /* ProceduralAudioDSP.swift */,
+					A2000000000000000000001E /* DepartureMelodyCatalog.swift */,
+					A2000000000000000000001F /* TrafficNetworkSheet.swift */,
+					A20000000000000000000020 /* RegionalNetworkIntegration.swift */,
+					A20000000000000000000021 /* RegionalNetworkAuditSheet.swift */,
+					A20000000000000000000022 /* SoundControlSheet.swift */,
+					A20000000000000000000024 /* SessionResultSheet.swift */,
+					A20000000000000000000025 /* RailwayTractionSoundProfile.swift */,
+										A20000000000000000000026 /* EnvironmentQualitySheet.swift */,
+					A20000000000000000000027 /* FictionalVehicleProfile.swift */,
+					A20000000000000000000028 /* MaintenanceGameplayCoordinator.swift */,
+					A20000000000000000000029 /* MaintenanceGameplaySheet.swift */,
+					A2000000000000000000002A /* OperationsGameplayCoordinator.swift */,
+					A2000000000000000000002B /* OperationsGameplaySheet.swift */,
+					A2000000000000000000002C /* RailwayVehicleSceneAdapter.swift */,
+					A2000000000000000000002D /* RegionalRouteFactory.swift */,
+					A2000000000000000000002E /* RegionalRouteSelectionSheet.swift */,
+					A2000000000000000000002F /* VehicleLibrarySheet.swift */,
+					A20000000000000000000030 /* VehicleProfileSheet.swift */,
+					A20000000000000000000031 /* StopScoringRouteAdapter.swift */,
+						A20000000000000000000032 /* StopScoringSheet.swift */,
+A20000000000000000000033 /* RegionalTimetableAdapter.swift */,
+A20000000000000000000034 /* TimetableControlSheet.swift */,
+A20000000000000000000035 /* TrainPhysicsProfileAdapter.swift */,
+A20000000000000000000036 /* TrainPhysicsDetailsSheet.swift */,
+						A20000000000000000000038 /* GameModeSessionSheet.swift */,
+							A20000000000000000000039 /* RegionalGameModeAdapter.swift */, A2000000000000000000003A /* SessionSaveSheet.swift */, A2000000000000000000003B /* SimulatorRuntimeSnapshot.swift */, A2000000000000000000003C /* DoorProcedureScoringRouteAdapter.swift */, A2000000000000000000003D /* DoorProcedureScoringSheet.swift */,
+					A2000000000000000000003E /* FictionalDoorProcedureScoring.json */,
+					A2000000000000000000003F /* ScenarioProgressSheet.swift */,
+							A20000000000000000000007 /* Info.plist */,
+				);
+			};
+		A70000000000000000000003 /* RailwayMasterPhase1Tests */ = {
+			isa = PBXGroup;
+			path = RailwayMasterPhase1Tests;
+			sourceTree = "<group>";
+			children = (A20000000000000000000005 /* TrainPhysicsTests.swift */, A20000000000000000000023 /* RegionalIntegrationTests.swift */, A20000000000000000000037 /* GameSystemsIntegrationTests.swift */, A20000000000000000000040 /* PackageIntegrationTests.swift */,);
+		};
+		A70000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+			children = (
+				A20000000000000000000008 /* RailwayMasterPhase1.app */,
+				A20000000000000000000009 /* RailwayMasterPhase1Tests.xctest */,
+			);
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* RailwayMasterPhase1 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000001 /* Build configuration list for PBXNativeTarget "RailwayMasterPhase1" */;
+			buildPhases = (
+				A60000000000000000000003 /* Sources */,
+				A60000000000000000000001 /* Frameworks */,
+				A60000000000000000000004 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = RailwayMasterPhase1;
+			productName = RailwayMasterPhase1;
+			productReference = A20000000000000000000008 /* RailwayMasterPhase1.app */;
+			packageProductDependencies = (A11000000000000000000001 /* RailwayRouteData */, A11000000000000000000002 /* RailwaySignalling */, A11000000000000000000003 /* TrafficSimulation */, A11000000000000000000007 /* EnvironmentConditions */, A11000000000000000000008 /* RailwayMaintenance */, A11000000000000000000009 /* RailwayOperations */, A1100000000000000000000A /* RailwayRendering */, A1100000000000000000000B /* RailwayVehicleCab */, A1100000000000000000000C /* StopScoring */, A1100000000000000000000E /* RailwayTimetable */, A1100000000000000000000F /* RailwayTrainPhysics */, A11000000000000000000012 /* RailwayGameModes */, A11000000000000000000015 /* DoorProcedureScoring */, A11000000000000000000014 /* RailwaySessionPersistence */, A11000000000000000000016 /* RailwayAudioEnhancements */, A11000000000000000000017 /* CrewWorkflow */, A11000000000000000000018 /* IncidentMaintenance */, A1100000000000000000001C /* RailwaySceneFidelity */, A1100000000000000000001E /* RailwayVehicleHighFidelity */, A1100000000000000000001F /* ProtectionSystems */);
+			productType = "com.apple.product-type.application";
+		};
+		A50000000000000000000002 /* RailwayMasterPhase1Tests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A80000000000000000000002 /* Build configuration list for PBXNativeTarget "RailwayMasterPhase1Tests" */;
+			buildPhases = (
+				A60000000000000000000005 /* Sources */,
+				A60000000000000000000002 /* Frameworks */,
+				A60000000000000000000006 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = (A90000000000000000000001 /* PBXTargetDependency */,);
+			name = RailwayMasterPhase1Tests;
+			productName = RailwayMasterPhase1Tests;
+			productReference = A20000000000000000000009 /* RailwayMasterPhase1Tests.xctest */;
+			packageProductDependencies = (A11000000000000000000004 /* RailwayRouteData test dependency */, A11000000000000000000005 /* RailwaySignalling test dependency */, A11000000000000000000006 /* TrafficSimulation test dependency */, A1100000000000000000000D /* StopScoring test dependency */, A11000000000000000000010 /* RailwayTimetable test dependency */, A11000000000000000000011 /* RailwayTrainPhysics test dependency */, A11000000000000000000013 /* RailwayGameModes test dependency */, A11000000000000000000019 /* RailwayAudioEnhancements test dependency */, A1100000000000000000001A /* CrewWorkflow test dependency */, A1100000000000000000001B /* IncidentMaintenance test dependency */, A1100000000000000000001D /* RailwaySceneFidelity test dependency */, A11000000000000000000020 /* RailwayVehicleHighFidelity test dependency */, A11000000000000000000021 /* ProtectionSystems test dependency */,);
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A60000000000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* RailwayMasterPhase1App.swift in Sources */, A10000000000000000000002 /* ContentView.swift in Sources */, A10000000000000000000003 /* TrainPhysics.swift in Sources */, A10000000000000000000004 /* SimulatorModel.swift in Sources */, A10000000000000000000007 /* RailwaySceneView.swift in Sources */, A1000000000000000000000A /* RouteData.swift in Sources */, A1000000000000000000000B /* OperationsSystem.swift in Sources */, A1000000000000000000000C /* RailwayAudioEngine.swift in Sources */, A1000000000000000000000D /* DrivingSession.swift in Sources */, A1000000000000000000000E /* RoutePackage.swift in Sources */, A10000000000000000000010 /* ServiceOperations.swift in Sources */, A10000000000000000000012 /* ServicePlanSheet.swift in Sources */, A10000000000000000000013 /* AudioModels.swift in Sources */, A10000000000000000000014 /* ProceduralAudioDSP.swift in Sources */, A10000000000000000000015 /* DepartureMelodyCatalog.swift in Sources */, A10000000000000000000016 /* TrafficNetworkSheet.swift in Sources */, A10000000000000000000017 /* RegionalNetworkIntegration.swift in Sources */, A10000000000000000000018 /* RegionalNetworkAuditSheet.swift in Sources */, A10000000000000000000019 /* SoundControlSheet.swift in Sources */, A1000000000000000000001B /* SessionResultSheet.swift in Sources */, A1000000000000000000001C /* RailwayTractionSoundProfile.swift in Sources */, A10000000000000000000027 /* EnvironmentQualitySheet.swift in Sources */, A10000000000000000000028 /* FictionalVehicleProfile.swift in Sources */, A10000000000000000000029 /* MaintenanceGameplayCoordinator.swift in Sources */, A1000000000000000000002A /* MaintenanceGameplaySheet.swift in Sources */, A1000000000000000000002B /* OperationsGameplayCoordinator.swift in Sources */, A1000000000000000000002C /* OperationsGameplaySheet.swift in Sources */, A1000000000000000000002D /* RailwayVehicleSceneAdapter.swift in Sources */, A1000000000000000000002E /* RegionalRouteFactory.swift in Sources */, A1000000000000000000002F /* RegionalRouteSelectionSheet.swift in Sources */, A10000000000000000000030 /* VehicleLibrarySheet.swift in Sources */, A10000000000000000000031 /* VehicleProfileSheet.swift in Sources */, A10000000000000000000039 /* StopScoringRouteAdapter.swift in Sources */, A1000000000000000000003A /* StopScoringSheet.swift in Sources */, A1000000000000000000003F /* RegionalTimetableAdapter.swift in Sources */, A10000000000000000000040 /* TimetableControlSheet.swift in Sources */, A10000000000000000000041 /* TrainPhysicsProfileAdapter.swift in Sources */, A10000000000000000000042 /* TrainPhysicsDetailsSheet.swift in Sources */, A10000000000000000000046 /* GameModeSessionSheet.swift in Sources */, A10000000000000000000047 /* RegionalGameModeAdapter.swift in Sources */, A10000000000000000000048 /* SessionSaveSheet.swift in Sources */, A10000000000000000000049 /* SimulatorRuntimeSnapshot.swift in Sources */, A1000000000000000000004A /* DoorProcedureScoringRouteAdapter.swift in Sources */, A1000000000000000000004B /* DoorProcedureScoringSheet.swift in Sources */, A1000000000000000000004F /* ScenarioProgressSheet.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000005 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000005 /* TrainPhysicsTests.swift in Sources */, A1000000000000000000001A /* RegionalIntegrationTests.swift in Sources */, A10000000000000000000043 /* GameSystemsIntegrationTests.swift in Sources */, A10000000000000000000050 /* PackageIntegrationTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+	/* Begin PBXResourcesBuildPhase section */
+		A60000000000000000000004 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000F /* FictionalRegionalMainline.json in Resources */, A10000000000000000000011 /* FictionalOperationsPlan.json in Resources */, A1000000000000000000004C /* FictionalDoorProcedureScoring.json in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000006 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A90000000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A50000000000000000000001 /* RailwayMasterPhase1 */; targetProxy = A30000000000000000000001 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		AB0000000000000000000001 /* Project Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
+		AB0000000000000000000002 /* Project Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Release; };
+		AB0000000000000000000003 /* App Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 2; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = RailwayMasterPhase1/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 0.2.0; PRODUCT_BUNDLE_IDENTIFIER = jp.railwaymaster.phase1; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		AB0000000000000000000004 /* App Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 2; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = RailwayMasterPhase1/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 0.2.0; PRODUCT_BUNDLE_IDENTIFIER = jp.railwaymaster.phase1; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		AB0000000000000000000005 /* Tests Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = jp.railwaymaster.phase1.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RailwayMasterPhase1.app/RailwayMasterPhase1"; }; name = Debug; };
+		AB0000000000000000000006 /* Tests Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = jp.railwaymaster.phase1.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RailwayMasterPhase1.app/RailwayMasterPhase1"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A80000000000000000000001 /* Build configuration list for app */ = {isa = XCConfigurationList; buildConfigurations = (AB0000000000000000000003 /* App Debug */, AB0000000000000000000004 /* App Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A80000000000000000000002 /* Build configuration list for tests */ = {isa = XCConfigurationList; buildConfigurations = (AB0000000000000000000005 /* Tests Debug */, AB0000000000000000000006 /* Tests Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A80000000000000000000003 /* Build configuration list for project */ = {isa = XCConfigurationList; buildConfigurations = (AB0000000000000000000001 /* Project Debug */, AB0000000000000000000002 /* Project Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference and product dependency objects */
+		A11000000000000000000004 /* RailwayRouteData test dependency */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A12000000000000000000001 /* XCLocalSwiftPackageReference "Packages/RailwayRouteData" */;
+			productName = RailwayRouteData;
+		};
+		A11000000000000000000005 /* RailwaySignalling test dependency */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A12000000000000000000002 /* XCLocalSwiftPackageReference "Packages/RailwaySignalling" */;
+			productName = RailwaySignalling;
+		};
+		A11000000000000000000006 /* TrafficSimulation test dependency */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A12000000000000000000003 /* XCLocalSwiftPackageReference "Packages/TrafficSimulation" */;
+			productName = TrafficSimulation;
+		};
+		A12000000000000000000001 /* XCLocalSwiftPackageReference "Packages/RailwayRouteData" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RailwayRouteData;
+		};
+		A11000000000000000000001 /* RailwayRouteData */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A12000000000000000000001 /* XCLocalSwiftPackageReference "Packages/RailwayRouteData" */;
+			productName = RailwayRouteData;
+		};
+		A12000000000000000000002 /* XCLocalSwiftPackageReference "Packages/RailwaySignalling" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RailwaySignalling;
+		};
+		A11000000000000000000002 /* RailwaySignalling */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A12000000000000000000002 /* XCLocalSwiftPackageReference "Packages/RailwaySignalling" */;
+			productName = RailwaySignalling;
+		};
+		A12000000000000000000003 /* XCLocalSwiftPackageReference "Packages/TrafficSimulation" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/TrafficSimulation;
+		};
+		A11000000000000000000003 /* TrafficSimulation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A12000000000000000000003 /* XCLocalSwiftPackageReference "Packages/TrafficSimulation" */;
+			productName = TrafficSimulation;
+		};
+
+		A12000000000000000000004 /* XCLocalSwiftPackageReference "Packages/EnvironmentConditions" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/EnvironmentConditions; };
+		A11000000000000000000007 /* EnvironmentConditions */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000004 /* XCLocalSwiftPackageReference "Packages/EnvironmentConditions" */; productName = EnvironmentConditions; };
+		A12000000000000000000005 /* XCLocalSwiftPackageReference "Packages/RailwayMaintenance" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwayMaintenance; };
+		A11000000000000000000008 /* RailwayMaintenance */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000005 /* XCLocalSwiftPackageReference "Packages/RailwayMaintenance" */; productName = RailwayMaintenance; };
+		A12000000000000000000006 /* XCLocalSwiftPackageReference "Packages/RailwayOperations" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwayOperations; };
+		A11000000000000000000009 /* RailwayOperations */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000006 /* XCLocalSwiftPackageReference "Packages/RailwayOperations" */; productName = RailwayOperations; };
+		A12000000000000000000007 /* XCLocalSwiftPackageReference "Packages/RailwayRendering" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwayRendering; };
+		A1100000000000000000000A /* RailwayRendering */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000007 /* XCLocalSwiftPackageReference "Packages/RailwayRendering" */; productName = RailwayRendering; };
+		A12000000000000000000008 /* XCLocalSwiftPackageReference "Packages/RailwayVehicleCab" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwayVehicleCab; };
+		A1100000000000000000000B /* RailwayVehicleCab */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000008 /* XCLocalSwiftPackageReference "Packages/RailwayVehicleCab" */; productName = RailwayVehicleCab; };
+		A12000000000000000000009 /* XCLocalSwiftPackageReference "Packages/StopScoring" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/StopScoring; };
+		A1100000000000000000000C /* StopScoring */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000009 /* XCLocalSwiftPackageReference "Packages/StopScoring" */; productName = StopScoring; };
+		A1100000000000000000000D /* StopScoring test dependency */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000009 /* XCLocalSwiftPackageReference "Packages/StopScoring" */; productName = StopScoring; };
+	A1200000000000000000000A /* XCLocalSwiftPackageReference "Packages/RailwayTimetable" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwayTimetable; };
+A1100000000000000000000E /* RailwayTimetable */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000A /* XCLocalSwiftPackageReference "Packages/RailwayTimetable" */; productName = RailwayTimetable; };
+A11000000000000000000010 /* RailwayTimetable test dependency */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000A /* XCLocalSwiftPackageReference "Packages/RailwayTimetable" */; productName = RailwayTimetable; };
+A1200000000000000000000B /* XCLocalSwiftPackageReference "Packages/TrainPhysics" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/TrainPhysics; };
+A1100000000000000000000F /* RailwayTrainPhysics */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000B /* XCLocalSwiftPackageReference "Packages/TrainPhysics" */; productName = RailwayTrainPhysics; };
+A11000000000000000000011 /* RailwayTrainPhysics test dependency */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000B /* XCLocalSwiftPackageReference "Packages/TrainPhysics" */; productName = RailwayTrainPhysics; };
+		A1200000000000000000000C /* XCLocalSwiftPackageReference "Packages/RailwayGameModes" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwayGameModes; };
+		A11000000000000000000012 /* RailwayGameModes */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000C /* XCLocalSwiftPackageReference "Packages/RailwayGameModes" */; productName = RailwayGameModes; };
+		A11000000000000000000013 /* RailwayGameModes test dependency */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000C /* XCLocalSwiftPackageReference "Packages/RailwayGameModes" */; productName = RailwayGameModes; };
+		A1200000000000000000000D /* XCLocalSwiftPackageReference "Packages/RailwaySessionPersistence" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwaySessionPersistence; };
+		A11000000000000000000014 /* RailwaySessionPersistence */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000D /* XCLocalSwiftPackageReference "Packages/RailwaySessionPersistence" */; productName = RailwaySessionPersistence; };
+		A1200000000000000000000E /* XCLocalSwiftPackageReference "Packages/DoorProcedureScoring" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/DoorProcedureScoring; };
+		A11000000000000000000015 /* DoorProcedureScoring */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000E /* XCLocalSwiftPackageReference "Packages/DoorProcedureScoring" */; productName = DoorProcedureScoring; };
+	A1200000000000000000000F /* XCLocalSwiftPackageReference "Packages/RailwayAudioEnhancements" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwayAudioEnhancements; };
+	A11000000000000000000016 /* RailwayAudioEnhancements */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000F /* XCLocalSwiftPackageReference "Packages/RailwayAudioEnhancements" */; productName = RailwayAudioEnhancements; };
+	A11000000000000000000019 /* RailwayAudioEnhancements test dependency */ = {isa = XCSwiftPackageProductDependency; package = A1200000000000000000000F /* XCLocalSwiftPackageReference "Packages/RailwayAudioEnhancements" */; productName = RailwayAudioEnhancements; };
+	A12000000000000000000010 /* XCLocalSwiftPackageReference "Packages/CrewWorkflow" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/CrewWorkflow; };
+	A11000000000000000000017 /* CrewWorkflow */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000010 /* XCLocalSwiftPackageReference "Packages/CrewWorkflow" */; productName = CrewWorkflow; };
+	A1100000000000000000001A /* CrewWorkflow test dependency */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000010 /* XCLocalSwiftPackageReference "Packages/CrewWorkflow" */; productName = CrewWorkflow; };
+	A12000000000000000000011 /* XCLocalSwiftPackageReference "Packages/IncidentMaintenance" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/IncidentMaintenance; };
+	A11000000000000000000018 /* IncidentMaintenance */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000011 /* XCLocalSwiftPackageReference "Packages/IncidentMaintenance" */; productName = IncidentMaintenance; };
+	A1100000000000000000001B /* IncidentMaintenance test dependency */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000011 /* XCLocalSwiftPackageReference "Packages/IncidentMaintenance" */; productName = IncidentMaintenance; };
+		A12000000000000000000012 /* XCLocalSwiftPackageReference "Packages/RailwaySceneFidelity" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwaySceneFidelity; };
+
+A12000000000000000000013 /* XCLocalSwiftPackageReference "Packages/RailwayVehicleHighFidelity" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/RailwayVehicleHighFidelity; };
+A1100000000000000000001E /* RailwayVehicleHighFidelity */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000013 /* XCLocalSwiftPackageReference "Packages/RailwayVehicleHighFidelity" */; productName = RailwayVehicleHighFidelity; };
+A11000000000000000000020 /* RailwayVehicleHighFidelity test dependency */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000013 /* XCLocalSwiftPackageReference "Packages/RailwayVehicleHighFidelity" */; productName = RailwayVehicleHighFidelity; };
+A12000000000000000000014 /* XCLocalSwiftPackageReference "Packages/ProtectionSystems" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/ProtectionSystems; };
+A1100000000000000000001F /* ProtectionSystems */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000014 /* XCLocalSwiftPackageReference "Packages/ProtectionSystems" */; productName = ProtectionSystems; };
+A11000000000000000000021 /* ProtectionSystems test dependency */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000014 /* XCLocalSwiftPackageReference "Packages/ProtectionSystems" */; productName = ProtectionSystems; };
+	A1100000000000000000001C /* RailwaySceneFidelity */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000012 /* XCLocalSwiftPackageReference "Packages/RailwaySceneFidelity" */; productName = RailwaySceneFidelity; };
+	A1100000000000000000001D /* RailwaySceneFidelity test dependency */ = {isa = XCSwiftPackageProductDependency; package = A12000000000000000000012 /* XCLocalSwiftPackageReference "Packages/RailwaySceneFidelity" */; productName = RailwaySceneFidelity; };
+/* Begin PBXProject section */
+		A40000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1500; TargetAttributes = {A50000000000000000000001 = {CreatedOnToolsVersion = 15.0; }; A50000000000000000000002 = {CreatedOnToolsVersion = 15.0; TestTargetID = A50000000000000000000001; }; }; };
+			buildConfigurationList = A80000000000000000000003 /* Build configuration list for project */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base,);
+			mainGroup = A70000000000000000000001;
+			productRefGroup = A70000000000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			packageReferences = (A12000000000000000000001 /* XCLocalSwiftPackageReference "Packages/RailwayRouteData" */, A12000000000000000000002 /* XCLocalSwiftPackageReference "Packages/RailwaySignalling" */, A12000000000000000000003 /* XCLocalSwiftPackageReference "Packages/TrafficSimulation" */, A12000000000000000000004 /* XCLocalSwiftPackageReference "Packages/EnvironmentConditions" */, A12000000000000000000005 /* XCLocalSwiftPackageReference "Packages/RailwayMaintenance" */, A12000000000000000000006 /* XCLocalSwiftPackageReference "Packages/RailwayOperations" */, A12000000000000000000007 /* XCLocalSwiftPackageReference "Packages/RailwayRendering" */, A12000000000000000000008 /* XCLocalSwiftPackageReference "Packages/RailwayVehicleCab" */, A12000000000000000000009 /* XCLocalSwiftPackageReference "Packages/StopScoring" */, A1200000000000000000000A /* XCLocalSwiftPackageReference "Packages/RailwayTimetable" */, A1200000000000000000000B /* XCLocalSwiftPackageReference "Packages/TrainPhysics" */, A1200000000000000000000C /* XCLocalSwiftPackageReference "Packages/RailwayGameModes" */, A1200000000000000000000D /* XCLocalSwiftPackageReference "Packages/RailwaySessionPersistence" */, A1200000000000000000000E /* XCLocalSwiftPackageReference "Packages/DoorProcedureScoring" */, A1200000000000000000000F /* XCLocalSwiftPackageReference "Packages/RailwayAudioEnhancements" */, A12000000000000000000010 /* XCLocalSwiftPackageReference "Packages/CrewWorkflow" */, A12000000000000000000011 /* XCLocalSwiftPackageReference "Packages/IncidentMaintenance" */, A12000000000000000000012 /* XCLocalSwiftPackageReference "Packages/RailwaySceneFidelity" */, A12000000000000000000013 /* XCLocalSwiftPackageReference "Packages/RailwayVehicleHighFidelity" */, A12000000000000000000014 /* XCLocalSwiftPackageReference "Packages/ProtectionSystems" */);
+				targets = (A50000000000000000000001 /* RailwayMasterPhase1 */, A50000000000000000000002 /* RailwayMasterPhase1Tests */,);
+		};
+/* End PBXProject section */
+
+	};
+	rootObject = A40000000000000000000001 /* Project object */;
+}

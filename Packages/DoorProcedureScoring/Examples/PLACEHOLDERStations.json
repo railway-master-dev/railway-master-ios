@@ -1,0 +1,50 @@
+{
+  "fictionalDatasetNotice": "All station IDs, door sides, role labels, and prompt IDs below are fictional PLACEHOLDER game data. They are not real railway information, operating rules, or training procedures.",
+  "stations": [
+    {
+      "stationID": "PLACEHOLDER-01",
+      "displayName": "PLACEHOLDER Station One",
+      "expectedDoorSide": {
+        "status": "known",
+        "value": "left"
+      },
+      "procedureRequirements": {
+        "status": "known",
+        "value": [
+          {
+            "stepID": "fictional.prompt-choice",
+            "role": "conductor",
+            "title": "Fictional prompt selection"
+          },
+          {
+            "stepID": "fictional.marker-choice",
+            "role": "driver",
+            "title": "Fictional marker selection"
+          }
+        ]
+      }
+    },
+    {
+      "stationID": "PLACEHOLDER-02",
+      "displayName": "PLACEHOLDER Station Two — source data not supplied",
+      "expectedDoorSide": {
+        "status": "unknown",
+        "reason": "sourceDoesNotSpecify"
+      },
+      "procedureRequirements": {
+        "status": "unknown",
+        "reason": "notCollected"
+      }
+    },
+    {
+      "stationID": "PLACEHOLDER-03",
+      "displayName": "PLACEHOLDER Station Three — fields intentionally omitted",
+      "expectedDoorSide": {
+        "status": "missing"
+      },
+      "procedureRequirements": {
+        "status": "missing"
+      }
+    }
+  ]
+}

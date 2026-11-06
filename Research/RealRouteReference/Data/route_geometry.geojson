@@ -1,0 +1,181 @@
+{
+  "type": "FeatureCollection",
+  "name": "kintetsu_kyoto_toji_reference_geometry",
+  "metadata": {
+    "sourceDataset": "MLIT National Land Numerical Information N02-25",
+    "sourceURL": "https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N02-2025.html",
+    "sourceArchiveURL": "https://nlftp.mlit.go.jp/ksj/gml/data/N02/N02-25/N02-25_GML.zip",
+    "sourceArchiveSHA256": "aaf76af133b2e771e538fabc4646d2e443dc1d5a67b221382a28d744e706cc9f",
+    "retrievedAt": "2026-11-06",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "coordinateReferenceSystem": "JGD2011 / (B,L); coordinates stored in GeoJSON [longitude, latitude] order without a datum transformation",
+    "disclaimer": "The railway section is a national-scale route line, not an individual track centerline or survey of rail geometry."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "N02-25-kintetsu-kyoto-toji-route-link",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "packageChainageOrientation": "KYOTO_TO_TOJI",
+        "sourceVertexOrder": "TOJI_TO_KYOTO",
+        "routeVertexOrderReversed": true,
+        "startChainageM": 0.0,
+        "endChainageM": 801.5,
+        "distanceMethod": "GRS80 inverse geodesic over source vertices; rounded to 0.1 m",
+        "coordinateReferenceSystem": "JGD2011 / (B,L); GeoJSON array order [longitude, latitude]; no datum transformation",
+        "source": "mlit_n02_2025",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75684,
+            34.98459
+          ],
+          [
+            135.75631,
+            34.98473
+          ],
+          [
+            135.75514,
+            34.985
+          ],
+          [
+            135.75472,
+            34.98498
+          ],
+          [
+            135.7545,
+            34.98493
+          ],
+          [
+            135.75413,
+            34.98477
+          ],
+          [
+            135.75392,
+            34.98466
+          ],
+          [
+            135.75385,
+            34.98462
+          ],
+          [
+            135.7534,
+            34.98422
+          ],
+          [
+            135.75307,
+            34.98382
+          ],
+          [
+            135.75291,
+            34.98352
+          ],
+          [
+            135.75276,
+            34.98312
+          ],
+          [
+            135.75269,
+            34.98286
+          ],
+          [
+            135.75265,
+            34.98247
+          ],
+          [
+            135.7526,
+            34.98039
+          ],
+          [
+            135.7526,
+            34.98029
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-kintetsu-station-006084",
+      "properties": {
+        "featureRole": "SOURCE_STATION_LINE_NOT_POINT_OR_PLATFORM_SURVEY",
+        "sourceDataset": "N02-25_Station",
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "京都",
+          "N02_005c": "006084",
+          "N02_005g": "006079"
+        },
+        "stationName": "京都",
+        "coordinateReferenceSystem": "JGD2011 / (B,L); GeoJSON array order [longitude, latitude]; no datum transformation",
+        "source": "mlit_n02_2025",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75684,
+            34.98459
+          ],
+          [
+            135.75692,
+            34.98459
+          ],
+          [
+            135.76127,
+            34.98466
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-kintetsu-station-006099",
+      "properties": {
+        "featureRole": "SOURCE_STATION_LINE_NOT_POINT_OR_PLATFORM_SURVEY",
+        "sourceDataset": "N02-25_Station",
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道",
+          "N02_005": "東寺",
+          "N02_005c": "006099",
+          "N02_005g": "006099"
+        },
+        "stationName": "東寺",
+        "coordinateReferenceSystem": "JGD2011 / (B,L); GeoJSON array order [longitude, latitude]; no datum transformation",
+        "source": "mlit_n02_2025",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75259,
+            34.97968
+          ],
+          [
+            135.7526,
+            34.98029
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,3645 @@
+{
+  "type": "FeatureCollection",
+  "name": "kintetsu_kyoto_line_kyoto_yamato_saidaiji_reference_segments",
+  "metadata": {
+    "sourceID": "mlit_n02_2025",
+    "sourceURL": "https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N02-2025.html",
+    "sourceArchiveSHA256": "aaf76af133b2e771e538fabc4646d2e443dc1d5a67b221382a28d744e706cc9f",
+    "retrievedAt": "2026-11-06",
+    "license": "CC BY 4.0",
+    "coordinateReferenceSystem": "JGD2011 / (B, L)",
+    "coordinateOrder": "[longitude, latitude]",
+    "coordinateTransformation": "None; source coordinates preserved.",
+    "orientation": "京都 → 大和西大寺; individual source LineString vertex order may be reversed to create endpoint continuity."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01961",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 1,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1961,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 0.0,
+        "endChainageM": 404.558,
+        "computedSegmentLengthM": 404.558,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.76127,
+            34.98466
+          ],
+          [
+            135.75692,
+            34.98459
+          ],
+          [
+            135.75684,
+            34.98459
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01956",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 2,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1956,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 404.558,
+        "endChainageM": 1206.014,
+        "computedSegmentLengthM": 801.456,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75684,
+            34.98459
+          ],
+          [
+            135.75631,
+            34.98473
+          ],
+          [
+            135.75514,
+            34.985
+          ],
+          [
+            135.75472,
+            34.98498
+          ],
+          [
+            135.7545,
+            34.98493
+          ],
+          [
+            135.75413,
+            34.98477
+          ],
+          [
+            135.75392,
+            34.98466
+          ],
+          [
+            135.75385,
+            34.98462
+          ],
+          [
+            135.7534,
+            34.98422
+          ],
+          [
+            135.75307,
+            34.98382
+          ],
+          [
+            135.75291,
+            34.98352
+          ],
+          [
+            135.75276,
+            34.98312
+          ],
+          [
+            135.75269,
+            34.98286
+          ],
+          [
+            135.75265,
+            34.98247
+          ],
+          [
+            135.7526,
+            34.98039
+          ],
+          [
+            135.7526,
+            34.98029
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01950",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 3,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1950,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 1206.014,
+        "endChainageM": 1273.694,
+        "computedSegmentLengthM": 67.68,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.7526,
+            34.98029
+          ],
+          [
+            135.75259,
+            34.97968
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01955",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 4,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1955,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 1273.694,
+        "endChainageM": 1856.252,
+        "computedSegmentLengthM": 582.558,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75259,
+            34.97968
+          ],
+          [
+            135.75259,
+            34.97961
+          ],
+          [
+            135.75253,
+            34.97794
+          ],
+          [
+            135.75249,
+            34.97605
+          ],
+          [
+            135.75247,
+            34.97443
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01957",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 5,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1957,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 1856.252,
+        "endChainageM": 1952.787,
+        "computedSegmentLengthM": 96.535,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75247,
+            34.97443
+          ],
+          [
+            135.75245,
+            34.97356
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01960",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 6,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1960,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 1952.787,
+        "endChainageM": 2859.737,
+        "computedSegmentLengthM": 906.95,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75245,
+            34.97356
+          ],
+          [
+            135.75244,
+            34.97335
+          ],
+          [
+            135.75238,
+            34.96928
+          ],
+          [
+            135.75234,
+            34.96675
+          ],
+          [
+            135.75236,
+            34.96623
+          ],
+          [
+            135.7524,
+            34.96598
+          ],
+          [
+            135.75242,
+            34.96588
+          ],
+          [
+            135.75245,
+            34.9657
+          ],
+          [
+            135.75254,
+            34.9654
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01953",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 7,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1953,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 2859.737,
+        "endChainageM": 2951.941,
+        "computedSegmentLengthM": 92.204,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75254,
+            34.9654
+          ],
+          [
+            135.75292,
+            34.96463
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01959",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 8,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1959,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 2951.941,
+        "endChainageM": 3873.531,
+        "computedSegmentLengthM": 921.59,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75292,
+            34.96463
+          ],
+          [
+            135.75307,
+            34.9644
+          ],
+          [
+            135.75357,
+            34.96362
+          ],
+          [
+            135.75455,
+            34.96237
+          ],
+          [
+            135.75524,
+            34.96145
+          ],
+          [
+            135.75529,
+            34.9614
+          ],
+          [
+            135.75568,
+            34.96083
+          ],
+          [
+            135.75591,
+            34.96044
+          ],
+          [
+            135.75601,
+            34.96013
+          ],
+          [
+            135.75605,
+            34.95962
+          ],
+          [
+            135.75609,
+            34.95825
+          ],
+          [
+            135.75613,
+            34.95701
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01947",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 9,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1947,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 3873.531,
+        "endChainageM": 4099.915,
+        "computedSegmentLengthM": 226.383,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75613,
+            34.95701
+          ],
+          [
+            135.75619,
+            34.95497
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01949",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 10,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1949,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 4099.915,
+        "endChainageM": 5246.374,
+        "computedSegmentLengthM": 1146.459,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.75619,
+            34.95497
+          ],
+          [
+            135.7562,
+            34.95453
+          ],
+          [
+            135.75625,
+            34.95234
+          ],
+          [
+            135.75626,
+            34.95163
+          ],
+          [
+            135.7563,
+            34.95097
+          ],
+          [
+            135.75633,
+            34.95076
+          ],
+          [
+            135.75636,
+            34.95053
+          ],
+          [
+            135.7564,
+            34.95032
+          ],
+          [
+            135.75654,
+            34.94993
+          ],
+          [
+            135.75665,
+            34.9497
+          ],
+          [
+            135.75682,
+            34.94937
+          ],
+          [
+            135.75702,
+            34.94908
+          ],
+          [
+            135.75744,
+            34.94864
+          ],
+          [
+            135.758,
+            34.94822
+          ],
+          [
+            135.75897,
+            34.94761
+          ],
+          [
+            135.76096,
+            34.94634
+          ],
+          [
+            135.76103,
+            34.9463
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01954",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 11,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1954,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 5246.374,
+        "endChainageM": 5350.884,
+        "computedSegmentLengthM": 104.51,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.76103,
+            34.9463
+          ],
+          [
+            135.76195,
+            34.94574
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01948",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 12,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1948,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 5350.884,
+        "endChainageM": 6324.6,
+        "computedSegmentLengthM": 973.716,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.76195,
+            34.94574
+          ],
+          [
+            135.76202,
+            34.94569
+          ],
+          [
+            135.7646,
+            34.94402
+          ],
+          [
+            135.76511,
+            34.94368
+          ],
+          [
+            135.76555,
+            34.94327
+          ],
+          [
+            135.76575,
+            34.94302
+          ],
+          [
+            135.76598,
+            34.94267
+          ],
+          [
+            135.76607,
+            34.94239
+          ],
+          [
+            135.76614,
+            34.94217
+          ],
+          [
+            135.76626,
+            34.94176
+          ],
+          [
+            135.76633,
+            34.94115
+          ],
+          [
+            135.76635,
+            34.94105
+          ],
+          [
+            135.76635,
+            34.94073
+          ],
+          [
+            135.76637,
+            34.93994
+          ],
+          [
+            135.76638,
+            34.93966
+          ],
+          [
+            135.76642,
+            34.93859
+          ],
+          [
+            135.76642,
+            34.93849
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01952",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 13,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1952,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 6324.6,
+        "endChainageM": 6410.028,
+        "computedSegmentLengthM": 85.428,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.76642,
+            34.93849
+          ],
+          [
+            135.76643,
+            34.93772
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01958",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 14,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1958,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 6410.028,
+        "endChainageM": 6875.8,
+        "computedSegmentLengthM": 465.772,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.76643,
+            34.93772
+          ],
+          [
+            135.76642,
+            34.93758
+          ],
+          [
+            135.76639,
+            34.93715
+          ],
+          [
+            135.76631,
+            34.93658
+          ],
+          [
+            135.76623,
+            34.93628
+          ],
+          [
+            135.76583,
+            34.93538
+          ],
+          [
+            135.76573,
+            34.93518
+          ],
+          [
+            135.76566,
+            34.93493
+          ],
+          [
+            135.76558,
+            34.93451
+          ],
+          [
+            135.76556,
+            34.93369
+          ],
+          [
+            135.76556,
+            34.93362
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01951",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 15,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1951,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 6875.8,
+        "endChainageM": 6940.171,
+        "computedSegmentLengthM": 64.371,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.76556,
+            34.93362
+          ],
+          [
+            135.76554,
+            34.93304
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01945",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 16,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1945,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 6940.171,
+        "endChainageM": 8991.541,
+        "computedSegmentLengthM": 2051.371,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.76554,
+            34.93304
+          ],
+          [
+            135.76554,
+            34.93297
+          ],
+          [
+            135.76552,
+            34.9324
+          ],
+          [
+            135.76547,
+            34.93204
+          ],
+          [
+            135.76528,
+            34.93126
+          ],
+          [
+            135.76524,
+            34.93088
+          ],
+          [
+            135.76525,
+            34.92867
+          ],
+          [
+            135.7652,
+            34.92819
+          ],
+          [
+            135.76512,
+            34.92748
+          ],
+          [
+            135.76511,
+            34.92727
+          ],
+          [
+            135.76509,
+            34.92682
+          ],
+          [
+            135.76527,
+            34.92629
+          ],
+          [
+            135.76601,
+            34.92476
+          ],
+          [
+            135.76625,
+            34.92424
+          ],
+          [
+            135.76629,
+            34.92415
+          ],
+          [
+            135.76639,
+            34.92393
+          ],
+          [
+            135.76642,
+            34.92387
+          ],
+          [
+            135.76654,
+            34.92359
+          ],
+          [
+            135.76659,
+            34.92348
+          ],
+          [
+            135.76669,
+            34.92322
+          ],
+          [
+            135.76672,
+            34.92315
+          ],
+          [
+            135.76691,
+            34.92266
+          ],
+          [
+            135.76708,
+            34.92214
+          ],
+          [
+            135.76725,
+            34.92136
+          ],
+          [
+            135.76735,
+            34.92098
+          ],
+          [
+            135.76762,
+            34.9199
+          ],
+          [
+            135.7679,
+            34.9188
+          ],
+          [
+            135.76828,
+            34.91741
+          ],
+          [
+            135.76863,
+            34.91661
+          ],
+          [
+            135.7689,
+            34.91606
+          ],
+          [
+            135.76894,
+            34.91599
+          ],
+          [
+            135.76947,
+            34.91517
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01946",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 17,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1946,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 8991.541,
+        "endChainageM": 9104.48,
+        "computedSegmentLengthM": 112.938,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.76947,
+            34.91517
+          ],
+          [
+            135.77007,
+            34.91428
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01993",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 18,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1993,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 9104.48,
+        "endChainageM": 11751.512,
+        "computedSegmentLengthM": 2647.032,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77007,
+            34.91428
+          ],
+          [
+            135.77012,
+            34.9142
+          ],
+          [
+            135.77024,
+            34.91403
+          ],
+          [
+            135.77079,
+            34.91321
+          ],
+          [
+            135.77088,
+            34.91308
+          ],
+          [
+            135.77267,
+            34.91045
+          ],
+          [
+            135.77414,
+            34.90843
+          ],
+          [
+            135.77447,
+            34.90798
+          ],
+          [
+            135.77463,
+            34.90776
+          ],
+          [
+            135.77477,
+            34.90758
+          ],
+          [
+            135.77484,
+            34.9075
+          ],
+          [
+            135.77881,
+            34.9028
+          ],
+          [
+            135.78038,
+            34.90094
+          ],
+          [
+            135.78168,
+            34.89938
+          ],
+          [
+            135.7821,
+            34.89878
+          ],
+          [
+            135.78233,
+            34.89829
+          ],
+          [
+            135.7825,
+            34.89784
+          ],
+          [
+            135.78252,
+            34.89776
+          ],
+          [
+            135.78263,
+            34.89721
+          ],
+          [
+            135.78268,
+            34.89651
+          ],
+          [
+            135.78267,
+            34.89611
+          ],
+          [
+            135.78258,
+            34.89555
+          ],
+          [
+            135.78227,
+            34.89442
+          ],
+          [
+            135.782,
+            34.89346
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01980",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 19,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1980,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 11751.512,
+        "endChainageM": 11854.822,
+        "computedSegmentLengthM": 103.31,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.782,
+            34.89346
+          ],
+          [
+            135.78176,
+            34.89255
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01974",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 20,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1974,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 11854.822,
+        "endChainageM": 12989.463,
+        "computedSegmentLengthM": 1134.642,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78176,
+            34.89255
+          ],
+          [
+            135.78117,
+            34.89035
+          ],
+          [
+            135.78074,
+            34.88876
+          ],
+          [
+            135.78021,
+            34.88678
+          ],
+          [
+            135.78006,
+            34.8862
+          ],
+          [
+            135.77933,
+            34.88345
+          ],
+          [
+            135.7791,
+            34.88256
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01994",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 21,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1994,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 12989.463,
+        "endChainageM": 13080.267,
+        "computedSegmentLengthM": 90.803,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.7791,
+            34.88256
+          ],
+          [
+            135.77889,
+            34.88176
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01962",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 22,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1962,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 13080.267,
+        "endChainageM": 13818.441,
+        "computedSegmentLengthM": 738.175,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77889,
+            34.88176
+          ],
+          [
+            135.77882,
+            34.88147
+          ],
+          [
+            135.77822,
+            34.87913
+          ],
+          [
+            135.77724,
+            34.87532
+          ],
+          [
+            135.77722,
+            34.87525
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01964",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 23,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1964,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 13818.441,
+        "endChainageM": 13959.082,
+        "computedSegmentLengthM": 140.64,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77722,
+            34.87525
+          ],
+          [
+            135.7769,
+            34.87401
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01971",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 24,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1971,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 13959.082,
+        "endChainageM": 14943.193,
+        "computedSegmentLengthM": 984.111,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.7769,
+            34.87401
+          ],
+          [
+            135.77689,
+            34.87397
+          ],
+          [
+            135.77604,
+            34.87035
+          ],
+          [
+            135.77559,
+            34.86842
+          ],
+          [
+            135.77553,
+            34.86817
+          ],
+          [
+            135.77514,
+            34.86648
+          ],
+          [
+            135.77486,
+            34.8653
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01984",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 25,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1984,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 14943.193,
+        "endChainageM": 15020.959,
+        "computedSegmentLengthM": 77.766,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77486,
+            34.8653
+          ],
+          [
+            135.77471,
+            34.86461
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01991",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 26,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1991,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 15020.959,
+        "endChainageM": 16263.365,
+        "computedSegmentLengthM": 1242.405,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77471,
+            34.86461
+          ],
+          [
+            135.77467,
+            34.86444
+          ],
+          [
+            135.7743,
+            34.86286
+          ],
+          [
+            135.77395,
+            34.86141
+          ],
+          [
+            135.77381,
+            34.8608
+          ],
+          [
+            135.77366,
+            34.86015
+          ],
+          [
+            135.77309,
+            34.85766
+          ],
+          [
+            135.77242,
+            34.85474
+          ],
+          [
+            135.77219,
+            34.85375
+          ],
+          [
+            135.77216,
+            34.85361
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01995",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 27,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1995,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 16263.365,
+        "endChainageM": 16340.039,
+        "computedSegmentLengthM": 76.675,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77216,
+            34.85361
+          ],
+          [
+            135.77201,
+            34.85293
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01972",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 28,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1972,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 16340.039,
+        "endChainageM": 17714.671,
+        "computedSegmentLengthM": 1374.632,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77201,
+            34.85293
+          ],
+          [
+            135.77196,
+            34.85273
+          ],
+          [
+            135.77178,
+            34.8519
+          ],
+          [
+            135.77175,
+            34.85146
+          ],
+          [
+            135.77174,
+            34.85103
+          ],
+          [
+            135.77176,
+            34.85051
+          ],
+          [
+            135.77179,
+            34.85009
+          ],
+          [
+            135.77204,
+            34.84785
+          ],
+          [
+            135.77235,
+            34.84509
+          ],
+          [
+            135.7725,
+            34.84376
+          ],
+          [
+            135.77282,
+            34.84093
+          ],
+          [
+            135.77285,
+            34.84071
+          ],
+          [
+            135.77287,
+            34.8406
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01966",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 29,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1966,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 17714.671,
+        "endChainageM": 17812.643,
+        "computedSegmentLengthM": 97.972,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77287,
+            34.8406
+          ],
+          [
+            135.77296,
+            34.83972
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01967",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 30,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1967,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 17812.643,
+        "endChainageM": 19872.867,
+        "computedSegmentLengthM": 2060.224,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77296,
+            34.83972
+          ],
+          [
+            135.77316,
+            34.83797
+          ],
+          [
+            135.77319,
+            34.83775
+          ],
+          [
+            135.77334,
+            34.83658
+          ],
+          [
+            135.77335,
+            34.83633
+          ],
+          [
+            135.77337,
+            34.83614
+          ],
+          [
+            135.7734,
+            34.83585
+          ],
+          [
+            135.77368,
+            34.83361
+          ],
+          [
+            135.77372,
+            34.83332
+          ],
+          [
+            135.77379,
+            34.83267
+          ],
+          [
+            135.77393,
+            34.83156
+          ],
+          [
+            135.77397,
+            34.83129
+          ],
+          [
+            135.774,
+            34.83111
+          ],
+          [
+            135.77404,
+            34.83072
+          ],
+          [
+            135.7741,
+            34.83017
+          ],
+          [
+            135.77415,
+            34.82956
+          ],
+          [
+            135.77416,
+            34.82936
+          ],
+          [
+            135.77414,
+            34.82913
+          ],
+          [
+            135.77414,
+            34.82873
+          ],
+          [
+            135.77412,
+            34.82866
+          ],
+          [
+            135.77407,
+            34.82797
+          ],
+          [
+            135.77398,
+            34.82742
+          ],
+          [
+            135.77392,
+            34.82705
+          ],
+          [
+            135.7737,
+            34.82576
+          ],
+          [
+            135.77365,
+            34.82546
+          ],
+          [
+            135.7736,
+            34.8252
+          ],
+          [
+            135.77347,
+            34.8244
+          ],
+          [
+            135.77339,
+            34.824
+          ],
+          [
+            135.77338,
+            34.82387
+          ],
+          [
+            135.77313,
+            34.82248
+          ],
+          [
+            135.77294,
+            34.82143
+          ],
+          [
+            135.77291,
+            34.82127
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01975",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 31,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1975,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 19872.867,
+        "endChainageM": 19999.21,
+        "computedSegmentLengthM": 126.343,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77291,
+            34.82127
+          ],
+          [
+            135.77287,
+            34.82106
+          ],
+          [
+            135.77283,
+            34.8208
+          ],
+          [
+            135.77276,
+            34.82032
+          ],
+          [
+            135.77274,
+            34.82014
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01981",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 32,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1981,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 19999.21,
+        "endChainageM": 21435.784,
+        "computedSegmentLengthM": 1436.574,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77274,
+            34.82014
+          ],
+          [
+            135.77272,
+            34.81983
+          ],
+          [
+            135.77268,
+            34.81948
+          ],
+          [
+            135.77262,
+            34.819
+          ],
+          [
+            135.77261,
+            34.81889
+          ],
+          [
+            135.77256,
+            34.81836
+          ],
+          [
+            135.77252,
+            34.81784
+          ],
+          [
+            135.7725,
+            34.81764
+          ],
+          [
+            135.77248,
+            34.81744
+          ],
+          [
+            135.77248,
+            34.81709
+          ],
+          [
+            135.77252,
+            34.81675
+          ],
+          [
+            135.77253,
+            34.81668
+          ],
+          [
+            135.77256,
+            34.81642
+          ],
+          [
+            135.77264,
+            34.81617
+          ],
+          [
+            135.77268,
+            34.81605
+          ],
+          [
+            135.77274,
+            34.81594
+          ],
+          [
+            135.77292,
+            34.81567
+          ],
+          [
+            135.77309,
+            34.81545
+          ],
+          [
+            135.77333,
+            34.81514
+          ],
+          [
+            135.77347,
+            34.81496
+          ],
+          [
+            135.77383,
+            34.8145
+          ],
+          [
+            135.77415,
+            34.81411
+          ],
+          [
+            135.77448,
+            34.81368
+          ],
+          [
+            135.77506,
+            34.81292
+          ],
+          [
+            135.77549,
+            34.8124
+          ],
+          [
+            135.77588,
+            34.8119
+          ],
+          [
+            135.77594,
+            34.81182
+          ],
+          [
+            135.77662,
+            34.81096
+          ],
+          [
+            135.7772,
+            34.81023
+          ],
+          [
+            135.77765,
+            34.80965
+          ],
+          [
+            135.77845,
+            34.80861
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01992",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 33,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1992,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": false,
+        "startChainageM": 21435.784,
+        "endChainageM": 21512.671,
+        "computedSegmentLengthM": 76.887,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77845,
+            34.80861
+          ],
+          [
+            135.77891,
+            34.80803
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01977",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 34,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1977,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 21512.671,
+        "endChainageM": 22706.312,
+        "computedSegmentLengthM": 1193.64,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.77891,
+            34.80803
+          ],
+          [
+            135.77961,
+            34.80716
+          ],
+          [
+            135.77981,
+            34.80689
+          ],
+          [
+            135.78056,
+            34.80595
+          ],
+          [
+            135.78075,
+            34.80569
+          ],
+          [
+            135.78093,
+            34.80545
+          ],
+          [
+            135.78121,
+            34.80509
+          ],
+          [
+            135.78166,
+            34.80453
+          ],
+          [
+            135.78202,
+            34.80406
+          ],
+          [
+            135.78257,
+            34.80337
+          ],
+          [
+            135.78342,
+            34.80234
+          ],
+          [
+            135.78368,
+            34.80203
+          ],
+          [
+            135.78413,
+            34.8015
+          ],
+          [
+            135.7843,
+            34.80129
+          ],
+          [
+            135.78475,
+            34.80073
+          ],
+          [
+            135.78525,
+            34.80015
+          ],
+          [
+            135.78535,
+            34.80001
+          ],
+          [
+            135.78559,
+            34.79965
+          ],
+          [
+            135.78566,
+            34.79953
+          ],
+          [
+            135.78583,
+            34.79924
+          ],
+          [
+            135.78596,
+            34.79899
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01970",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 35,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1970,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 22706.312,
+        "endChainageM": 22787.531,
+        "computedSegmentLengthM": 81.219,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78596,
+            34.79899
+          ],
+          [
+            135.78622,
+            34.79829
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01983",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 36,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1983,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 22787.531,
+        "endChainageM": 23481.424,
+        "computedSegmentLengthM": 693.893,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78622,
+            34.79829
+          ],
+          [
+            135.78635,
+            34.7979
+          ],
+          [
+            135.78641,
+            34.7977
+          ],
+          [
+            135.78646,
+            34.79748
+          ],
+          [
+            135.7865,
+            34.79732
+          ],
+          [
+            135.78666,
+            34.79657
+          ],
+          [
+            135.78684,
+            34.79555
+          ],
+          [
+            135.78689,
+            34.79526
+          ],
+          [
+            135.78689,
+            34.79521
+          ],
+          [
+            135.78699,
+            34.79465
+          ],
+          [
+            135.78738,
+            34.79241
+          ],
+          [
+            135.78743,
+            34.79212
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01985",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 37,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1985,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 23481.424,
+        "endChainageM": 23593.446,
+        "computedSegmentLengthM": 112.022,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78743,
+            34.79212
+          ],
+          [
+            135.7876,
+            34.79112
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01986",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 38,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1986,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 23593.446,
+        "endChainageM": 24749.727,
+        "computedSegmentLengthM": 1156.28,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.7876,
+            34.79112
+          ],
+          [
+            135.78771,
+            34.79055
+          ],
+          [
+            135.78782,
+            34.78994
+          ],
+          [
+            135.78792,
+            34.78938
+          ],
+          [
+            135.788,
+            34.78893
+          ],
+          [
+            135.788,
+            34.78891
+          ],
+          [
+            135.78807,
+            34.78852
+          ],
+          [
+            135.78813,
+            34.78816
+          ],
+          [
+            135.78823,
+            34.78766
+          ],
+          [
+            135.78835,
+            34.78693
+          ],
+          [
+            135.78844,
+            34.78642
+          ],
+          [
+            135.78858,
+            34.78558
+          ],
+          [
+            135.78871,
+            34.78486
+          ],
+          [
+            135.78882,
+            34.78426
+          ],
+          [
+            135.78899,
+            34.78333
+          ],
+          [
+            135.78906,
+            34.7829
+          ],
+          [
+            135.78939,
+            34.78113
+          ],
+          [
+            135.78945,
+            34.78081
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01968",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 39,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1968,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 24749.727,
+        "endChainageM": 24832.814,
+        "computedSegmentLengthM": 83.087,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78945,
+            34.78081
+          ],
+          [
+            135.78959,
+            34.78007
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01982",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 40,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1982,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": false,
+        "startChainageM": 24832.814,
+        "endChainageM": 26953.4,
+        "computedSegmentLengthM": 2120.586,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78959,
+            34.78007
+          ],
+          [
+            135.78963,
+            34.7799
+          ],
+          [
+            135.78977,
+            34.77909
+          ],
+          [
+            135.7899,
+            34.77829
+          ],
+          [
+            135.79007,
+            34.77741
+          ],
+          [
+            135.79009,
+            34.77732
+          ],
+          [
+            135.79036,
+            34.77573
+          ],
+          [
+            135.79051,
+            34.77494
+          ],
+          [
+            135.79064,
+            34.77414
+          ],
+          [
+            135.79069,
+            34.7739
+          ],
+          [
+            135.79134,
+            34.77008
+          ],
+          [
+            135.79143,
+            34.76962
+          ],
+          [
+            135.79153,
+            34.76906
+          ],
+          [
+            135.79155,
+            34.76888
+          ],
+          [
+            135.79167,
+            34.76834
+          ],
+          [
+            135.79168,
+            34.76824
+          ],
+          [
+            135.79176,
+            34.76782
+          ],
+          [
+            135.79178,
+            34.76769
+          ],
+          [
+            135.79181,
+            34.76754
+          ],
+          [
+            135.79211,
+            34.76579
+          ],
+          [
+            135.79214,
+            34.76553
+          ],
+          [
+            135.79245,
+            34.76385
+          ],
+          [
+            135.79251,
+            34.76345
+          ],
+          [
+            135.79257,
+            34.76299
+          ],
+          [
+            135.79259,
+            34.7629
+          ],
+          [
+            135.79259,
+            34.76274
+          ],
+          [
+            135.79263,
+            34.7624
+          ],
+          [
+            135.79274,
+            34.76131
+          ],
+          [
+            135.79274,
+            34.76114
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01988",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 41,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1988,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 26953.4,
+        "endChainageM": 27135.516,
+        "computedSegmentLengthM": 182.116,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.79274,
+            34.76114
+          ],
+          [
+            135.79276,
+            34.76034
+          ],
+          [
+            135.79282,
+            34.7595
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01965",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 42,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1965,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 27135.516,
+        "endChainageM": 28546.149,
+        "computedSegmentLengthM": 1410.633,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.79282,
+            34.7595
+          ],
+          [
+            135.79286,
+            34.75899
+          ],
+          [
+            135.79292,
+            34.75808
+          ],
+          [
+            135.79292,
+            34.75794
+          ],
+          [
+            135.79296,
+            34.75756
+          ],
+          [
+            135.79306,
+            34.75594
+          ],
+          [
+            135.79315,
+            34.75477
+          ],
+          [
+            135.79325,
+            34.75443
+          ],
+          [
+            135.79339,
+            34.75402
+          ],
+          [
+            135.79376,
+            34.75325
+          ],
+          [
+            135.79403,
+            34.75271
+          ],
+          [
+            135.79445,
+            34.75185
+          ],
+          [
+            135.79498,
+            34.75074
+          ],
+          [
+            135.79502,
+            34.75065
+          ],
+          [
+            135.79545,
+            34.74976
+          ],
+          [
+            135.79556,
+            34.7495
+          ],
+          [
+            135.79581,
+            34.74883
+          ],
+          [
+            135.7959,
+            34.74844
+          ],
+          [
+            135.79598,
+            34.74814
+          ],
+          [
+            135.79603,
+            34.74788
+          ],
+          [
+            135.79607,
+            34.74721
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01969",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 43,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1969,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 28546.149,
+        "endChainageM": 28670.732,
+        "computedSegmentLengthM": 124.583,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.79607,
+            34.74721
+          ],
+          [
+            135.79608,
+            34.74698
+          ],
+          [
+            135.79607,
+            34.74671
+          ],
+          [
+            135.79605,
+            34.74649
+          ],
+          [
+            135.796,
+            34.74609
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01976",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 44,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1976,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 28670.732,
+        "endChainageM": 29561.311,
+        "computedSegmentLengthM": 890.579,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.796,
+            34.74609
+          ],
+          [
+            135.79596,
+            34.74592
+          ],
+          [
+            135.79593,
+            34.74576
+          ],
+          [
+            135.79586,
+            34.7455
+          ],
+          [
+            135.7957,
+            34.74479
+          ],
+          [
+            135.79549,
+            34.74405
+          ],
+          [
+            135.79544,
+            34.74385
+          ],
+          [
+            135.7953,
+            34.7433
+          ],
+          [
+            135.79522,
+            34.74296
+          ],
+          [
+            135.79516,
+            34.74273
+          ],
+          [
+            135.79509,
+            34.74245
+          ],
+          [
+            135.79477,
+            34.74123
+          ],
+          [
+            135.79473,
+            34.74107
+          ],
+          [
+            135.79442,
+            34.73985
+          ],
+          [
+            135.79397,
+            34.73824
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01963",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 45,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1963,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 29561.311,
+        "endChainageM": 29664.7,
+        "computedSegmentLengthM": 103.389,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.79397,
+            34.73824
+          ],
+          [
+            135.79388,
+            34.73781
+          ],
+          [
+            135.79379,
+            34.73732
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01973",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 46,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1973,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 29664.7,
+        "endChainageM": 31122.237,
+        "computedSegmentLengthM": 1457.537,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.79379,
+            34.73732
+          ],
+          [
+            135.79363,
+            34.73673
+          ],
+          [
+            135.79356,
+            34.73644
+          ],
+          [
+            135.79344,
+            34.73599
+          ],
+          [
+            135.79313,
+            34.7348
+          ],
+          [
+            135.7929,
+            34.73401
+          ],
+          [
+            135.79271,
+            34.73332
+          ],
+          [
+            135.79258,
+            34.73281
+          ],
+          [
+            135.79246,
+            34.7323
+          ],
+          [
+            135.79224,
+            34.73118
+          ],
+          [
+            135.79216,
+            34.73061
+          ],
+          [
+            135.79211,
+            34.7302
+          ],
+          [
+            135.79201,
+            34.72921
+          ],
+          [
+            135.79188,
+            34.72757
+          ],
+          [
+            135.79186,
+            34.72709
+          ],
+          [
+            135.79181,
+            34.726
+          ],
+          [
+            135.7918,
+            34.72528
+          ],
+          [
+            135.79182,
+            34.72496
+          ],
+          [
+            135.79183,
+            34.72477
+          ],
+          [
+            135.79185,
+            34.72433
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01987",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 47,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1987,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 31122.237,
+        "endChainageM": 31259.809,
+        "computedSegmentLengthM": 137.572,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.79185,
+            34.72433
+          ],
+          [
+            135.79187,
+            34.72309
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01989",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 48,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1989,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 31259.809,
+        "endChainageM": 33820.117,
+        "computedSegmentLengthM": 2560.308,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.79187,
+            34.72309
+          ],
+          [
+            135.79191,
+            34.7216
+          ],
+          [
+            135.79196,
+            34.72014
+          ],
+          [
+            135.79205,
+            34.71799
+          ],
+          [
+            135.79209,
+            34.71685
+          ],
+          [
+            135.79211,
+            34.71624
+          ],
+          [
+            135.79219,
+            34.71436
+          ],
+          [
+            135.79219,
+            34.71408
+          ],
+          [
+            135.79219,
+            34.7134
+          ],
+          [
+            135.79221,
+            34.71259
+          ],
+          [
+            135.7922,
+            34.71193
+          ],
+          [
+            135.79216,
+            34.71124
+          ],
+          [
+            135.79213,
+            34.71098
+          ],
+          [
+            135.79205,
+            34.71065
+          ],
+          [
+            135.79185,
+            34.71008
+          ],
+          [
+            135.7917,
+            34.70977
+          ],
+          [
+            135.79152,
+            34.70947
+          ],
+          [
+            135.79103,
+            34.70892
+          ],
+          [
+            135.79013,
+            34.70797
+          ],
+          [
+            135.79002,
+            34.70785
+          ],
+          [
+            135.78968,
+            34.7075
+          ],
+          [
+            135.78951,
+            34.70732
+          ],
+          [
+            135.78949,
+            34.7073
+          ],
+          [
+            135.7893,
+            34.7071
+          ],
+          [
+            135.78853,
+            34.70628
+          ],
+          [
+            135.78834,
+            34.70608
+          ],
+          [
+            135.78824,
+            34.70596
+          ],
+          [
+            135.78814,
+            34.70583
+          ],
+          [
+            135.78774,
+            34.70514
+          ],
+          [
+            135.78744,
+            34.70452
+          ],
+          [
+            135.78714,
+            34.70393
+          ],
+          [
+            135.78713,
+            34.70387
+          ],
+          [
+            135.78711,
+            34.70379
+          ],
+          [
+            135.78692,
+            34.70342
+          ],
+          [
+            135.78667,
+            34.70297
+          ],
+          [
+            135.78644,
+            34.70264
+          ],
+          [
+            135.78631,
+            34.70247
+          ],
+          [
+            135.78617,
+            34.70232
+          ],
+          [
+            135.78603,
+            34.70217
+          ],
+          [
+            135.78576,
+            34.70198
+          ],
+          [
+            135.78552,
+            34.70185
+          ],
+          [
+            135.78534,
+            34.70176
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01990",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 49,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1990,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 33820.117,
+        "endChainageM": 33962.487,
+        "computedSegmentLengthM": 142.37,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78534,
+            34.70176
+          ],
+          [
+            135.78396,
+            34.70117
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01978",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 50,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1978,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 33962.487,
+        "endChainageM": 34830.754,
+        "computedSegmentLengthM": 868.266,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78396,
+            34.70117
+          ],
+          [
+            135.78362,
+            34.70098
+          ],
+          [
+            135.78345,
+            34.7009
+          ],
+          [
+            135.78317,
+            34.70074
+          ],
+          [
+            135.78293,
+            34.7006
+          ],
+          [
+            135.78264,
+            34.70042
+          ],
+          [
+            135.78234,
+            34.7002
+          ],
+          [
+            135.7821,
+            34.70001
+          ],
+          [
+            135.78187,
+            34.69978
+          ],
+          [
+            135.78167,
+            34.69956
+          ],
+          [
+            135.78145,
+            34.69931
+          ],
+          [
+            135.78127,
+            34.69904
+          ],
+          [
+            135.78112,
+            34.69883
+          ],
+          [
+            135.7809,
+            34.69842
+          ],
+          [
+            135.78074,
+            34.69812
+          ],
+          [
+            135.78058,
+            34.69768
+          ],
+          [
+            135.7805,
+            34.69739
+          ],
+          [
+            135.78037,
+            34.69694
+          ],
+          [
+            135.78033,
+            34.69679
+          ],
+          [
+            135.78028,
+            34.6963
+          ],
+          [
+            135.78027,
+            34.69617
+          ],
+          [
+            135.78029,
+            34.696
+          ],
+          [
+            135.78035,
+            34.69583
+          ],
+          [
+            135.78046,
+            34.6956
+          ],
+          [
+            135.7806,
+            34.69537
+          ],
+          [
+            135.78077,
+            34.69515
+          ],
+          [
+            135.78097,
+            34.6949
+          ],
+          [
+            135.78119,
+            34.69469
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01979",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 51,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1979,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 34830.754,
+        "endChainageM": 34935.667,
+        "computedSegmentLengthM": 104.913,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78119,
+            34.69469
+          ],
+          [
+            135.78213,
+            34.69415
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "N02-25-RS-record-01996",
+      "properties": {
+        "featureRole": "ROUTE_REFERENCE_LINE_SEGMENT_NOT_PHYSICAL_TRACK_CENTERLINE",
+        "routeOrder": 52,
+        "sourceID": "mlit_n02_2025",
+        "sourceDataset": "N02-25_RailroadSection",
+        "sourceRecordIndex": 1996,
+        "sourceProperties": {
+          "N02_001": "12",
+          "N02_002": "4",
+          "N02_003": "京都線",
+          "N02_004": "近畿日本鉄道"
+        },
+        "sourceVertexOrderReversed": true,
+        "startChainageM": 34935.667,
+        "endChainageM": 35140.556,
+        "computedSegmentLengthM": 204.89,
+        "measureStatus": "ESTIMATED",
+        "sourceCoordinateStatus": "VERIFIED_SOURCE_VALUE",
+        "positioningConfidence": "LOW",
+        "license": "CC BY 4.0"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            135.78213,
+            34.69415
+          ],
+          [
+            135.78401,
+            34.69315
+          ]
+        ]
+      }
+    }
+  ]
+}

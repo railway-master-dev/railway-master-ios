@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "scenarioID": "fictional-parallel-corridor-v1",
+  "routeID": "fictional-corridor-01",
+  "routeLengthM": 2400,
+  "routePaths": [{ "id": "mainline", "lengthM": 2400, "kind": "mainline", "dataStatus": "PLACEHOLDER" }],
+  "dataStatus": "PLACEHOLDER",
+  "fixedTimeStepSeconds": 0.008333333333333333,
+  "minimumTrainGapM": 35,
+  "minimumRoadVehicleGapM": 7,
+  "passingVisualizationDistanceM": 55,
+  "tracks": [
+    { "id": "track-east", "routePathID": "mainline", "parallelGroupID": "rail-corridor", "direction": 1, "lateralOffsetM": -2.1 },
+    { "id": "track-west", "routePathID": "mainline", "parallelGroupID": "rail-corridor", "direction": -1, "lateralOffsetM": 2.1 }
+  ],
+  "roads": [
+    { "id": "road-east", "routePathID": "mainline", "parallelGroupID": "road-corridor", "direction": 1, "lateralOffsetM": -7 },
+    { "id": "road-west", "routePathID": "mainline", "parallelGroupID": "road-corridor", "direction": -1, "lateralOffsetM": 7 }
+  ],
+  "platforms": [
+    { "id": "mid-platform-east", "stationID": "fictional-mid-station", "trackID": "track-east", "chainageM": 1200, "lengthM": 180, "lateralOffsetM": -4.4 },
+    { "id": "mid-platform-west", "stationID": "fictional-mid-station", "trackID": "track-west", "chainageM": 1200, "lengthM": 180, "lateralOffsetM": 4.4 }
+  ],
+  "trains": [
+    {
+      "id": "ai-east-01", "trackID": "track-east", "departureTimeSeconds": 0,
+      "startPositionM": 0, "destinationPositionM": 2400, "maximumSpeedMps": 18,
+      "accelerationMps2": 0.65, "brakingDecelerationMps2": 0.8, "lengthM": 120,
+      "stops": [{ "positionM": 1200, "dwellSeconds": 12 }],
+      "serviceType": "local", "servicePeriod": "daytime", "operationKind": "passengerService"
+    },
+    {
+      "id": "ai-east-02", "trackID": "track-east", "departureTimeSeconds": 38,
+      "startPositionM": 0, "destinationPositionM": 2400, "maximumSpeedMps": 16,
+      "accelerationMps2": 0.55, "brakingDecelerationMps2": 0.75, "lengthM": 100,
+      "stops": [{ "positionM": 1200, "dwellSeconds": 9 }],
+      "serviceType": "local", "servicePeriod": "daytime", "operationKind": "passengerService"
+    },
+    {
+      "id": "ai-west-01", "trackID": "track-west", "departureTimeSeconds": 18,
+      "startPositionM": 2400, "destinationPositionM": 0, "maximumSpeedMps": 17,
+      "accelerationMps2": 0.6, "brakingDecelerationMps2": 0.8, "lengthM": 110,
+      "stops": [{ "positionM": 1200, "dwellSeconds": 10 }],
+      "serviceType": "local", "servicePeriod": "daytime", "operationKind": "passengerService"
+    }
+  ],
+  "roadVehicles": [
+    {
+      "id": "car-east-01", "roadID": "road-east", "departureTimeSeconds": 0,
+      "startPositionM": 0, "destinationPositionM": 2400, "targetSpeedMps": 13,
+      "accelerationMps2": 1.5, "lengthM": 4.6
+    },
+    {
+      "id": "car-east-02", "roadID": "road-east", "departureTimeSeconds": 16,
+      "startPositionM": 0, "destinationPositionM": 2400, "targetSpeedMps": 11,
+      "accelerationMps2": 1.3, "lengthM": 4.2
+    },
+    {
+      "id": "car-west-01", "roadID": "road-west", "departureTimeSeconds": 9,
+      "startPositionM": 2400, "destinationPositionM": 0, "targetSpeedMps": 12,
+      "accelerationMps2": 1.4, "lengthM": 4.5
+    }
+  ],
+  "passengerTrips": [
+    {
+      "id": "passenger-east-01", "platformID": "mid-platform-east", "startTimeSeconds": 4,
+      "startOffsetM": 12, "destinationOffsetM": 166, "walkingSpeedMps": 1.15
+    },
+    {
+      "id": "passenger-east-02", "platformID": "mid-platform-east", "startTimeSeconds": 12,
+      "startOffsetM": 155, "destinationOffsetM": 34, "walkingSpeedMps": 0.95
+    },
+    {
+      "id": "passenger-west-01", "platformID": "mid-platform-west", "startTimeSeconds": 6,
+      "startOffsetM": 20, "destinationOffsetM": 145, "walkingSpeedMps": 1.05
+    }
+  ]
+}

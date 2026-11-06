@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# RAILWAY MASTER - CI step implementations, called from .github/workflows/ios-ci.yml
+# Usage: bash Scripts/ci_run.sh [static|build|packages]
+set -u
+mode="${1:-}"
+
+pick_simulator() {
+  python3 - << 'PY'
+import json, subprocess, sys
+data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "--json"]))
+for runtime, devices in data["devices"].items():
+    if "iOS" not in runtime:
+        continue
+    for device in devices:
+        if device.get("name", "").startswith("iPhone") and device.get("isAvailable", True):
+            print(device["udid"])
+            sys.exit(0)
+sys.exit("No available iPhone simulator found on this runner")
+PY
+}
+
+case "$mode" in
+  static)
+    python3 -m pip install -r Scripts/requirements.txt
+    python3 Scripts/validate_project.py
+    python3 Scripts/validate_generated_3d_assets.py
+    python3 Scripts/generate_package_inventory.py --check
+    ;;
+  build)
+    xcodebuild -version
+    swift --version
+    xcrun simctl list runtimes
+    SIMULATOR_UDID="$(pick_simulator)" || exit 1
+    echo "Using simulator UDID: $SIMULATOR_UDID"
+    xcodebuild -resolvePackageDependencies \
+      -project RailwayMasterPhase1.xcodeproj \
+      -scheme RailwayMasterPhase1
+    set -o pipefail
+    xcodebuild build \
+      -project RailwayMasterPhase1.xcodeproj \
+      -scheme RailwayMasterPhase1 \
+      -configuration Debug \
+      -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+      CODE_SIGNING_ALLOWED=NO \
+      | tee build.log
+    build_status=$?
+    if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
+    xcodebuild test \
+      -project RailwayMasterPhase1.xcodeproj \
+      -scheme RailwayMasterPhase1 \
+      -configuration Debug \
+      -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+      -resultBundlePath TestResults.xcresult \
+      CODE_SIGNING_ALLOWED=NO \
+      | tee test.log
+    ;;
+  packages)
+    xcodebuild -version
+    swift --version
+    SIMULATOR_UDID="$(pick_simulator)" || exit 1
+    echo "Using simulator UDID: $SIMULATOR_UDID"
+    FAILED=""
+    for manifest in Packages/*/Package.swift; do
+      dir=$(dirname "$manifest")
+      name=$(sed -n 's/.*name: *"\([^"]*\)".*/\1/p' "$manifest" | head -n 1)
+      echo "::group::swift package: $name ($dir)"
+      (cd "$dir" && xcodebuild test \
+        -scheme "$name" \
+        -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+        CODE_SIGNING_ALLOWED=NO) 2>&1 | tee "package-test-$name.log"
+      status=${PIPESTATUS[0]}
+      echo "::endgroup::"
+      if [ "$status" -ne 0 ]; then
+        FAILED="$FAILED $name"
+      fi
+    done
+    if [ -n "$FAILED" ]; then
+      echo "FAILED packages:$FAILED"
+      exit 1
+    fi
+    echo "All local packages passed."
+    ;;
+  *)
+    echo "usage: ci_run.sh [static|build|packages]" >&2
+    exit 2
+    ;;
+esac
