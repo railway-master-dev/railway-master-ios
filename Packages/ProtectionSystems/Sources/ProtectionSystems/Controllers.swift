@@ -50,6 +50,12 @@ struct ATSSController {
     private var deadlineByTrain: [String: Double] = [:]
     private var latchedTrains: Set<String> = []
 
+    // Explicit internal initializer: the private stored properties above would
+    // otherwise make the synthesized memberwise initializer private.
+    init(acknowledgementTimeoutSeconds: Double) {
+        self.acknowledgementTimeoutSeconds = acknowledgementTimeoutSeconds
+    }
+
     mutating func evaluate(train: TrainState, previous: TrainState?, devices: [RouteEquipment], input: OperatorInput, time: Double) -> ControllerEvaluation {
         var events: [SimulationEvent] = []
         let beacons = devices.filter { $0.trackID == train.trackID && $0.kind == .atsSBeacon }
@@ -85,6 +91,12 @@ struct ATSPController {
     let safetyMarginM: Double
     let overspeedToleranceKmh: Double
     private var latchedTrains: Set<String> = []
+
+    init(virtualDecelerationMps2: Double, safetyMarginM: Double, overspeedToleranceKmh: Double) {
+        self.virtualDecelerationMps2 = virtualDecelerationMps2
+        self.safetyMarginM = safetyMarginM
+        self.overspeedToleranceKmh = overspeedToleranceKmh
+    }
 
     mutating func evaluate(train: TrainState, devices: [RouteEquipment], time: Double) -> ControllerEvaluation {
         let targets = devices.filter { device in
@@ -130,6 +142,10 @@ struct ATSPSController {
     let overspeedToleranceKmh: Double
     private var activeByTrain: [String: ActiveLimit] = [:]
     private var latchedTrains: Set<String> = []
+
+    init(overspeedToleranceKmh: Double) {
+        self.overspeedToleranceKmh = overspeedToleranceKmh
+    }
 
     mutating func evaluate(train: TrainState, previous: TrainState?, devices: [RouteEquipment], time: Double) -> ControllerEvaluation {
         var events: [SimulationEvent] = []
@@ -181,6 +197,11 @@ struct ATCController {
     let speedCommandsByClearBlocks: [Int: Double]
     let overspeedToleranceKmh: Double
     private var latchedTrains: Set<String> = []
+
+    init(speedCommandsByClearBlocks: [Int: Double], overspeedToleranceKmh: Double) {
+        self.speedCommandsByClearBlocks = speedCommandsByClearBlocks
+        self.overspeedToleranceKmh = overspeedToleranceKmh
+    }
 
     mutating func evaluate(train: TrainState, network: RailwayNetwork, occupancy: [String: Set<String>], devices: [RouteEquipment], time: Double) -> ControllerEvaluation {
         guard let track = network.track(train.trackID) else {
@@ -275,6 +296,14 @@ struct DriverMonitorController {
     let deadmanBrakeSeconds: Double
     let minimumMonitoredSpeedKmh: Double
     private var stateByTrain: [String: DriverState] = [:]
+
+    init(activityWarningSeconds: Double, activityBrakeSeconds: Double, deadmanWarningSeconds: Double, deadmanBrakeSeconds: Double, minimumMonitoredSpeedKmh: Double) {
+        self.activityWarningSeconds = activityWarningSeconds
+        self.activityBrakeSeconds = activityBrakeSeconds
+        self.deadmanWarningSeconds = deadmanWarningSeconds
+        self.deadmanBrakeSeconds = deadmanBrakeSeconds
+        self.minimumMonitoredSpeedKmh = minimumMonitoredSpeedKmh
+    }
 
     mutating func evaluate(train: TrainState, input: OperatorInput, time: Double) -> (eb: ControllerEvaluation, deadman: ControllerEvaluation) {
         var state = stateByTrain[train.id] ?? DriverState()
