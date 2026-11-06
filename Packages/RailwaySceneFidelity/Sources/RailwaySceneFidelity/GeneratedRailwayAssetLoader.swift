@@ -428,7 +428,7 @@ public enum RailwayGeneratedAssetLoader {
                 let color = try document.colorAccessor(attributes["COLOR_0"])
                 let material = SimpleMaterial(
                     color: UIColor(red: CGFloat(color.x), green: CGFloat(color.y), blue: CGFloat(color.z), alpha: CGFloat(color.w)),
-                    roughness: Self.roughness(for: name),
+                    roughness: .init(floatLiteral: Self.roughness(for: name)),
                     isMetallic: Self.isMetallic(name)
                 )
                 let model = ModelEntity(mesh: meshResource, materials: [material])
