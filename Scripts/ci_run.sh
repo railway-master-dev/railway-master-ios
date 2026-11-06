@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RAILWAY MASTER - CI step implementations, called from .github/workflows/ios-ci.yml
-# Usage: bash Scripts/ci_run.sh [static|build|packages]
+# Usage: bash Scripts/ci_run.sh [static|build|packages|screenshots]
 set -u
 mode="${1:-}"
 
@@ -54,6 +54,46 @@ case "$mode" in
       CODE_SIGNING_ALLOWED=NO \
       | tee test.log
     ;;
+  screenshots)
+    xcodebuild -version
+    SIMULATOR_UDID="$(pick_simulator)" || exit 1
+    echo "Using simulator UDID: $SIMULATOR_UDID"
+    xcodebuild -resolvePackageDependencies \
+      -project RailwayMasterPhase1.xcodeproj \
+      -scheme RailwayMasterPhase1
+    set -o pipefail
+    xcodebuild build \
+      -project RailwayMasterPhase1.xcodeproj \
+      -scheme RailwayMasterPhase1 \
+      -configuration Debug \
+      -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+      -derivedDataPath build/DerivedData \
+      CODE_SIGNING_ALLOWED=NO \
+      | tee screenshots-build.log
+    build_status=$?
+    if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
+    APP_PATH="$(find build/DerivedData/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' | head -n 1)"
+    if [ -z "$APP_PATH" ]; then echo "Built .app not found" >&2; exit 1; fi
+    echo "Built app: $APP_PATH"
+    BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+    echo "Bundle ID: $BUNDLE_ID"
+    mkdir -p screenshots
+    xcrun simctl boot "$SIMULATOR_UDID" || true
+    xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+    xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+    xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID"
+    xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 screenshots/launch-video.mov &
+    VIDEO_PID=$!
+    sleep 4
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/01-launch.png || true
+    sleep 8
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/02-main.png || true
+    sleep 14
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/03-settled.png || true
+    kill -INT "$VIDEO_PID" 2>/dev/null || true
+    wait "$VIDEO_PID" 2>/dev/null || true
+    ls -la screenshots/
+    ;;
   packages)
     xcodebuild -version
     swift --version
@@ -103,7 +143,7 @@ case "$mode" in
     echo "All local packages passed."
     ;;
   *)
-    echo "usage: ci_run.sh [static|build|packages]" >&2
+    echo "usage: ci_run.sh [static|build|packages|screenshots]" >&2
     exit 2
     ;;
 esac
