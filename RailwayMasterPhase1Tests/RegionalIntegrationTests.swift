@@ -6,43 +6,6 @@ import TrafficSimulation
 @testable import RailwayMasterPhase1
 
 final class RegionalIntegrationTests: XCTestCase {
-    /// TEMPORARY DIAGNOSTIC v2 (quality3): v1 proved two same-seed
-    /// generations are value-identical section by section, yet their
-    /// JSONEncoder bytes differ at equal total length. This version
-    /// encodes section by section to find the first index whose bytes
-    /// differ, and prints both JSON payloads plus the Double bit
-    /// patterns, which distinguishes a -0.0/+0.0 sign flip from an
-    /// encoder formatting quirk. Always fails by design; remove once
-    /// the root cause is fixed.
-    func testDiagnosticSeededSectionsFirstDifference() throws {
-        let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
-        let seed: UInt64 = 0x1234_5678_9ABC_DEF0
-        let a = try RegionalRouteFactory.make(plan: plan, variant: .mainline, direction: .up, geometrySeed: seed)
-        let b = try RegionalRouteFactory.make(plan: plan, variant: .mainline, direction: .up, geometrySeed: seed)
-        let encoder = JSONEncoder()
-        var report = "no per-section byte differences"
-        if a.profile.sections.count != b.profile.sections.count {
-            report = "section count \(a.profile.sections.count) vs \(b.profile.sections.count)"
-        } else {
-            for (index, pair) in zip(a.profile.sections, b.profile.sections).enumerated() {
-                let dataA = try encoder.encode(pair.0)
-                let dataB = try encoder.encode(pair.1)
-                if dataA != dataB {
-                    let sa = pair.0
-                    let sb = pair.1
-                    report = """
-                    section \(index) bytes differ
-                    A json: \(String(decoding: dataA, as: UTF8.self))
-                    B json: \(String(decoding: dataB, as: UTF8.self))
-                    bits startM \(sa.startM.bitPattern)/\(sb.startM.bitPattern) endM \(sa.endM.bitPattern)/\(sb.endM.bitPattern) gradient \(sa.gradientPermille.bitPattern)/\(sb.gradientPermille.bitPattern) radius \(String(describing: sa.curveRadiusM?.bitPattern))/\(String(describing: sb.curveRadiusM?.bitPattern)) cant \(String(describing: sa.cantMm?.bitPattern))/\(String(describing: sb.cantMm?.bitPattern)) speed \(sa.speedLimitKmh.bitPattern)/\(sb.speedLimitKmh.bitPattern) tunnel \(sa.tunnelResistanceMultiplier.bitPattern)/\(sb.tunnelResistanceMultiplier.bitPattern) transition \(String(describing: sa.curveTransition?.startM.bitPattern))/\(String(describing: sb.curveTransition?.startM.bitPattern)) direction \(String(describing: sa.curveDirection))/\(String(describing: sb.curveDirection))
-                    """
-                    break
-                }
-            }
-        }
-        XCTFail("diagnostic v2: \(report)")
-    }
-
     func testSeededMainlineCurvesAreDeterministicContinuousAndBounded() throws {
         let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
         let seed: UInt64 = 0x1234_5678_9ABC_DEF0
@@ -51,8 +14,14 @@ final class RegionalIntegrationTests: XCTestCase {
         let otherSeed = try RegionalRouteFactory.make(plan: plan, variant: .mainline, direction: .up, geometrySeed: seed &+ 1)
 
         XCTAssertEqual(route.geometrySeed, seed)
-        XCTAssertEqual(try JSONEncoder().encode(route.profile.sections), try JSONEncoder().encode(sameSeed.profile.sections))
-        XCTAssertNotEqual(try JSONEncoder().encode(route.profile.sections), try JSONEncoder().encode(otherSeed.profile.sections))
+        // JSONEncoder does not guarantee key order, so raw byte equality
+        // is not a valid determinism check (CI #116 diagnostic: same-seed
+        // sections were bit-identical but key-permuted). Encode with
+        // sorted keys so the bytes reflect the values alone.
+        let canonicalEncoder = JSONEncoder()
+        canonicalEncoder.outputFormatting = [.sortedKeys]
+        XCTAssertEqual(try canonicalEncoder.encode(route.profile.sections), try canonicalEncoder.encode(sameSeed.profile.sections))
+        XCTAssertNotEqual(try canonicalEncoder.encode(route.profile.sections), try canonicalEncoder.encode(otherSeed.profile.sections))
         XCTAssertFalse(route.profile.validateData().contains { $0.severity == .error })
 
         let baseRadii = route.profile.sections.compactMap(\.curveRadiusM)
