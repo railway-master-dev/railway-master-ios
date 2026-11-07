@@ -6,6 +6,27 @@ import TrafficSimulation
 @testable import RailwayMasterPhase1
 
 final class RegionalIntegrationTests: XCTestCase {
+    /// TEMPORARY DIAGNOSTIC (quality2): pinpoints where two same-seed
+    /// generations disagree, section by section, so the determinism
+    /// failure below can be attributed to a field (or, with zero
+    /// differences, to the encoder). Always fails by design; remove
+    /// once the root cause is fixed.
+    func testDiagnosticSeededSectionsFirstDifference() throws {
+        let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
+        let seed: UInt64 = 0x1234_5678_9ABC_DEF0
+        let a = try RegionalRouteFactory.make(plan: plan, variant: .mainline, direction: .up, geometrySeed: seed)
+        let b = try RegionalRouteFactory.make(plan: plan, variant: .mainline, direction: .up, geometrySeed: seed)
+        var differences: [String] = []
+        if a.profile.sections.count != b.profile.sections.count {
+            differences.append("section count \(a.profile.sections.count) vs \(b.profile.sections.count)")
+        }
+        for (index, pair) in zip(a.profile.sections, b.profile.sections).enumerated() where pair.0 != pair.1 {
+            differences.append("section \(index): A=\(pair.0) B=\(pair.1)")
+            if differences.count >= 3 { break }
+        }
+        XCTFail("same-seed section differences found: \(differences.count) :: \(differences.joined(separator: " | "))")
+    }
+
     func testSeededMainlineCurvesAreDeterministicContinuousAndBounded() throws {
         let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
         let seed: UInt64 = 0x1234_5678_9ABC_DEF0
