@@ -62,10 +62,7 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            VStack(spacing: 7) {
-                header
-                    .frame(height: 38)
-
+            ZStack {
                 RealityTrackView(
                     route: model.route,
                     positionM: model.telemetry.positionM,
@@ -97,9 +94,22 @@ struct ContentView: View {
                     nextStopName: nextStopName,
                     distanceToNextStopM: distanceToNextStopM
                 )
-                .frame(height: min(max(geometry.size.height * 0.32, 96), 160))
-                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                .overlay(alignment: .bottomLeading) {
+                VStack(spacing: 0) {
+                    header
+                        .frame(height: 38)
+                        .padding(.horizontal, max(10, geometry.size.width * 0.018))
+                        .padding(.top, 7)
+                        .background(Color.black.opacity(0.30))
+
+                    HStack {
+                        operationsHUD
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 6)
+
+                    Spacer()
+
                     HStack(spacing: 7) {
                         Image(systemName: "viewfinder")
                         Text("\(model.route.lineName) · \(model.route.dataStatus.rawValue)")
@@ -111,29 +121,38 @@ struct ContentView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(.black.opacity(0.34), in: Capsule())
-                    .padding(8)
-                }
-                .overlay(alignment: .topLeading) {
-                    operationsHUD
-                        .padding(7)
-                }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
 
-                GeometryReader { console in
+                    // Cab desk: the three existing panels recomposed as one
+                    // continuous console surface along the bottom edge.
                     HStack(spacing: 8) {
                         instrumentPanel
-                            .frame(width: console.size.width * 0.275)
+                            .frame(width: geometry.size.width * 0.275)
                         controllerPanel
-                            .frame(width: console.size.width * 0.425)
+                            .frame(width: geometry.size.width * 0.425)
                         pneumaticPanel
                             .frame(maxWidth: .infinity)
                     }
+                    .frame(height: geometry.size.height * (geometry.size.width > geometry.size.height ? 0.46 : 0.40))
+                    .padding(.horizontal, max(10, geometry.size.width * 0.018))
+                    .padding(.top, 7)
+                    .padding(.bottom, 8)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(red: 0.05, green: 0.07, blue: 0.09).opacity(0.92), Color(red: 0.02, green: 0.03, blue: 0.045).opacity(0.96)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.14))
+                            .frame(height: 1)
+                    }
                 }
-                .frame(maxHeight: .infinity)
             }
-            .padding(.horizontal, max(10, geometry.size.width * 0.018))
-            .padding(.top, 7)
-            .padding(.bottom, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color(red: 0.025, green: 0.045, blue: 0.067).ignoresSafeArea())
         .preferredColorScheme(.dark)
