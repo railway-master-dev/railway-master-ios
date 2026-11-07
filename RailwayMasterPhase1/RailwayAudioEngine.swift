@@ -6,7 +6,8 @@ import RailwayAudioEnhancements
 import UIKit
 
 /// 架空路線シミュレーター用の手続き合成音響アダプター。
-/// 実車録音、BVE車両素材、実在駅メロディは含みません。
+/// 基本は独自合成。同梱サンプルは利用許諾を確認済みのものだけを使う
+/// （抵抗制御車のドアチャイムはプロジェクト提供の録音）。
 @MainActor
 public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     public static let shared = RailwayAudioEngine()
@@ -156,10 +157,54 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
         dsp.setSpeechActive(active)
     }
 
-    /// Optional authorized vehicle audio can be attached here. This app ships no third-party samples.
+    /// Optional authorized vehicle audio can be attached here.
     public func attachLicensedSamplePlayer(_ playerNode: AVAudioPlayerNode) {
         engine.attach(playerNode)
         engine.connect(playerNode, to: licensedSampleMixer, format: nil)
+    }
+
+    private var bundledSamplePlayer: AVAudioPlayerNode?
+    private var bundledSampleBuffers: [String: AVAudioPCMBuffer] = [:]
+
+    /// Plays a bundled WAV sample through the licensed-sample mixer and
+    /// returns its duration in seconds so callers can sequence actions
+    /// (for example closing the doors only after a door chime ends).
+    /// Returns nil when the sample is missing or audio is disabled.
+    @discardableResult
+    public func playBundledSample(named name: String) -> TimeInterval? {
+        guard isEnabled else { return nil }
+        let buffer: AVAudioPCMBuffer
+        if let cached = bundledSampleBuffers[name] {
+            buffer = cached
+        } else {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "wav"),
+                  let file = try? AVAudioFile(forReading: url),
+                  let loaded = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                                frameCapacity: AVAudioFrameCount(file.length)) else {
+                return nil
+            }
+            do {
+                try file.read(into: loaded)
+            } catch {
+                return nil
+            }
+            bundledSampleBuffers[name] = loaded
+            buffer = loaded
+        }
+        let player: AVAudioPlayerNode
+        if let existing = bundledSamplePlayer {
+            player = existing
+        } else {
+            let created = AVAudioPlayerNode()
+            attachLicensedSamplePlayer(created)
+            bundledSamplePlayer = created
+            player = created
+        }
+        if !engine.isRunning { try? engine.start() }
+        player.volume = outputVolume
+        player.scheduleBuffer(buffer, at: nil, options: [])
+        player.play()
+        return Double(buffer.frameLength) / buffer.format.sampleRate
     }
 
     public func playHorn(long: Bool = false) {
