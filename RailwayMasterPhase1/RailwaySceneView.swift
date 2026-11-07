@@ -348,13 +348,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var currentCabDesk = FictionalCabAndSoundCatalog.fieldChopper
     private var lastSceneFidelityBuildChainage = Double.nan
 
-    private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.92, green: 0.92, blue: 0.92, alpha: 1), roughness: 0.96, textureName: "scenery_ballast")
+    private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.92, green: 0.92, blue: 0.92, alpha: 1), roughness: 0.96, textureName: "scenery_ballast", normalName: "normal_ballast")
     private let sleeperMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.72, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.88, textureName: "scenery_timber")
     private let railMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
-    private let concreteMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.87, textureName: "scenery_concrete")
+    private let concreteMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.87, textureName: "scenery_concrete", normalName: "normal_concrete")
     private let poleMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.58, blue: 0.58, alpha: 1), metallic: 0.62, roughness: 0.42, textureName: "scenery_steel")
     private let wireMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.66, blue: 0.57, alpha: 1), metallic: 0.84, roughness: 0.24)
-    private let roadMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.78, textureName: "scenery_asphalt")
+    private let roadMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.78, textureName: "scenery_asphalt", normalName: "normal_asphalt")
     private let glassMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.12, green: 0.26, blue: 0.31, alpha: 1), metallic: 0.18, roughness: 0.20)
     private let roofMaterials = [
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.45, green: 0.38, blue: 0.33, alpha: 1), roughness: 0.84, textureName: "scenery_steel"),
@@ -367,6 +367,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.82, blue: 0.76, alpha: 1), roughness: 0.91, textureName: "scenery_brick_warm"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.95, green: 0.90, blue: 0.82, alpha: 1), roughness: 0.88, textureName: "scenery_concrete"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.95, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.7, textureName: "scenery_brick_cool")
+    ]
+    private let officeMaterials = [
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.62, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.88, blue: 0.84, alpha: 1), roughness: 0.66, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
+        RailwaySceneWorld.texturedPBR(.white, metallic: 0.25, roughness: 0.34, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.92, blue: 1.0, alpha: 1), metallic: 0.25, roughness: 0.38, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.94, green: 0.90, blue: 0.84, alpha: 1), roughness: 0.9, textureName: "scenery_house_facade")
     ]
     private let foliageMaterials = [
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.75, green: 0.90, blue: 0.75, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
@@ -470,7 +478,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             sceneFidelityRoute = nil
             buildTrack(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildCatenary(route: route)
-            buildSuburb(route: route)
+            buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
             buildFictionalCorridorLandmarks(route: route, quality: quality)
             buildDestinationPlatform(route: route)
@@ -736,6 +744,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
+    /// Chainage measured from the central terminal (Kanun-Chuo),
+    /// regardless of travel direction, so scenery zoning is
+    /// direction-independent.
+    private func chainageFromCenter(distanceM: Double, route: RailwayRouteProfile, travelDirection: RegionalTravelDirection) -> Double {
+        travelDirection == .up ? distanceM : route.distanceM - distanceM
+    }
+
+    private func isMainlineSection(distanceM: Double, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) -> Bool {
+        switch routeVariant {
+        case .mainline: return true
+        case .throughBranch: return travelDirection == .up ? distanceM < 60_000 : distanceM >= 8_000
+        default: return false
+        }
+    }
+
+    /// 2 = urban core around the central terminal, 1 = mid-rise band
+    /// (secondary city node / core fringe), 0 = ordinary suburb/rural.
+    private func urbanBand(distanceM: Double, route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) -> Int {
+        guard isMainlineSection(distanceM: distanceM, routeVariant: routeVariant, travelDirection: travelDirection) else { return 0 }
+        let c = chainageFromCenter(distanceM: distanceM, route: route, travelDirection: travelDirection)
+        if c <= 4_200 { return 2 }
+        if c <= 6_000 { return 1 }
+        if c >= 22_600 && c <= 25_800 { return 1 }
+        return 0
+    }
+
     private func buildTrack(
         route: RailwayRouteProfile,
         routeVariant: RegionalRouteVariant,
@@ -744,27 +778,54 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let distance = Float(route.distanceM)
         addSurfaceBox(parent: world, name: "formation-ground", size: SIMD3<Float>(1_400, 0.38, distance + 100), position: SIMD3<Float>(0, -0.28, -distance / 2), color: UIColor(red: 0.24, green: 0.28, blue: 0.24, alpha: 1), roughness: 1)
 
-        // Distant mountain backdrop planes repeated along the line, so the
-        // horizon is never empty (BVE-style background).
+        // Distant backdrop planes repeated along the line, so the horizon
+        // is never empty (BVE-style background). City skyline inside the
+        // urban bands, mountain ranges elsewhere — real BVE routes swap
+        // backgrounds per section the same way.
         var backdropMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_mountains")
         backdropMaterial.faceCulling = .none
+        var skylineMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_skyline")
+        skylineMaterial.faceCulling = .none
         let backdropSegment: Float = 4_000
         let backdropCount = max(1, Int((distance / backdropSegment).rounded(.up)))
         for side in [-1, 1] {
             for i in 0..<backdropCount {
-                addBox(parent: world, name: "backdrop-mountains-\(side)-\(i)",
+                let centerM = Double(backdropSegment) * (Double(i) + 0.5)
+                let startM = Double(backdropSegment) * Double(i)
+                let endM = Double(backdropSegment) * Double(i + 1)
+                let isUrban = urbanBand(distanceM: centerM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
+                    || urbanBand(distanceM: startM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
+                    || urbanBand(distanceM: endM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
+                addBox(parent: world, name: "backdrop-\(isUrban ? "skyline" : "mountains")-\(side)-\(i)",
                        size: SIMD3<Float>(1, 110, backdropSegment),
                        position: SIMD3<Float>(Float(side) * 680, 40, -backdropSegment * (Float(i) + 0.5)),
-                       material: backdropMaterial)
+                       material: isUrban ? skylineMaterial : backdropMaterial)
             }
         }
 
-        // Photographic ground apron following the line (grass texture at
-        // real-world scale) over the flat far slab.
-        if let apron = ribbonEntity(name: "ground-apron", width: 46, y: -0.04, tileLength: 12,
-                                    offsets: [Float](repeating: 0, count: samples.count),
-                                    material: Self.texturedPBR(.white, roughness: 1, textureName: "scenery_grass")) {
-            world.addChild(apron)
+        // Photographic ground apron following the line over the flat far
+        // slab: grass at real-world scale, asphalt inside the urban bands
+        // so the towers stand on city ground.
+        if samples.count > 1 {
+            let apronOffsets = [Float](repeating: 0, count: samples.count)
+            let grassApron = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_grass")
+            let cityApron = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
+            var runStart = 0
+            var runBand = urbanBand(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            for i in 1...samples.count {
+                let band = i < samples.count ? urbanBand(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) : -1
+                if band != runBand {
+                    let runEnd = min(i + 1, samples.count)
+                    if let apron = ribbonEntity(name: "ground-apron-\(runStart)", width: 46, y: -0.04, tileLength: 12,
+                                                offsets: apronOffsets,
+                                                material: runBand > 0 ? cityApron : grassApron,
+                                                range: runStart..<runEnd) {
+                        world.addChild(apron)
+                    }
+                    runStart = i
+                    runBand = band
+                }
+            }
         }
 
         // One-piece trackbed ribbons (rails + sleepers + ballast in a
@@ -780,7 +841,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 trackOffsetsSeen.append(o)
             }
         }
-        let trackbedMaterial = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_trackbed")
+        let trackbedMaterial = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_trackbed", normalName: "normal_trackbed")
         for offset in trackOffsetsSeen {
             let offsets = samples.map { sample -> Float in
                 let available = offsetsFor(sample: sample)
@@ -791,6 +852,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
         }
 
+        let wallLandmarks = fictionalCorridorLandmarks(for: route)
         for index in samples.indices {
             let sample = samples[index]
             let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -825,6 +887,27 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let z = sample.z - lateral * sin(sample.heading)
                 addSurfaceBox(parent: world, name: "sleeper-\(index)-\(trackIndex)", size: SIMD3<Float>(2.55, 0.13, 0.26), position: SIMD3<Float>(x, 0.105, z), color: UIColor(red: 0.34, green: 0.27, blue: 0.19, alpha: 1), roughness: 0.88, orientation: trackOrientation)
             }
+
+            // Continuous lineside walls (noise barriers), laid as
+            // per-segment slabs the way BVE routes repeat WallL/WallR:
+            // they enclose the corridor and separate it from the parallel
+            // roads and houses. Mainline sections only, kept clear of
+            // stations and crossings.
+            if index.isMultiple(of: 3), hasPassingTrack, !corridorReserved(at: sample.distanceM, landmarks: wallLandmarks) {
+                let band = urbanBand(distanceM: sample.distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                let wallHeight: Float = band == 2 ? 2.6 : band == 1 ? 2.2 : 1.8
+                let wallMaterial = (index / 3).isMultiple(of: 2) ? concreteMaterial : poleMaterial
+                for side in [-1.0, 1.0] {
+                    let wallLateral = Float(side) * 5.6
+                    let wallX = sample.x + wallLateral * cos(sample.heading)
+                    let wallZ = sample.z - wallLateral * sin(sample.heading)
+                    let wall = addBox(parent: world, name: "lineside-wall-\(index)-\(Int(side))",
+                                      size: SIMD3<Float>(0.18, wallHeight, segmentLength + 0.3),
+                                      position: SIMD3<Float>(wallX, wallHeight / 2, wallZ),
+                                      material: wallMaterial)
+                    wall.orientation = trackOrientation
+                }
+            }
         }
     }
 
@@ -855,16 +938,85 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
-    private func buildSuburb(route: RailwayRouteProfile) {
+    /// One city tower built from stacked facade segments (each segment
+    /// shows the office-facade texture once, so windows keep a realistic
+    /// ~3 m floor height instead of stretching over the whole tower).
+    private func addTower(at distance: Double, side: Float, seed: Int, band: Int, route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        let sample = sample(at: distance)
+        let lateral: Float = (band == 2 ? 12.5 : 13.5) + Float(seed % 3) * 1.4
+        let width: Float = 11 + Float((seed / 3) % 4) * 1.4
+        let depth: Float = 10 + Float((seed / 7) % 3) * 1.6
+        var height: Float = 15 + Float((seed * 29) % 100) / 100 * (band == 2 ? 30 : 15)
+        if band == 2 {
+            let c = chainageFromCenter(distanceM: distance, route: route, travelDirection: travelDirection)
+            height *= Float(1.05 - (c / 4_200) * 0.45)
+            height = max(15, height)
+        }
+        let segments = max(1, Int((height / 15).rounded()))
+        let segmentHeight = height / Float(segments)
+        let offset = side * lateral
+        let x = sample.x + offset * cos(sample.heading)
+        let z = sample.z - offset * sin(sample.heading)
+        let orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+        // Apartment facades only on mid-rise towers; tall ones are
+        // office or glass.
+        let materialPool = height > 30 ? Array(officeMaterials.prefix(4)) : officeMaterials
+        let material = materialPool[abs(seed) % materialPool.count]
+        for segment in 0..<segments {
+            let box = addBox(parent: world, name: "office-tower-\(seed)-\(segment)",
+                             size: SIMD3<Float>(width, segmentHeight, depth),
+                             position: SIMD3<Float>(x, segmentHeight * (Float(segment) + 0.5), z),
+                             material: material)
+            box.orientation = orientation
+        }
+        let roof = addBox(parent: world, name: "office-roof-\(seed)",
+                          size: SIMD3<Float>(width + 0.4, 0.3, depth + 0.4),
+                          position: SIMD3<Float>(x, height + 0.15, z),
+                          material: roofMaterials[abs(seed) % roofMaterials.count])
+        roof.orientation = orientation
+        // Rooftop block (stair tower / tank) on some towers so the
+        // silhouette is not a plain card edge.
+        if seed % 2 == 0 {
+            let block = addBox(parent: world, name: "office-rooftop-\(seed)",
+                               size: SIMD3<Float>(width * 0.34, 2.3, depth * 0.4),
+                               position: SIMD3<Float>(x, height + 1.15, z),
+                               material: concreteMaterial)
+            block.orientation = orientation
+        }
+        // Slightly proud ground-floor band: hides the wall/ground seam
+        // and reads as a storefront/podium base.
+        let baseBand = addBox(parent: world, name: "office-base-\(seed)",
+                              size: SIMD3<Float>(width + 0.18, 3.1, depth + 0.18),
+                              position: SIMD3<Float>(x, 1.55, z),
+                              material: band == 2 ? glassMaterial : concreteMaterial)
+        baseBand.orientation = orientation
+    }
+
+    private func buildSuburb(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         let sceneryMaterials = buildingMaterials
         let landmarks = fictionalCorridorLandmarks(for: route)
         var index = 0
+        var urbanIndex = 0
         var foliageCount = 0
         let buildingLimit = max(1, renderQualitySettings.sceneryInstanceLimit / 6)
         let buildingStep = max(105, (route.distanceM - 114) / Double(buildingLimit))
         var distance = 34.0
-        while distance < route.distanceM - 80 && index < buildingLimit {
+        while distance < route.distanceM - 80 {
+            let band = urbanBand(distanceM: distance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            if band > 0 {
+                if urbanIndex < 720 && !corridorReserved(at: distance, landmarks: landmarks) {
+                    addTower(at: distance, side: 1, seed: urbanIndex * 2, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                    addTower(at: distance + 9, side: -1, seed: urbanIndex * 2 + 1, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                }
+                urbanIndex += 1
+                distance += band == 2 ? 27 : 36
+                continue
+            }
             if corridorReserved(at: distance, landmarks: landmarks) {
+                distance += buildingStep
+                continue
+            }
+            if index >= buildingLimit {
                 distance += buildingStep
                 continue
             }
@@ -1755,12 +1907,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// Photographic-texture material: the bundled scenery texture carries
     /// the surface detail and the color acts as a multiply tint. Falls back
     /// to the flat color when the texture cannot be loaded.
-    static func texturedPBR(_ color: UIColor, metallic: Float = 0.0, roughness: Float, textureName: String) -> PhysicallyBasedMaterial {
+    static func texturedPBR(_ color: UIColor, metallic: Float = 0.0, roughness: Float, textureName: String, normalName: String? = nil) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
         if let texture = SceneTextureProvider.texture(named: textureName) {
-            material.baseColor = .init(tint: color, texture: texture)
+            material.baseColor = .init(tint: color, texture: .init(texture))
         } else {
             material.baseColor = .init(tint: color, texture: nil)
+        }
+        // A normal map gives flat texture walls real relief (window
+        // frames, balcony rails) under the scene lighting, which is what
+        // keeps them from reading as printed paper.
+        if let normalName, let normal = SceneTextureProvider.texture(named: normalName) {
+            material.normal = .init(texture: .init(normal))
         }
         material.metallic = .init(floatLiteral: metallic)
         material.roughness = .init(floatLiteral: roughness)
@@ -1771,14 +1929,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// runs along the line in tileLength-metre repeats, so the texture
     /// keeps its real-world scale over any distance (BVE-style trackbed
     /// and ground aprons without UV stretching).
-    private func ribbonEntity(name: String, width: Float, y: Float, tileLength: Float, offsets: [Float], material: PhysicallyBasedMaterial) -> ModelEntity? {
+    private func ribbonEntity(name: String, width: Float, y: Float, tileLength: Float, offsets: [Float], material: PhysicallyBasedMaterial, range: Range<Int>? = nil) -> ModelEntity? {
         guard offsets.count == samples.count, samples.count > 1 else { return nil }
+        let sampleRange = range ?? samples.indices
+        guard sampleRange.count > 1 else { return nil }
         var positions: [SIMD3<Float>] = []
         var normals: [SIMD3<Float>] = []
         var uvs: [SIMD2<Float>] = []
         var indices: [UInt32] = []
-        positions.reserveCapacity(samples.count * 2)
-        for (i, sample) in samples.enumerated() {
+        positions.reserveCapacity(sampleRange.count * 2)
+        var vertexIndex = 0
+        for i in sampleRange {
+            let sample = samples[i]
             let lateral = offsets[i]
             let cx = sample.x + lateral * cos(sample.heading)
             let cz = sample.z - lateral * sin(sample.heading)
@@ -1792,10 +1954,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let v = Float(sample.distanceM) / tileLength
             uvs.append(SIMD2<Float>(0, v))
             uvs.append(SIMD2<Float>(1, v))
-            if i > 0 {
-                let base = UInt32((i - 1) * 2)
+            if vertexIndex > 0 {
+                let base = UInt32((vertexIndex - 1) * 2)
                 indices.append(contentsOf: [base, base + 1, base + 2, base + 1, base + 3, base + 2])
             }
+            vertexIndex += 1
         }
         var descriptor = MeshDescriptor(name: name)
         descriptor.positions = MeshBuffers.Positions(positions)
