@@ -31,6 +31,8 @@ struct RealityTrackView: View {
     let stationModelPlacements: [RailwayGeneratedStationPlacement]
     let nextStopName: String
     let distanceToNextStopM: Double
+    var signalPositionM: Double? = nil
+    var signalAspect: ThreeAspectSignal? = nil
 
     var body: some View {
         ZStack {
@@ -58,7 +60,9 @@ struct RealityTrackView: View {
                 environmentSelection: environmentSelection,
                 vehicleCarCount: vehicleCarCount,
                 cabDesk: cabDesk,
-                stationModelPlacements: stationModelPlacements
+                stationModelPlacements: stationModelPlacements,
+                signalPositionM: signalPositionM,
+                signalAspect: signalAspect
             )
                 .accessibilityHidden(true)
             let visibilityLoss = max(0, 1 - environmentSelection.environment.visibilityM / 20_000)
@@ -129,6 +133,8 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
     let vehicleCarCount: Int
     let cabDesk: FictionalCabDesk
     let stationModelPlacements: [RailwayGeneratedStationPlacement]
+    var signalPositionM: Double? = nil
+    var signalAspect: ThreeAspectSignal? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -152,7 +158,8 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
             controls: controls, vehicleCabIndicatorState: vehicleCabIndicatorState,
             vehicleMaximumSpeedKmh: vehicleMaximumSpeedKmh,
             environmentSelection: environmentSelection, vehicleCarCount: vehicleCarCount,
-            cabDesk: cabDesk, stationModelPlacements: stationModelPlacements
+            cabDesk: cabDesk, stationModelPlacements: stationModelPlacements,
+            signalPositionM: signalPositionM, signalAspect: signalAspect
         )
         return view
     }
@@ -171,7 +178,8 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
             controls: controls, vehicleCabIndicatorState: vehicleCabIndicatorState,
             vehicleMaximumSpeedKmh: vehicleMaximumSpeedKmh,
             environmentSelection: environmentSelection, vehicleCarCount: vehicleCarCount,
-            cabDesk: cabDesk, stationModelPlacements: stationModelPlacements
+            cabDesk: cabDesk, stationModelPlacements: stationModelPlacements,
+            signalPositionM: signalPositionM, signalAspect: signalAspect
         )
     }
 
@@ -381,6 +389,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 1.0, blue: 0.85, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.80, green: 0.95, blue: 0.88, alpha: 1), roughness: 0.98, textureName: "scenery_foliage")
     ]
+    /// Full-facade photo texture for suburban houses (windows and door are
+    /// painted in, so those houses skip the separate window/door boxes).
+    private let houseFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_house_facade")
+    /// Platform-edge tactile paving: the safety yellow band reads as
+    /// tactile paving at platform distance even without modelled dots.
+    private let tactileMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.87, green: 0.66, blue: 0.10, alpha: 1), roughness: 0.9)
+    /// Signal lamp materials: unlit, so a lit lamp reads at full
+    /// brightness in daylight while a dark lens stays near-black.
+    private let signalDarkLampMaterial = UnlitMaterial(color: UIColor(red: 0.07, green: 0.07, blue: 0.08, alpha: 1))
+    private let signalRedMaterial = UnlitMaterial(color: UIColor(red: 1.0, green: 0.12, blue: 0.08, alpha: 1))
+    private let signalYellowMaterial = UnlitMaterial(color: UIColor(red: 1.0, green: 0.75, blue: 0.10, alpha: 1))
+    private let signalGreenMaterial = UnlitMaterial(color: UIColor(red: 0.15, green: 0.95, blue: 0.35, alpha: 1))
+    /// Trackside signal lamp heads by travel-frame distance [m]:
+    /// the three lamp entities in red / yellow / green order.
+    private var signalLampHeads: [Double: [ModelEntity]] = [:]
+    private var dynamicSignalDistance: Double?
+    private var dynamicSignalAspect: ThreeAspectSignal?
 
     func prepare(
         route: RailwayRouteProfile,
@@ -418,6 +443,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         previousTrafficSnapshot = nil
         roadCarEntities.removeAll()
         platformPeople.removeAll()
+        signalLampHeads.removeAll()
+        dynamicSignalDistance = nil
+        dynamicSignalAspect = nil
         aiTrainEntities.removeAll()
         vehicleModels.removeAll()
         highFidelityLeadVehicle = nil
@@ -477,6 +505,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         } else {
             sceneFidelityRoute = nil
             buildTrack(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildTunnels(route: route)
+            buildSignals(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildCatenary(route: route)
             buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
@@ -505,7 +535,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         environmentSelection: EnvironmentQualitySelection,
         vehicleCarCount: Int,
         cabDesk: FictionalCabDesk,
-        stationModelPlacements: [RailwayGeneratedStationPlacement]
+        stationModelPlacements: [RailwayGeneratedStationPlacement],
+        signalPositionM: Double? = nil,
+        signalAspect: ThreeAspectSignal? = nil
     ) {
         let safeCarCount = min(max(vehicleCarCount, 1), 12)
         let stationSignature = stationModelPlacements.map { "\($0.stationId):\($0.chainageM):\($0.asset.rawValue)" }.joined(separator: ",")
@@ -519,6 +551,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             )
         }
         guard !samples.isEmpty else { return }
+        updateSignalAspect(positionM: signalPositionM, aspect: signalAspect)
         updateGeneratedStationModel(positionM: positionM)
         let centerSample = sample(at: positionM)
         let playerLateral: Float = travelDirection == .up ? -2.1 : 2.1
@@ -533,7 +566,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         currentSimulationTime = simulationTime
         for (index, model) in vehicleModels.enumerated() {
             let consistIndex = index + (highFidelityLeadVehicle == nil ? 0 : 1)
-            let chainage = max(0, positionM - 9.75 - Double(consistIndex) * 19.5)
+            let chainage = positionM - 9.75 - Double(consistIndex) * 19.5
             let carSample = self.sample(at: chainage)
             let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
             let trackSide: Float = travelDirection == .up ? -2.1 : 2.1
@@ -545,9 +578,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 simd_quatf(angle: -carSample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
         }
         if let model = highFidelityLeadVehicle {
-            let carChainage = max(0, positionM - 9.75)
+            let carChainage = positionM - 9.75
             let carSample = self.sample(at: carChainage)
-            let frontBogieSample = self.sample(at: max(0, carChainage - 6.35))
+            let frontBogieSample = self.sample(at: carChainage - 6.35)
             let rearBogieSample = self.sample(at: carChainage + 6.35)
             let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
             let trackSide: Float = travelDirection == .up ? -2.1 : 2.1
@@ -770,6 +803,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         return 0
     }
 
+    /// Coastal stretches with beach and open sea on one side, about
+    /// 14 km in total across three windows. The middle window starts
+    /// exactly at the 42.1-43.6 km tunnel's exit portal, so the train
+    /// bursts out of the tunnel straight into the sea view.
+    ///   38.5-40.5 km: a first taste of the sea around Kaigandori
+    ///   43.6-48.6 km: the tunnel-exit reveal
+    ///   53.0-60.0 km: Shirahama to the Higashihama terminus
+    private func isCoastal(distanceM: Double, route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) -> Bool {
+        guard isMainlineSection(distanceM: distanceM, routeVariant: routeVariant, travelDirection: travelDirection) else { return false }
+        let c = chainageFromCenter(distanceM: distanceM, route: route, travelDirection: travelDirection)
+        return (c >= 38_500 && c <= 40_500) || (c >= 43_600 && c <= 48_600) || c >= 53_000
+    }
+
+    /// Lateral sign of the sea in travel-frame coordinates. The single
+    /// running track flips its offset by direction the same way, so the
+    /// sea stays on the same geographic side in both directions.
+    private func seaSideSign(travelDirection: RegionalTravelDirection) -> Float {
+        travelDirection == .up ? 1 : -1
+    }
+
     private func buildTrack(
         route: RailwayRouteProfile,
         routeVariant: RegionalRouteVariant,
@@ -824,6 +877,38 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     }
                     runStart = i
                     runBand = band
+                }
+            }
+        }
+
+        // Coastal stretch: a sand beach just outside the ground apron
+        // and open sea beyond it, as ribbons over the coastal samples.
+        // The far edge of the sea meets the backdrop wall, which then
+        // reads as a distant shore across the water.
+        if samples.count > 1 {
+            let seaSign = seaSideSign(travelDirection: travelDirection)
+            let beachOffsets = samples.map { _ in seaSign * 31 }
+            let seaOffsets = samples.map { _ in seaSign * 369 }
+            let beachMaterial = Self.pbr(UIColor(red: 0.76, green: 0.69, blue: 0.52, alpha: 1), roughness: 1)
+            let seaMaterial = Self.texturedPBR(.white, roughness: 0.55, textureName: "scenery_sea")
+            var runStart = 0
+            var runCoastal = isCoastal(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            for i in 1...samples.count {
+                let coastal = i < samples.count ? isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) : false
+                if coastal != runCoastal {
+                    if runCoastal {
+                        let runEnd = min(i + 1, samples.count)
+                        if let beach = ribbonEntity(name: "beach-\(runStart)", width: 16, y: -0.03, tileLength: 12,
+                                                    offsets: beachOffsets, material: beachMaterial, range: runStart..<runEnd) {
+                            world.addChild(beach)
+                        }
+                        if let sea = ribbonEntity(name: "sea-\(runStart)", width: 660, y: -0.06, tileLength: 30,
+                                                  offsets: seaOffsets, material: seaMaterial, range: runStart..<runEnd, uTileLength: 30) {
+                            world.addChild(sea)
+                        }
+                    }
+                    runStart = i
+                    runCoastal = coastal
                 }
             }
         }
@@ -907,6 +992,138 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                       material: wallMaterial)
                     wall.orientation = trackOrientation
                 }
+            }
+        }
+    }
+
+    /// Trackside colour-light signals at the canonical 3 km spacing on
+    /// the main line (the route data carries its signals every 3 km,
+    /// sighted on the left of the running track). Each head defaults to
+    /// green; the signal protecting the block ahead is re-lit from the
+    /// model's actual reading in updateSignalAspect.
+    private func buildSignals(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let lateral: Float = travelDirection == .up ? -3.7 : 3.7
+        let headMaterial = Self.pbr(UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1), metallic: 0.3, roughness: 0.6)
+        for target in stride(from: 0.0, to: 60_000.0, by: 3_000.0) {
+            var best: RouteSample?
+            var bestDelta = Double.greatestFiniteMagnitude
+            for sample in samples where isMainlineSection(distanceM: sample.distanceM, routeVariant: routeVariant, travelDirection: travelDirection) {
+                let delta = abs(chainageFromCenter(distanceM: sample.distanceM, route: route, travelDirection: travelDirection) - target)
+                if delta < bestDelta {
+                    bestDelta = delta
+                    best = sample
+                }
+            }
+            guard let sample = best else { continue }
+            let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            let base = routeOffsetPoint(sample, lateral: lateral)
+            addBox(parent: world, name: "signal-post-\(Int(target))", size: SIMD3<Float>(0.14, 3.6, 0.14),
+                   position: SIMD3<Float>(base.x, 1.8, base.z), material: poleMaterial, orientation: yaw)
+            addBox(parent: world, name: "signal-head-\(Int(target))", size: SIMD3<Float>(0.36, 1.1, 0.24),
+                   position: SIMD3<Float>(base.x, 3.9, base.z), material: headMaterial, orientation: yaw)
+            // Lamps sit on the face turned toward the approaching train
+            // (opposite the direction of travel), red over yellow over
+            // green.
+            let forward = SIMD3<Float>(sin(sample.heading), 0, -cos(sample.heading))
+            let lampX = base.x - forward.x * 0.16
+            let lampZ = base.z - forward.z * 0.16
+            var lamps: [ModelEntity] = []
+            for lampY in [4.25, 3.9, 3.55] {
+                let lamp = ModelEntity(mesh: MeshResource.generateBox(size: SIMD3<Float>(0.17, 0.17, 0.05)),
+                                       materials: [signalDarkLampMaterial])
+                lamp.position = SIMD3<Float>(lampX, Float(lampY), lampZ)
+                lamp.orientation = yaw
+                world.addChild(lamp)
+                lamps.append(lamp)
+            }
+            signalLampHeads[sample.distanceM] = lamps
+            applyAspect(lamps, aspect: .green)
+        }
+    }
+
+    private func applyAspect(_ lamps: [ModelEntity], aspect: ThreeAspectSignal) {
+        guard lamps.count == 3 else { return }
+        lamps[0].model?.materials = [aspect == .red ? signalRedMaterial : signalDarkLampMaterial]
+        lamps[1].model?.materials = [aspect == .yellow ? signalYellowMaterial : signalDarkLampMaterial]
+        lamps[2].model?.materials = [aspect == .green ? signalGreenMaterial : signalDarkLampMaterial]
+    }
+
+    /// Lights the placed signal nearest the model's current reading
+    /// with that reading's aspect; the previously lit signal returns to
+    /// the default green.
+    private func updateSignalAspect(positionM: Double?, aspect: ThreeAspectSignal?) {
+        var matched: Double?
+        if let positionM {
+            matched = signalLampHeads.keys.min { abs($0 - positionM) < abs($1 - positionM) }
+            if let candidate = matched, abs(candidate - positionM) > 250 {
+                matched = nil
+            }
+        }
+        if matched == dynamicSignalDistance && aspect == dynamicSignalAspect { return }
+        if let previous = dynamicSignalDistance, let lamps = signalLampHeads[previous] {
+            applyAspect(lamps, aspect: .green)
+        }
+        dynamicSignalDistance = matched
+        dynamicSignalAspect = aspect
+        if let matched, let lamps = signalLampHeads[matched], let aspect {
+            applyAspect(lamps, aspect: aspect)
+        }
+    }
+
+    /// Visual tunnel shells over the sections the physics profile marks
+    /// as tunnels (tunnelResistanceMultiplier > 1): side walls and a roof
+    /// slab in dark concrete, with a three-piece portal frame at each
+    /// end. Built with addBox (not surface boxes) so the weather pass
+    /// never repaints them. The 42.1-43.6 km tunnel's exit portal is
+    /// where the coastal reveal window begins.
+    private func buildTunnels(route: RailwayRouteProfile) {
+        var ranges: [(start: Double, end: Double)] = []
+        for section in route.sections where section.tunnelResistanceMultiplier > 1 {
+            if let last = ranges.last, section.startM <= last.end + 0.5 {
+                ranges[ranges.count - 1].end = section.endM
+            } else {
+                ranges.append((section.startM, section.endM))
+            }
+        }
+        guard !ranges.isEmpty else { return }
+        let tunnelMaterial = Self.texturedPBR(UIColor(red: 0.32, green: 0.33, blue: 0.34, alpha: 1), roughness: 0.95, textureName: "scenery_concrete", normalName: "normal_concrete")
+        for range in ranges {
+            let inside = samples.indices.filter { samples[$0].distanceM >= range.start && samples[$0].distanceM <= range.end }
+            guard inside.count > 1 else { continue }
+            for (offsetIndex, index) in inside.enumerated() where offsetIndex.isMultiple(of: 2) {
+                let sample = samples[index]
+                let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let nextIndex = inside[min(offsetIndex + 2, inside.count - 1)]
+                let length = max(Float(samples[nextIndex].distanceM - sample.distanceM), 8)
+                for side in [-1.0, 1.0] {
+                    let lateral = Float(side) * 5.6
+                    let x = sample.x + lateral * cos(sample.heading)
+                    let z = sample.z - lateral * sin(sample.heading)
+                    addBox(parent: world, name: "tunnel-wall-\(Int(range.start))-\(index)-\(Int(side))",
+                           size: SIMD3<Float>(0.5, 6.2, length), position: SIMD3<Float>(x, 3.1, z),
+                           material: tunnelMaterial, orientation: yaw)
+                }
+                addBox(parent: world, name: "tunnel-roof-\(Int(range.start))-\(index)",
+                       size: SIMD3<Float>(11.7, 0.5, length), position: SIMD3<Float>(sample.x, 6.45, sample.z),
+                       material: tunnelMaterial, orientation: yaw)
+            }
+            // Portal frames at both ends: two pillars and a lintel,
+            // leaving the bore opening clear.
+            for boundary in [range.start, range.end] {
+                let portalSample = sample(at: boundary)
+                let yaw = simd_quatf(angle: portalSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                for side in [-1.0, 1.0] {
+                    let lateral = Float(side) * 7.9
+                    let x = portalSample.x + lateral * cos(portalSample.heading)
+                    let z = portalSample.z - lateral * sin(portalSample.heading)
+                    addBox(parent: world, name: "tunnel-portal-\(Int(boundary))-\(Int(side))",
+                           size: SIMD3<Float>(4.6, 9.2, 0.9), position: SIMD3<Float>(x, 4.6, z),
+                           material: concreteMaterial, orientation: yaw)
+                }
+                addBox(parent: world, name: "tunnel-portal-lintel-\(Int(boundary))",
+                       size: SIMD3<Float>(20.4, 3.0, 0.9), position: SIMD3<Float>(portalSample.x, 7.7, portalSample.z),
+                       material: concreteMaterial, orientation: yaw)
             }
         }
     }
@@ -998,8 +1215,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var index = 0
         var urbanIndex = 0
         var foliageCount = 0
-        let buildingLimit = max(1, renderQualitySettings.sceneryInstanceLimit / 6)
-        let buildingStep = max(105, (route.distanceM - 114) / Double(buildingLimit))
+        let buildingLimit = max(1, renderQualitySettings.sceneryInstanceLimit / 2)
+        let buildingStep = max(75, (route.distanceM - 114) / Double(buildingLimit))
         var distance = 34.0
         while distance < route.distanceM - 80 {
             let band = urbanBand(distanceM: distance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
@@ -1023,6 +1240,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let sample = sample(at: distance)
             let side = index.isMultiple(of: 2) ? 1.0 : -1.0
             let sign = Float(side)
+            // No houses on the sea side of the coastal stretch: that
+            // ground is beach and water.
+            if isCoastal(distanceM: distance, route: route, routeVariant: routeVariant, travelDirection: travelDirection),
+               sign == seaSideSign(travelDirection: travelDirection) {
+                index += 1
+                distance += buildingStep
+                continue
+            }
             let lateral = 9.0 + Float((index * 13) % 4) * 1.7
             let shed = index.isMultiple(of: 4)
             let width = (shed ? 7.2 : 4.6) + Float((index * 7) % 4) * 0.75
@@ -1031,7 +1256,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let offset = sign * lateral
             let x = sample.x + offset * cos(sample.heading)
             let z = sample.z - offset * sin(sample.heading)
-            let bodyMaterial = sceneryMaterials[index % sceneryMaterials.count]
+            // Every third house wears the full photo facade; its windows
+            // and door are painted in, so the separate boxes are skipped.
+            let useFacadeTexture = !shed && index % 3 == 2
+            let bodyMaterial = useFacadeTexture ? houseFacadeMaterial : sceneryMaterials[index % sceneryMaterials.count]
             let building = addBox(parent: world, name: shed ? "fictional-shed-\(index)" : "fictional-home-\(index)", size: SIMD3<Float>(width, height, depth), position: SIMD3<Float>(x, height / 2, z), material: bodyMaterial)
             building.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
 
@@ -1045,16 +1273,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 balcony.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
             }
 
-            let facadeLateral = offset - sign * (width / 2 + 0.035)
-            for window in 0..<2 {
-                let windowSample = self.sample(at: distance + Double((Float(window) - 0.5) * depth * 0.42))
-                let windowPoint = routeOffsetPoint(windowSample, lateral: facadeLateral)
-                let pane = addBox(parent: world, name: "window-\(index)-\(window)", size: SIMD3<Float>(0.07, 0.72, 0.78), position: SIMD3<Float>(windowPoint.x, min(height * 0.72, 2.45), windowPoint.z), material: glassMaterial)
-                pane.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            if !useFacadeTexture {
+                let facadeLateral = offset - sign * (width / 2 + 0.035)
+                for window in 0..<2 {
+                    let windowSample = self.sample(at: distance + Double((Float(window) - 0.5) * depth * 0.42))
+                    let windowPoint = routeOffsetPoint(windowSample, lateral: facadeLateral)
+                    let pane = addBox(parent: world, name: "window-\(index)-\(window)", size: SIMD3<Float>(0.07, 0.72, 0.78), position: SIMD3<Float>(windowPoint.x, min(height * 0.72, 2.45), windowPoint.z), material: glassMaterial)
+                    pane.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                }
+                let doorPoint = routeOffsetPoint(sample, lateral: facadeLateral)
+                let door = addBox(parent: world, name: "door-\(index)", size: SIMD3<Float>(0.07, 1.8, 0.78), position: SIMD3<Float>(doorPoint.x, 0.95, doorPoint.z), material: roofMaterials[(index + 1) % roofMaterials.count])
+                door.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
             }
-            let doorPoint = routeOffsetPoint(sample, lateral: facadeLateral)
-            let door = addBox(parent: world, name: "door-\(index)", size: SIMD3<Float>(0.07, 1.8, 0.78), position: SIMD3<Float>(doorPoint.x, 0.95, doorPoint.z), material: roofMaterials[(index + 1) % roofMaterials.count])
-            door.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
 
             if index.isMultiple(of: 2), foliageCount < renderQualitySettings.foliageInstanceLimit {
                 let treeSample = self.sample(at: distance + 5)
@@ -1096,7 +1326,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let z = sample.z - lateral * sin(sample.heading)
             let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
             addBox(parent: world, name: "arrival-platform-\(Int(side))", size: SIMD3<Float>(2.0, 0.48, 115), position: SIMD3<Float>(x, 0.24, z), material: concreteMaterial, orientation: yaw)
-            addBox(parent: world, name: "tactile-strip-\(Int(side))", size: SIMD3<Float>(0.22, 0.035, 115), position: SIMD3<Float>(x - Float(side) * 0.83 * cos(sample.heading), 0.50, z + Float(side) * 0.83 * sin(sample.heading)), material: roofMaterials[0], orientation: yaw)
+            addBox(parent: world, name: "tactile-strip-\(Int(side))", size: SIMD3<Float>(0.3, 0.035, 115), position: SIMD3<Float>(x - Float(side) * 0.8 * cos(sample.heading), 0.50, z + Float(side) * 0.8 * sin(sample.heading)), material: tactileMaterial, orientation: yaw)
         }
         let signSample = self.sample(at: max(route.stopMarkerM - 42, 0))
         let signYaw = simd_quatf(angle: signSample.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -1864,8 +2094,31 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     }
 
     private func sample(at distanceM: Double) -> RouteSample {
+        // Outside the sampled range, extrapolate along the end sample's
+        // heading instead of clamping: at the route origin the lead car
+        // legitimately extends behind chainage 0, and clamping would
+        // stack the whole consist onto the first sample.
+        if let first = samples.first, distanceM < first.distanceM {
+            let delta = Float(distanceM - first.distanceM)
+            return RouteSample(
+                distanceM: distanceM,
+                x: first.x + sin(first.heading) * delta,
+                z: first.z - cos(first.heading) * delta,
+                heading: first.heading,
+                bankRadians: first.bankRadians
+            )
+        }
         guard let upperIndex = samples.firstIndex(where: { $0.distanceM >= distanceM }) else {
-            if let last = samples.last { return last }
+            if let last = samples.last {
+                let delta = Float(distanceM - last.distanceM)
+                return RouteSample(
+                    distanceM: distanceM,
+                    x: last.x + sin(last.heading) * delta,
+                    z: last.z - cos(last.heading) * delta,
+                    heading: last.heading,
+                    bankRadians: last.bankRadians
+                )
+            }
             return RouteSample(distanceM: distanceM, x: 0, z: Float(-distanceM), heading: 0, bankRadians: 0)
         }
         guard upperIndex > 0 else { return samples[upperIndex] }
@@ -1929,7 +2182,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// runs along the line in tileLength-metre repeats, so the texture
     /// keeps its real-world scale over any distance (BVE-style trackbed
     /// and ground aprons without UV stretching).
-    private func ribbonEntity(name: String, width: Float, y: Float, tileLength: Float, offsets: [Float], material: PhysicallyBasedMaterial, range: Range<Int>? = nil) -> ModelEntity? {
+    private func ribbonEntity(name: String, width: Float, y: Float, tileLength: Float, offsets: [Float], material: PhysicallyBasedMaterial, range: Range<Int>? = nil, uTileLength: Float? = nil) -> ModelEntity? {
         guard offsets.count == samples.count, samples.count > 1 else { return nil }
         let sampleRange = range ?? samples.indices
         guard sampleRange.count > 1 else { return nil }
@@ -1952,8 +2205,21 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             normals.append(SIMD3<Float>(0, 1, 0))
             normals.append(SIMD3<Float>(0, 1, 0))
             let v = Float(sample.distanceM) / tileLength
-            uvs.append(SIMD2<Float>(0, v))
-            uvs.append(SIMD2<Float>(1, v))
+            // Wide ribbons (the sea) tile across their width too, so the
+            // texture keeps its scale in both directions instead of
+            // stretching into streaks.
+            let u0: Float
+            let u1: Float
+            if let uTileLength {
+                let center = lateral / uTileLength
+                u0 = center - half / uTileLength
+                u1 = center + half / uTileLength
+            } else {
+                u0 = 0
+                u1 = 1
+            }
+            uvs.append(SIMD2<Float>(u0, v))
+            uvs.append(SIMD2<Float>(u1, v))
             if vertexIndex > 0 {
                 let base = UInt32((vertexIndex - 1) * 2)
                 indices.append(contentsOf: [base, base + 1, base + 2, base + 1, base + 3, base + 2])
