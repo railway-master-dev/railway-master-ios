@@ -167,17 +167,19 @@ def main() -> None:
     print("PASS: 32 unique station layouts (28 mainline, 4 branch), platform counts match, S12 is 5-track/4-platform")
 
     # 2026-11-07 scenery/station quality revision checks.
-    # (a) All nine original scenery textures must be 256x256 PNGs
+    # (a) All scenery textures must be 512x512 PNGs. The set grew from the
+    # original nine to thirteen with the all-texture revision (trackbed,
+    # mountain forest, sea, house facade added as photographic textures).
     # (IHDR width/height are big-endian uint32 at bytes 16..24).
     texture_root = ROOT / "Packages/RailwaySceneFidelity/Sources/RailwaySceneFidelity/Resources"
     textures = sorted(texture_root.glob("scenery_*.png"))
-    require(len(textures) == 9, f"expected 9 scenery textures, found {len(textures)}")
+    require(len(textures) == 13, f"expected 13 scenery textures, found {len(textures)}")
     for texture in textures:
         header = texture.read_bytes()[:24]
         require(header[:8] == b"\x89PNG\r\n\x1a\n", f"not a PNG: {texture.name}")
         width, height = struct.unpack(">II", header[16:24])
-        require((width, height) == (256, 256), f"scenery texture is {width}x{height}, expected 256x256: {texture.name}")
-    print("PASS: 9 original scenery textures are 256x256 PNGs")
+        require((width, height) == (512, 512), f"scenery texture is {width}x{height}, expected 512x512: {texture.name}")
+    print("PASS: 13 scenery textures are 512x512 PNGs")
 
     # (b) Enhancement meshes must exist in all six enhance-target GLBs.
     station_prefixes = ("bench_", "platform_sign_", "canopy_fixture_", "vending_", "bin_", "white_line_", "end_fence_")
