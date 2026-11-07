@@ -348,30 +348,30 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var currentCabDesk = FictionalCabAndSoundCatalog.fieldChopper
     private var lastSceneFidelityBuildChainage = Double.nan
 
-    private let ballastMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.25, green: 0.26, blue: 0.25, alpha: 1), roughness: 0.96)
-    private let sleeperMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.34, green: 0.27, blue: 0.19, alpha: 1), roughness: 0.88)
+    private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.92, green: 0.92, blue: 0.92, alpha: 1), roughness: 0.96, textureName: "scenery_ballast")
+    private let sleeperMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.72, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.88, textureName: "scenery_timber")
     private let railMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
-    private let concreteMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.49, green: 0.51, blue: 0.50, alpha: 1), roughness: 0.87)
-    private let poleMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.34, green: 0.37, blue: 0.36, alpha: 1), metallic: 0.62, roughness: 0.42)
+    private let concreteMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.87, textureName: "scenery_concrete")
+    private let poleMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.58, blue: 0.58, alpha: 1), metallic: 0.62, roughness: 0.42, textureName: "scenery_steel")
     private let wireMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.66, blue: 0.57, alpha: 1), metallic: 0.84, roughness: 0.24)
-    private let roadMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.17, green: 0.18, blue: 0.18, alpha: 1), roughness: 0.78)
+    private let roadMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.78, textureName: "scenery_asphalt")
     private let glassMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.12, green: 0.26, blue: 0.31, alpha: 1), metallic: 0.18, roughness: 0.20)
     private let roofMaterials = [
-        RailwaySceneWorld.pbr(UIColor(red: 0.28, green: 0.23, blue: 0.20, alpha: 1), roughness: 0.84),
-        RailwaySceneWorld.pbr(UIColor(red: 0.34, green: 0.30, blue: 0.25, alpha: 1), roughness: 0.82),
-        RailwaySceneWorld.pbr(UIColor(red: 0.22, green: 0.26, blue: 0.28, alpha: 1), metallic: 0.12, roughness: 0.71)
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.45, green: 0.38, blue: 0.33, alpha: 1), roughness: 0.84, textureName: "scenery_steel"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.50, blue: 0.44, alpha: 1), roughness: 0.82, textureName: "scenery_steel"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.40, green: 0.46, blue: 0.50, alpha: 1), metallic: 0.12, roughness: 0.71, textureName: "scenery_steel")
     ]
     private let buildingMaterials = [
-        RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.89),
-        RailwaySceneWorld.pbr(UIColor(red: 0.54, green: 0.60, blue: 0.59, alpha: 1), roughness: 0.86),
-        RailwaySceneWorld.pbr(UIColor(red: 0.67, green: 0.57, blue: 0.49, alpha: 1), roughness: 0.91),
-        RailwaySceneWorld.pbr(UIColor(red: 0.58, green: 0.57, blue: 0.53, alpha: 1), roughness: 0.88),
-        RailwaySceneWorld.pbr(UIColor(red: 0.57, green: 0.63, blue: 0.65, alpha: 1), metallic: 0.06, roughness: 0.7)
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.89, textureName: "scenery_brick_warm"),
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.86, textureName: "scenery_brick_cool"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.82, blue: 0.76, alpha: 1), roughness: 0.91, textureName: "scenery_brick_warm"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.95, green: 0.90, blue: 0.82, alpha: 1), roughness: 0.88, textureName: "scenery_concrete"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.95, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.7, textureName: "scenery_brick_cool")
     ]
     private let foliageMaterials = [
-        RailwaySceneWorld.pbr(UIColor(red: 0.18, green: 0.31, blue: 0.20, alpha: 1), roughness: 0.98),
-        RailwaySceneWorld.pbr(UIColor(red: 0.28, green: 0.36, blue: 0.21, alpha: 1), roughness: 0.98),
-        RailwaySceneWorld.pbr(UIColor(red: 0.22, green: 0.32, blue: 0.27, alpha: 1), roughness: 0.98)
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.75, green: 0.90, blue: 0.75, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 1.0, blue: 0.85, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.80, green: 0.95, blue: 0.88, alpha: 1), roughness: 0.98, textureName: "scenery_foliage")
     ]
 
     func prepare(
@@ -743,6 +743,53 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     ) {
         let distance = Float(route.distanceM)
         addSurfaceBox(parent: world, name: "formation-ground", size: SIMD3<Float>(1_400, 0.38, distance + 100), position: SIMD3<Float>(0, -0.28, -distance / 2), color: UIColor(red: 0.24, green: 0.28, blue: 0.24, alpha: 1), roughness: 1)
+
+        // Distant mountain backdrop planes repeated along the line, so the
+        // horizon is never empty (BVE-style background).
+        var backdropMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_mountains")
+        backdropMaterial.faceCulling = .none
+        let backdropSegment: Float = 4_000
+        let backdropCount = max(1, Int((distance / backdropSegment).rounded(.up)))
+        for side in [-1, 1] {
+            for i in 0..<backdropCount {
+                addBox(parent: world, name: "backdrop-mountains-\(side)-\(i)",
+                       size: SIMD3<Float>(1, 110, backdropSegment),
+                       position: SIMD3<Float>(Float(side) * 680, 40, -backdropSegment * (Float(i) + 0.5)),
+                       material: backdropMaterial)
+            }
+        }
+
+        // Photographic ground apron following the line (grass texture at
+        // real-world scale) over the flat far slab.
+        if let apron = ribbonEntity(name: "ground-apron", width: 46, y: -0.04, tileLength: 12,
+                                    offsets: [Float](repeating: 0, count: samples.count),
+                                    material: Self.texturedPBR(.white, roughness: 1, textureName: "scenery_grass")) {
+            world.addChild(apron)
+        }
+
+        // One-piece trackbed ribbons (rails + sleepers + ballast in a
+        // single texture whose rails sit at the exact gauge) per track.
+        func offsetsFor(sample: RouteSample) -> [Float] {
+            let isMainlineSection = travelDirection == .up ? sample.distanceM < 60_000 : sample.distanceM >= 8_000
+            let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
+            return hasPassingTrack ? [-2.1, 2.1] : [travelDirection == .up ? -2.1 : 2.1]
+        }
+        var trackOffsetsSeen: [Float] = []
+        for sample in samples {
+            for o in offsetsFor(sample: sample) where !trackOffsetsSeen.contains(o) {
+                trackOffsetsSeen.append(o)
+            }
+        }
+        let trackbedMaterial = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_trackbed")
+        for offset in trackOffsetsSeen {
+            let offsets = samples.map { sample -> Float in
+                let available = offsetsFor(sample: sample)
+                return available.contains(offset) ? offset : available[0]
+            }
+            if let ribbon = ribbonEntity(name: "trackbed-\(offset)", width: 4.6, y: 0.18, tileLength: 5, offsets: offsets, material: trackbedMaterial) {
+                world.addChild(ribbon)
+            }
+        }
 
         for index in samples.indices {
             let sample = samples[index]
@@ -1703,6 +1750,62 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         material.metallic = .init(floatLiteral: metallic)
         material.roughness = .init(floatLiteral: roughness)
         return material
+    }
+
+    /// Photographic-texture material: the bundled scenery texture carries
+    /// the surface detail and the color acts as a multiply tint. Falls back
+    /// to the flat color when the texture cannot be loaded.
+    static func texturedPBR(_ color: UIColor, metallic: Float = 0.0, roughness: Float, textureName: String) -> PhysicallyBasedMaterial {
+        var material = PhysicallyBasedMaterial()
+        if let texture = SceneTextureProvider.texture(named: textureName) {
+            material.baseColor = .init(tint: color, texture: texture)
+        } else {
+            material.baseColor = .init(tint: color, texture: nil)
+        }
+        material.metallic = .init(floatLiteral: metallic)
+        material.roughness = .init(floatLiteral: roughness)
+        return material
+    }
+
+    /// A textured strip that follows the route samples. The V coordinate
+    /// runs along the line in tileLength-metre repeats, so the texture
+    /// keeps its real-world scale over any distance (BVE-style trackbed
+    /// and ground aprons without UV stretching).
+    private func ribbonEntity(name: String, width: Float, y: Float, tileLength: Float, offsets: [Float], material: PhysicallyBasedMaterial) -> ModelEntity? {
+        guard offsets.count == samples.count, samples.count > 1 else { return nil }
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+        positions.reserveCapacity(samples.count * 2)
+        for (i, sample) in samples.enumerated() {
+            let lateral = offsets[i]
+            let cx = sample.x + lateral * cos(sample.heading)
+            let cz = sample.z - lateral * sin(sample.heading)
+            let rx = cos(sample.heading)
+            let rz = -sin(sample.heading)
+            let half = width / 2
+            positions.append(SIMD3<Float>(cx - rx * half, y, cz - rz * half))
+            positions.append(SIMD3<Float>(cx + rx * half, y, cz + rz * half))
+            normals.append(SIMD3<Float>(0, 1, 0))
+            normals.append(SIMD3<Float>(0, 1, 0))
+            let v = Float(sample.distanceM) / tileLength
+            uvs.append(SIMD2<Float>(0, v))
+            uvs.append(SIMD2<Float>(1, v))
+            if i > 0 {
+                let base = UInt32((i - 1) * 2)
+                indices.append(contentsOf: [base, base + 1, base + 2, base + 1, base + 3, base + 2])
+            }
+        }
+        var descriptor = MeshDescriptor(name: name)
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+        descriptor.primitives = .triangles(indices)
+        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
+        var material = material
+        material.faceCulling = .none
+        return ModelEntity(mesh: mesh, materials: [material])
     }
 }
 
