@@ -92,7 +92,9 @@ struct ContentView: View {
                     cabDesk: model.selectedVehicleProfile.cabDesk,
                     stationModelPlacements: generatedStationModelPlacements,
                     nextStopName: nextStopName,
-                    distanceToNextStopM: distanceToNextStopM
+                    distanceToNextStopM: distanceToNextStopM,
+                    signalPositionM: model.tracksideSignalReading?.blockStartM,
+                    signalAspect: model.tracksideSignalReading?.aspect
                 )
                 // Full-bleed 3D: the cab interior in the scene is the desk;
                 // no SwiftUI panel overlays the lower screen any more.
@@ -193,7 +195,9 @@ struct ContentView: View {
                         cabAuxButton(symbol: "speaker.wave.3.fill", label: "警笛") { model.playHorn() }
                         cabAuxButton(symbol: "checkmark.shield.fill", label: "ATS確認") { _ = model.acknowledgeATS() }
                         Button {
-                            model.setEmergencyBrake(!model.controls.emergencyBrake)
+                            let engaging = !model.controls.emergencyBrake
+                            model.setEmergencyBrake(engaging)
+                            NotchHaptic.emergencyBrake(engaged: engaging)
                         } label: {
                             VStack(spacing: 2) {
                                 Image(systemName: "octagon.fill").font(.system(size: 17, weight: .semibold))
@@ -1174,8 +1178,43 @@ private struct CombinedNotchLever: View {
     private func select(_ proposedValue: Int) {
         let next = min(max(proposedValue, -powerMaximum), brakeMaximum)
         guard next != value else { return }
-        UISelectionFeedbackGenerator().selectionChanged()
+        NotchHaptic.notchChanged(to: next, brakeMaximum: brakeMaximum)
         onChange(next)
+    }
+}
+
+/// Haptic feedback for the driving controls. Generators are kept alive so
+/// `prepare()` actually warms the Taptic Engine between detents; a fresh
+/// generator per tap drops or weakens most clicks on real hardware.
+/// Ordinary notches get the light selection tick, the neutral detent a
+/// firmer medium thunk, and full service brake / emergency a heavy one,
+/// roughly matching the feel of a real master controller.
+private enum NotchHaptic {
+    static let selection = UISelectionFeedbackGenerator()
+    static let medium = UIImpactFeedbackGenerator(style: .medium)
+    static let heavy = UIImpactFeedbackGenerator(style: .heavy)
+
+    static func notchChanged(to value: Int, brakeMaximum: Int) {
+        if value == 0 {
+            medium.impactOccurred()
+            medium.prepare()
+        } else if value == brakeMaximum {
+            heavy.impactOccurred()
+            heavy.prepare()
+        } else {
+            selection.selectionChanged()
+            selection.prepare()
+        }
+    }
+
+    static func emergencyBrake(engaged: Bool) {
+        if engaged {
+            heavy.impactOccurred()
+        } else {
+            medium.impactOccurred()
+        }
+        heavy.prepare()
+        medium.prepare()
     }
 }
 
