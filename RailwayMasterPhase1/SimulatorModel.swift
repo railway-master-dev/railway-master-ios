@@ -114,6 +114,13 @@ final class SimulatorModel: ObservableObject {
         )
     }
 
+    /// The reading the lineside signal ahead should display, with the
+    /// block start chainage where that signal stands. The 3D scene uses
+    /// this to light the matching trackside signal.
+    var tracksideSignalReading: BlockSignalReading? {
+        latestOperationsSnapshot?.signalReading
+    }
+
     var gameModeSnapshot: GameModeSimulationSnapshot? {
         guard !activeStops.isEmpty else { return nil }
         let context = gameModeContext
@@ -205,6 +212,14 @@ final class SimulatorModel: ObservableObject {
     private var playedChopperStartBuzzer = false
     private var stationPatternAlarmStopID: String?
     private var doorWarningStopID: String?
+
+    /// A door closure held back until the recorded door chime has finished
+    /// (resistance-control stock: chime first, then the doors move).
+    private struct PendingDoorClose {
+        let state: GameModeDoorState
+        let applyAt: Double
+    }
+    private var pendingDoorClose: PendingDoorClose?
     private var trackImpactTracker = FictionalTrackImpactTracker(carCount: 6)
     private var lastCrossingLandmarkID: String?
     private var lastBridgeLandmarkID: String?
@@ -309,6 +324,7 @@ final class SimulatorModel: ObservableObject {
             simulationTime += fixedStep
             simulationTick(dt: fixedStep)
         }
+        applyPendingDoorCloseIfDue()
         refreshPublishedTelemetry()
         if let latestOperationsSnapshot { operationsSnapshot = latestOperationsSnapshot }
         let waitingForScheduledDeparture = timetableDepartureRemainingSeconds > 0 && engine.positionM <= 0.5
@@ -1383,9 +1399,48 @@ final class SimulatorModel: ObservableObject {
     func setGameModeSession(_ session: GameModeSession?) {
         gameModeSession = session
         if session == nil {
+            pendingDoorClose = nil
             gameModeDoorState = .closed
             gameModeHostNotice = nil
         }
+    }
+
+    /// Recorded door sound bundled for the selected control family.
+    /// The resistance family shares the chopper recordings (project
+    /// decision, 2026-11-07); VVVF families use the 223-series
+    /// recordings. Nil means no recording is bundled for that family.
+    private func bundledDoorSampleName(open: Bool) -> String? {
+        switch selectedVehicleProfile.soundProfile {
+        case .fieldChopperDC, .rheostaticDC:
+            if open { return "door_open_chopper" }
+            return "door_close_chopper"
+        case .vvvfGTO, .vvvfIGBT, .vvvfIGBTVariableCarrier, .vvvfSiC:
+            if open { return "door_open_vvvf" }
+            return "door_close_vvvf"
+        }
+    }
+
+    /// Plays the recorded door sound for the selected vehicle when one
+    /// is bundled, falling back to the synthesized door cue.
+    private func playDoorSound(open: Bool) {
+        if let name = bundledDoorSampleName(open: open),
+           audio.playBundledSample(named: name) != nil {
+            return
+        }
+        audio.playDoor(open: open)
+    }
+
+    /// Applies a door closure that was held back until the recorded door
+    /// chime finished playing.
+    private func applyPendingDoorCloseIfDue() {
+        guard let pending = pendingDoorClose, simulationTime >= pending.applyAt else { return }
+        pendingDoorClose = nil
+        let wasOpen = gameModeDoorState.isOpen
+        gameModeDoorState = pending.state
+        if wasOpen {
+            audio.playDoor(open: false)
+        }
+        gameModeHostNotice = "架空ゲームのドア状態を「\(pending.state.rawValue)」に更新しました。物理モデルのドアではありません。"
     }
 
     func handleGameModeHostEffects(_ effects: [GameModeHostEffect]) {
@@ -1393,13 +1448,29 @@ final class SimulatorModel: ObservableObject {
             switch effect {
             case .setGameDoorState(let state):
                 let wasOpen = gameModeDoorState.isOpen
-                gameModeDoorState = state
-                if state.isOpen && !wasOpen {
-                    audio.playDoor(open: true)
-                } else if wasOpen && !state.isOpen {
-                    audio.playDoor(open: false)
+                if state.isOpen {
+                    // Opening cancels any chime-timed closure in progress.
+                    pendingDoorClose = nil
+                    gameModeDoorState = state
+                    if !wasOpen {
+                        playDoorSound(open: true)
+                    }
+                    gameModeHostNotice = "架空ゲームのドア状態を「\(state.rawValue)」に更新しました。物理モデルのドアではありません。"
+                } else if wasOpen, pendingDoorClose == nil,
+                          selectedVehicleProfile.soundProfile == .rheostaticDC,
+                          let chimeSeconds = audio.playBundledSample(named: "door_chime_resistance") {
+                    // Resistance-control stock: the recorded door chime
+                    // plays first and the doors close only after it ends
+                    // (applied by applyPendingDoorCloseIfDue).
+                    pendingDoorClose = PendingDoorClose(state: state, applyAt: simulationTime + chimeSeconds)
+                    gameModeHostNotice = "ドアチャイム再生中です。鳴り終わってから扉が閉まります。"
+                } else if pendingDoorClose == nil {
+                    gameModeDoorState = state
+                    if wasOpen {
+                        playDoorSound(open: false)
+                    }
+                    gameModeHostNotice = "架空ゲームのドア状態を「\(state.rawValue)」に更新しました。物理モデルのドアではありません。"
                 }
-                gameModeHostNotice = "架空ゲームのドア状態を「\(state.rawValue)」に更新しました。物理モデルのドアではありません。"
             case .playGameAnnouncement(let announcementID):
                 if announcementID.localizedCaseInsensitiveContains("arrival") {
                     announceStop()
