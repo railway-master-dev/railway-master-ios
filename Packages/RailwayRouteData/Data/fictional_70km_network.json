@@ -14973,7 +14973,16 @@
           "main_line",
           "depot_spur"
         ],
-        "notes": "S01に接続する架空車両基地。2 km車庫線に属するPLACEHOLDER。"
+        "notes": {
+          "value": "S01に接続する架空車両基地。2 km車庫線に属するPLACEHOLDER。",
+          "status": "PLACEHOLDER",
+          "sourceIDs": [
+            "fictional_60_8_2_design_v2"
+          ],
+          "uncertainty": null,
+          "confidence": "MEDIUM",
+          "note": "架空シミュレーター用の設計値。実在路線・実測・運転規則を示さない。"
+        }
       }
     ],
     "timetables": [
