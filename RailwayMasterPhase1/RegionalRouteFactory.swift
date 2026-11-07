@@ -184,11 +184,17 @@ enum RegionalRouteFactory {
             throw RegionalRouteFactoryError.invalidStopSequence
         }
 
+        // Section generation judges station proximity in the up-direction
+        // layout; the reversal for the down direction happens afterwards.
+        // Passing already-reversed stops would skew the near-station speed cap.
+        let sectionStations = direction == .up
+            ? stops
+            : stops.map { RegionalRouteStop(stationID: $0.stationID, name: $0.name, positionM: routeLengthM - $0.positionM, trackID: $0.trackID) }
         let sections = makePlaceholderSections(
             lengthM: routeLengthM,
             direction: direction,
             variant: variant,
-            stations: stops,
+            stations: sectionStations,
             mainlineLengthM: mainlineLengthM,
             branchLengthM: branchLengthM,
             depotLengthM: depotLengthM,
