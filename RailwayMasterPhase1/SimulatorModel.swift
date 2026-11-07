@@ -270,7 +270,6 @@ final class SimulatorModel: ObservableObject {
         trafficEngine = trafficScenario.flatMap(Self.makeTrafficEngine(from:))
         trafficSnapshot = trafficEngine?.snapshot()
         atsSystem = try? EducationalATSConfirmation(acknowledgementTimeoutSeconds: 5)
-        rebuildProtectionSession()
         recorder = DrivingSessionRecorder(metadata: Self.makeSessionMetadata(route: trip?.profile ?? loadedRoute.profile))
         trainPhysicsTelemetry = loadedPhysics.telemetry
         stoppingDistanceEstimate = nil
@@ -281,6 +280,7 @@ final class SimulatorModel: ObservableObject {
             stoppingDistance: nil
         )
         dataValidationIssues = trip?.profile.validateData() ?? loadedRoute.issues
+        rebuildProtectionSession()
         rebuildStopScoringSession()
         rebuildDoorProcedureScoringSession()
         incidentMaintenanceEngine = Self.makeIncidentMaintenanceEngine(seed: 0x5241494C)
@@ -2418,7 +2418,7 @@ final class SimulatorModel: ObservableObject {
                 zip(savedTrains, trustedTrains).allSatisfy { pair in
                     let savedTrain = pair.0
                     let trustedTrain = pair.1
-                    savedTrain.id == trustedTrain.id &&
+                    return savedTrain.id == trustedTrain.id &&
                     savedTrain.trackID == trustedTrain.trackID &&
                     savedTrain.maximumSpeedMps == trustedTrain.maximumSpeedMps &&
                     savedTrain.maximumAccelerationMps2 == trustedTrain.maximumAccelerationMps2 &&
@@ -2436,7 +2436,7 @@ final class SimulatorModel: ObservableObject {
                 return zip(ordered, ordered.dropFirst()).allSatisfy { pair in
                     let follower = pair.0
                     let leader = pair.1
-                    leader.positionM - leader.lengthM - follower.positionM >= schedule.minimumSeparationM - 1e-6
+                    return leader.positionM - leader.lengthM - follower.positionM >= schedule.minimumSeparationM - 1e-6
                 }
             }
             guard savedRouteDefinition == trustedRouteDefinition,
