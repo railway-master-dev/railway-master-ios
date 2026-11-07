@@ -24,6 +24,70 @@
 			A10000000000000000000062 /* door_close_chopper.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* door_close_chopper.wav */; };
 			A10000000000000000000063 /* door_open_vvvf.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000063 /* door_open_vvvf.wav */; };
 			A10000000000000000000064 /* door_close_vvvf.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000064 /* door_close_vvvf.wav */; };
+		A10000000000000000000065 /* motor_chopper_00.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000065 /* motor_chopper_00.wav */; };
+		A10000000000000000000066 /* motor_chopper_01.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000066 /* motor_chopper_01.wav */; };
+		A10000000000000000000067 /* motor_chopper_02.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000067 /* motor_chopper_02.wav */; };
+		A10000000000000000000068 /* motor_chopper_03.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000068 /* motor_chopper_03.wav */; };
+		A10000000000000000000069 /* motor_chopper_04.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000069 /* motor_chopper_04.wav */; };
+		A1000000000000000000006A /* motor_chopper_05.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000006A /* motor_chopper_05.wav */; };
+		A1000000000000000000006B /* motor_chopper_06.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000006B /* motor_chopper_06.wav */; };
+		A1000000000000000000006C /* motor_chopper_07.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000006C /* motor_chopper_07.wav */; };
+		A1000000000000000000006D /* motor_chopper_08.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000006D /* motor_chopper_08.wav */; };
+		A1000000000000000000006E /* motor_chopper_09.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000006E /* motor_chopper_09.wav */; };
+		A1000000000000000000006F /* motor_chopper_10.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000006F /* motor_chopper_10.wav */; };
+		A10000000000000000000070 /* motor_chopper_11.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000070 /* motor_chopper_11.wav */; };
+		A10000000000000000000071 /* motor_res_00.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000071 /* motor_res_00.wav */; };
+		A10000000000000000000072 /* motor_res_01.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000072 /* motor_res_01.wav */; };
+		A10000000000000000000073 /* motor_res_02.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000073 /* motor_res_02.wav */; };
+		A10000000000000000000074 /* motor_res_03.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000074 /* motor_res_03.wav */; };
+		A10000000000000000000075 /* motor_res_04.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000075 /* motor_res_04.wav */; };
+		A10000000000000000000076 /* motor_res_05.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000076 /* motor_res_05.wav */; };
+		A10000000000000000000077 /* motor_res_06.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000077 /* motor_res_06.wav */; };
+		A10000000000000000000078 /* motor_res_07.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000078 /* motor_res_07.wav */; };
+		A10000000000000000000079 /* motor_res_08.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000079 /* motor_res_08.wav */; };
+		A1000000000000000000007A /* motor_res_09.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007A /* motor_res_09.wav */; };
+		A1000000000000000000007B /* motor_res_10.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007B /* motor_res_10.wav */; };
+		A1000000000000000000007C /* motor_res_11.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007C /* motor_res_11.wav */; };
+		A1000000000000000000007D /* motor_res_12.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007D /* motor_res_12.wav */; };
+		A1000000000000000000007E /* motor_res_13.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007E /* motor_res_13.wav */; };
+		A1000000000000000000007F /* motor_res_14.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007F /* motor_res_14.wav */; };
+		A10000000000000000000080 /* motor_res_15.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000080 /* motor_res_15.wav */; };
+		A10000000000000000000081 /* motor_res_16.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000081 /* motor_res_16.wav */; };
+		A10000000000000000000082 /* motor_res_17.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000082 /* motor_res_17.wav */; };
+		A10000000000000000000083 /* motor_vvvf_00.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000083 /* motor_vvvf_00.wav */; };
+		A10000000000000000000084 /* motor_vvvf_01.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000084 /* motor_vvvf_01.wav */; };
+		A10000000000000000000085 /* motor_vvvf_02.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000085 /* motor_vvvf_02.wav */; };
+		A10000000000000000000086 /* motor_vvvf_03.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000086 /* motor_vvvf_03.wav */; };
+		A10000000000000000000087 /* motor_vvvf_04.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000087 /* motor_vvvf_04.wav */; };
+		A10000000000000000000088 /* motor_vvvf_05.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000088 /* motor_vvvf_05.wav */; };
+		A10000000000000000000089 /* motor_vvvf_06.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000089 /* motor_vvvf_06.wav */; };
+		A1000000000000000000008A /* motor_vvvf_07.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008A /* motor_vvvf_07.wav */; };
+		A1000000000000000000008B /* motor_vvvf_08.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008B /* motor_vvvf_08.wav */; };
+		A1000000000000000000008C /* motor_vvvf_09.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008C /* motor_vvvf_09.wav */; };
+		A1000000000000000000008D /* motor_vvvf_10.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008D /* motor_vvvf_10.wav */; };
+		A1000000000000000000008E /* motor_vvvf_11.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008E /* motor_vvvf_11.wav */; };
+		A1000000000000000000008F /* motor_vvvf_12.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008F /* motor_vvvf_12.wav */; };
+		A10000000000000000000090 /* motor_vvvf_13.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000090 /* motor_vvvf_13.wav */; };
+		A10000000000000000000091 /* motor_vvvf_14.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000091 /* motor_vvvf_14.wav */; };
+		A10000000000000000000092 /* motor_vvvf_15.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000092 /* motor_vvvf_15.wav */; };
+		A10000000000000000000093 /* motor_vvvf_16.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000093 /* motor_vvvf_16.wav */; };
+		A10000000000000000000094 /* motor_vvvf_17.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000094 /* motor_vvvf_17.wav */; };
+		A10000000000000000000095 /* motor_vvvf_18.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000095 /* motor_vvvf_18.wav */; };
+		A10000000000000000000096 /* motor_vvvf_19.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000096 /* motor_vvvf_19.wav */; };
+		A10000000000000000000097 /* motor_vvvf_20.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000097 /* motor_vvvf_20.wav */; };
+		A10000000000000000000098 /* motor_vvvf_21.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000098 /* motor_vvvf_21.wav */; };
+		A10000000000000000000099 /* motor_vvvf_22.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000099 /* motor_vvvf_22.wav */; };
+		A1000000000000000000009A /* motor_vvvf_26.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009A /* motor_vvvf_26.wav */; };
+		A1000000000000000000009B /* motor_vvvf_27.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009B /* motor_vvvf_27.wav */; };
+		A1000000000000000000009C /* motor_vvvf_28.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009C /* motor_vvvf_28.wav */; };
+		A1000000000000000000009D /* run_ballast.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009D /* run_ballast.wav */; };
+		A1000000000000000000009E /* run_ballast25.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009E /* run_ballast25.wav */; };
+		A1000000000000000000009F /* run_bridge.wav in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009F /* run_bridge.wav */; };
+		A100000000000000000000A0 /* run_slab.wav in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A0 /* run_slab.wav */; };
+		A100000000000000000000A1 /* run_tunnel.wav in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A1 /* run_tunnel.wav */; };
+		A100000000000000000000A2 /* vvvf_run_loop_9301.wav in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A2 /* vvvf_run_loop_9301.wav */; };
+		A100000000000000000000A3 /* motor_curves.json in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A3 /* motor_curves.json */; };
+		A100000000000000000000A4 /* SampledMotorSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A4 /* SampledMotorSound.swift */; };
 			A10000000000000000000010 /* ServiceOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* ServiceOperations.swift */; };
 			A10000000000000000000011 /* FictionalOperationsPlan.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* FictionalOperationsPlan.json */; };
 			A10000000000000000000012 /* ServicePlanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* ServicePlanSheet.swift */; };
@@ -132,6 +196,70 @@ A1000000000000000000005C /* ProtectionSystems test dependency in Test Frameworks
 			A20000000000000000000062 /* door_close_chopper.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/door_close_chopper.wav; sourceTree = "<group>"; };
 			A20000000000000000000063 /* door_open_vvvf.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/door_open_vvvf.wav; sourceTree = "<group>"; };
 			A20000000000000000000064 /* door_close_vvvf.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/door_close_vvvf.wav; sourceTree = "<group>"; };
+		A20000000000000000000065 /* motor_chopper_00.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_00.wav; sourceTree = "<group>"; };
+		A20000000000000000000066 /* motor_chopper_01.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_01.wav; sourceTree = "<group>"; };
+		A20000000000000000000067 /* motor_chopper_02.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_02.wav; sourceTree = "<group>"; };
+		A20000000000000000000068 /* motor_chopper_03.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_03.wav; sourceTree = "<group>"; };
+		A20000000000000000000069 /* motor_chopper_04.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_04.wav; sourceTree = "<group>"; };
+		A2000000000000000000006A /* motor_chopper_05.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_05.wav; sourceTree = "<group>"; };
+		A2000000000000000000006B /* motor_chopper_06.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_06.wav; sourceTree = "<group>"; };
+		A2000000000000000000006C /* motor_chopper_07.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_07.wav; sourceTree = "<group>"; };
+		A2000000000000000000006D /* motor_chopper_08.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_08.wav; sourceTree = "<group>"; };
+		A2000000000000000000006E /* motor_chopper_09.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_09.wav; sourceTree = "<group>"; };
+		A2000000000000000000006F /* motor_chopper_10.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_10.wav; sourceTree = "<group>"; };
+		A20000000000000000000070 /* motor_chopper_11.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_chopper_11.wav; sourceTree = "<group>"; };
+		A20000000000000000000071 /* motor_res_00.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_00.wav; sourceTree = "<group>"; };
+		A20000000000000000000072 /* motor_res_01.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_01.wav; sourceTree = "<group>"; };
+		A20000000000000000000073 /* motor_res_02.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_02.wav; sourceTree = "<group>"; };
+		A20000000000000000000074 /* motor_res_03.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_03.wav; sourceTree = "<group>"; };
+		A20000000000000000000075 /* motor_res_04.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_04.wav; sourceTree = "<group>"; };
+		A20000000000000000000076 /* motor_res_05.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_05.wav; sourceTree = "<group>"; };
+		A20000000000000000000077 /* motor_res_06.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_06.wav; sourceTree = "<group>"; };
+		A20000000000000000000078 /* motor_res_07.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_07.wav; sourceTree = "<group>"; };
+		A20000000000000000000079 /* motor_res_08.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_08.wav; sourceTree = "<group>"; };
+		A2000000000000000000007A /* motor_res_09.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_09.wav; sourceTree = "<group>"; };
+		A2000000000000000000007B /* motor_res_10.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_10.wav; sourceTree = "<group>"; };
+		A2000000000000000000007C /* motor_res_11.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_11.wav; sourceTree = "<group>"; };
+		A2000000000000000000007D /* motor_res_12.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_12.wav; sourceTree = "<group>"; };
+		A2000000000000000000007E /* motor_res_13.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_13.wav; sourceTree = "<group>"; };
+		A2000000000000000000007F /* motor_res_14.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_14.wav; sourceTree = "<group>"; };
+		A20000000000000000000080 /* motor_res_15.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_15.wav; sourceTree = "<group>"; };
+		A20000000000000000000081 /* motor_res_16.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_16.wav; sourceTree = "<group>"; };
+		A20000000000000000000082 /* motor_res_17.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_res_17.wav; sourceTree = "<group>"; };
+		A20000000000000000000083 /* motor_vvvf_00.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_00.wav; sourceTree = "<group>"; };
+		A20000000000000000000084 /* motor_vvvf_01.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_01.wav; sourceTree = "<group>"; };
+		A20000000000000000000085 /* motor_vvvf_02.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_02.wav; sourceTree = "<group>"; };
+		A20000000000000000000086 /* motor_vvvf_03.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_03.wav; sourceTree = "<group>"; };
+		A20000000000000000000087 /* motor_vvvf_04.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_04.wav; sourceTree = "<group>"; };
+		A20000000000000000000088 /* motor_vvvf_05.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_05.wav; sourceTree = "<group>"; };
+		A20000000000000000000089 /* motor_vvvf_06.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_06.wav; sourceTree = "<group>"; };
+		A2000000000000000000008A /* motor_vvvf_07.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_07.wav; sourceTree = "<group>"; };
+		A2000000000000000000008B /* motor_vvvf_08.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_08.wav; sourceTree = "<group>"; };
+		A2000000000000000000008C /* motor_vvvf_09.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_09.wav; sourceTree = "<group>"; };
+		A2000000000000000000008D /* motor_vvvf_10.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_10.wav; sourceTree = "<group>"; };
+		A2000000000000000000008E /* motor_vvvf_11.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_11.wav; sourceTree = "<group>"; };
+		A2000000000000000000008F /* motor_vvvf_12.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_12.wav; sourceTree = "<group>"; };
+		A20000000000000000000090 /* motor_vvvf_13.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_13.wav; sourceTree = "<group>"; };
+		A20000000000000000000091 /* motor_vvvf_14.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_14.wav; sourceTree = "<group>"; };
+		A20000000000000000000092 /* motor_vvvf_15.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_15.wav; sourceTree = "<group>"; };
+		A20000000000000000000093 /* motor_vvvf_16.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_16.wav; sourceTree = "<group>"; };
+		A20000000000000000000094 /* motor_vvvf_17.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_17.wav; sourceTree = "<group>"; };
+		A20000000000000000000095 /* motor_vvvf_18.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_18.wav; sourceTree = "<group>"; };
+		A20000000000000000000096 /* motor_vvvf_19.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_19.wav; sourceTree = "<group>"; };
+		A20000000000000000000097 /* motor_vvvf_20.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_20.wav; sourceTree = "<group>"; };
+		A20000000000000000000098 /* motor_vvvf_21.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_21.wav; sourceTree = "<group>"; };
+		A20000000000000000000099 /* motor_vvvf_22.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_22.wav; sourceTree = "<group>"; };
+		A2000000000000000000009A /* motor_vvvf_26.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_26.wav; sourceTree = "<group>"; };
+		A2000000000000000000009B /* motor_vvvf_27.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_27.wav; sourceTree = "<group>"; };
+		A2000000000000000000009C /* motor_vvvf_28.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/motor_vvvf_28.wav; sourceTree = "<group>"; };
+		A2000000000000000000009D /* run_ballast.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/run_ballast.wav; sourceTree = "<group>"; };
+		A2000000000000000000009E /* run_ballast25.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/run_ballast25.wav; sourceTree = "<group>"; };
+		A2000000000000000000009F /* run_bridge.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/run_bridge.wav; sourceTree = "<group>"; };
+		A200000000000000000000A0 /* run_slab.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/run_slab.wav; sourceTree = "<group>"; };
+		A200000000000000000000A1 /* run_tunnel.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/run_tunnel.wav; sourceTree = "<group>"; };
+		A200000000000000000000A2 /* vvvf_run_loop_9301.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/vvvf_run_loop_9301.wav; sourceTree = "<group>"; };
+		A200000000000000000000A3 /* motor_curves.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/motor_curves.json; sourceTree = "<group>"; };
+		A200000000000000000000A4 /* SampledMotorSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampledMotorSound.swift; sourceTree = "<group>"; };
 			A20000000000000000000019 /* ServiceOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceOperations.swift; sourceTree = "<group>"; };
 			A2000000000000000000001A /* FictionalOperationsPlan.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/FictionalOperationsPlan.json; sourceTree = "<group>"; };
 			A2000000000000000000001B /* ServicePlanSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicePlanSheet.swift; sourceTree = "<group>"; };
@@ -214,9 +342,73 @@ A20000000000000000000037 /* GameSystemsIntegrationTests.swift */ = {isa = PBXFil
 										A20000000000000000000062 /* door_close_chopper.wav */,
 										A20000000000000000000063 /* door_open_vvvf.wav */,
 										A20000000000000000000064 /* door_close_vvvf.wav */,
+										A20000000000000000000065 /* motor_chopper_00.wav */,
+										A20000000000000000000066 /* motor_chopper_01.wav */,
+										A20000000000000000000067 /* motor_chopper_02.wav */,
+										A20000000000000000000068 /* motor_chopper_03.wav */,
+										A20000000000000000000069 /* motor_chopper_04.wav */,
+										A2000000000000000000006A /* motor_chopper_05.wav */,
+										A2000000000000000000006B /* motor_chopper_06.wav */,
+										A2000000000000000000006C /* motor_chopper_07.wav */,
+										A2000000000000000000006D /* motor_chopper_08.wav */,
+										A2000000000000000000006E /* motor_chopper_09.wav */,
+										A2000000000000000000006F /* motor_chopper_10.wav */,
+										A20000000000000000000070 /* motor_chopper_11.wav */,
+										A20000000000000000000071 /* motor_res_00.wav */,
+										A20000000000000000000072 /* motor_res_01.wav */,
+										A20000000000000000000073 /* motor_res_02.wav */,
+										A20000000000000000000074 /* motor_res_03.wav */,
+										A20000000000000000000075 /* motor_res_04.wav */,
+										A20000000000000000000076 /* motor_res_05.wav */,
+										A20000000000000000000077 /* motor_res_06.wav */,
+										A20000000000000000000078 /* motor_res_07.wav */,
+										A20000000000000000000079 /* motor_res_08.wav */,
+										A2000000000000000000007A /* motor_res_09.wav */,
+										A2000000000000000000007B /* motor_res_10.wav */,
+										A2000000000000000000007C /* motor_res_11.wav */,
+										A2000000000000000000007D /* motor_res_12.wav */,
+										A2000000000000000000007E /* motor_res_13.wav */,
+										A2000000000000000000007F /* motor_res_14.wav */,
+										A20000000000000000000080 /* motor_res_15.wav */,
+										A20000000000000000000081 /* motor_res_16.wav */,
+										A20000000000000000000082 /* motor_res_17.wav */,
+										A20000000000000000000083 /* motor_vvvf_00.wav */,
+										A20000000000000000000084 /* motor_vvvf_01.wav */,
+										A20000000000000000000085 /* motor_vvvf_02.wav */,
+										A20000000000000000000086 /* motor_vvvf_03.wav */,
+										A20000000000000000000087 /* motor_vvvf_04.wav */,
+										A20000000000000000000088 /* motor_vvvf_05.wav */,
+										A20000000000000000000089 /* motor_vvvf_06.wav */,
+										A2000000000000000000008A /* motor_vvvf_07.wav */,
+										A2000000000000000000008B /* motor_vvvf_08.wav */,
+										A2000000000000000000008C /* motor_vvvf_09.wav */,
+										A2000000000000000000008D /* motor_vvvf_10.wav */,
+										A2000000000000000000008E /* motor_vvvf_11.wav */,
+										A2000000000000000000008F /* motor_vvvf_12.wav */,
+										A20000000000000000000090 /* motor_vvvf_13.wav */,
+										A20000000000000000000091 /* motor_vvvf_14.wav */,
+										A20000000000000000000092 /* motor_vvvf_15.wav */,
+										A20000000000000000000093 /* motor_vvvf_16.wav */,
+										A20000000000000000000094 /* motor_vvvf_17.wav */,
+										A20000000000000000000095 /* motor_vvvf_18.wav */,
+										A20000000000000000000096 /* motor_vvvf_19.wav */,
+										A20000000000000000000097 /* motor_vvvf_20.wav */,
+										A20000000000000000000098 /* motor_vvvf_21.wav */,
+										A20000000000000000000099 /* motor_vvvf_22.wav */,
+										A2000000000000000000009A /* motor_vvvf_26.wav */,
+										A2000000000000000000009B /* motor_vvvf_27.wav */,
+										A2000000000000000000009C /* motor_vvvf_28.wav */,
+										A2000000000000000000009D /* run_ballast.wav */,
+										A2000000000000000000009E /* run_ballast25.wav */,
+										A2000000000000000000009F /* run_bridge.wav */,
+										A200000000000000000000A0 /* run_slab.wav */,
+										A200000000000000000000A1 /* run_tunnel.wav */,
+										A200000000000000000000A2 /* vvvf_run_loop_9301.wav */,
+										A200000000000000000000A3 /* motor_curves.json */,
 							A2000000000000000000001A /* FictionalOperationsPlan.json */,
 					A2000000000000000000001C /* AudioModels.swift */,
 					A2000000000000000000001D /* ProceduralAudioDSP.swift */,
+					A200000000000000000000A4 /* SampledMotorSound.swift */,
 					A2000000000000000000001E /* DepartureMelodyCatalog.swift */,
 					A2000000000000000000001F /* TrafficNetworkSheet.swift */,
 					A20000000000000000000020 /* RegionalNetworkIntegration.swift */,
@@ -301,12 +493,12 @@ A20000000000000000000036 /* TrainPhysicsDetailsSheet.swift */,
 /* End PBXNativeTarget section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A60000000000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* RailwayMasterPhase1App.swift in Sources */, A10000000000000000000002 /* ContentView.swift in Sources */, A10000000000000000000003 /* TrainPhysics.swift in Sources */, A10000000000000000000004 /* SimulatorModel.swift in Sources */, A10000000000000000000007 /* RailwaySceneView.swift in Sources */, A1000000000000000000000A /* RouteData.swift in Sources */, A1000000000000000000000B /* OperationsSystem.swift in Sources */, A1000000000000000000000C /* RailwayAudioEngine.swift in Sources */, A1000000000000000000000D /* DrivingSession.swift in Sources */, A1000000000000000000000E /* RoutePackage.swift in Sources */, A10000000000000000000010 /* ServiceOperations.swift in Sources */, A10000000000000000000012 /* ServicePlanSheet.swift in Sources */, A10000000000000000000013 /* AudioModels.swift in Sources */, A10000000000000000000014 /* ProceduralAudioDSP.swift in Sources */, A10000000000000000000015 /* DepartureMelodyCatalog.swift in Sources */, A10000000000000000000016 /* TrafficNetworkSheet.swift in Sources */, A10000000000000000000017 /* RegionalNetworkIntegration.swift in Sources */, A10000000000000000000018 /* RegionalNetworkAuditSheet.swift in Sources */, A10000000000000000000019 /* SoundControlSheet.swift in Sources */, A1000000000000000000001B /* SessionResultSheet.swift in Sources */, A1000000000000000000001C /* RailwayTractionSoundProfile.swift in Sources */, A10000000000000000000027 /* EnvironmentQualitySheet.swift in Sources */, A10000000000000000000028 /* FictionalVehicleProfile.swift in Sources */, A10000000000000000000029 /* MaintenanceGameplayCoordinator.swift in Sources */, A1000000000000000000002A /* MaintenanceGameplaySheet.swift in Sources */, A1000000000000000000002B /* OperationsGameplayCoordinator.swift in Sources */, A1000000000000000000002C /* OperationsGameplaySheet.swift in Sources */, A1000000000000000000002D /* RailwayVehicleSceneAdapter.swift in Sources */, A1000000000000000000002E /* RegionalRouteFactory.swift in Sources */, A1000000000000000000002F /* RegionalRouteSelectionSheet.swift in Sources */, A10000000000000000000030 /* VehicleLibrarySheet.swift in Sources */, A10000000000000000000031 /* VehicleProfileSheet.swift in Sources */, A10000000000000000000039 /* StopScoringRouteAdapter.swift in Sources */, A1000000000000000000003A /* StopScoringSheet.swift in Sources */, A1000000000000000000003F /* RegionalTimetableAdapter.swift in Sources */, A10000000000000000000040 /* TimetableControlSheet.swift in Sources */, A10000000000000000000041 /* TrainPhysicsProfileAdapter.swift in Sources */, A10000000000000000000042 /* TrainPhysicsDetailsSheet.swift in Sources */, A10000000000000000000046 /* GameModeSessionSheet.swift in Sources */, A10000000000000000000047 /* RegionalGameModeAdapter.swift in Sources */, A10000000000000000000048 /* SessionSaveSheet.swift in Sources */, A10000000000000000000049 /* SimulatorRuntimeSnapshot.swift in Sources */, A1000000000000000000004A /* DoorProcedureScoringRouteAdapter.swift in Sources */, A1000000000000000000004B /* DoorProcedureScoringSheet.swift in Sources */, A1000000000000000000004F /* ScenarioProgressSheet.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000003 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001 /* RailwayMasterPhase1App.swift in Sources */, A10000000000000000000002 /* ContentView.swift in Sources */, A10000000000000000000003 /* TrainPhysics.swift in Sources */, A10000000000000000000004 /* SimulatorModel.swift in Sources */, A10000000000000000000007 /* RailwaySceneView.swift in Sources */, A1000000000000000000000A /* RouteData.swift in Sources */, A1000000000000000000000B /* OperationsSystem.swift in Sources */, A1000000000000000000000C /* RailwayAudioEngine.swift in Sources */, A1000000000000000000000D /* DrivingSession.swift in Sources */, A1000000000000000000000E /* RoutePackage.swift in Sources */, A10000000000000000000010 /* ServiceOperations.swift in Sources */, A10000000000000000000012 /* ServicePlanSheet.swift in Sources */, A10000000000000000000013 /* AudioModels.swift in Sources */, A10000000000000000000014 /* ProceduralAudioDSP.swift in Sources */, A10000000000000000000015 /* DepartureMelodyCatalog.swift in Sources */, A10000000000000000000016 /* TrafficNetworkSheet.swift in Sources */, A10000000000000000000017 /* RegionalNetworkIntegration.swift in Sources */, A10000000000000000000018 /* RegionalNetworkAuditSheet.swift in Sources */, A10000000000000000000019 /* SoundControlSheet.swift in Sources */, A1000000000000000000001B /* SessionResultSheet.swift in Sources */, A1000000000000000000001C /* RailwayTractionSoundProfile.swift in Sources */, A10000000000000000000027 /* EnvironmentQualitySheet.swift in Sources */, A10000000000000000000028 /* FictionalVehicleProfile.swift in Sources */, A10000000000000000000029 /* MaintenanceGameplayCoordinator.swift in Sources */, A1000000000000000000002A /* MaintenanceGameplaySheet.swift in Sources */, A1000000000000000000002B /* OperationsGameplayCoordinator.swift in Sources */, A1000000000000000000002C /* OperationsGameplaySheet.swift in Sources */, A1000000000000000000002D /* RailwayVehicleSceneAdapter.swift in Sources */, A1000000000000000000002E /* RegionalRouteFactory.swift in Sources */, A1000000000000000000002F /* RegionalRouteSelectionSheet.swift in Sources */, A10000000000000000000030 /* VehicleLibrarySheet.swift in Sources */, A10000000000000000000031 /* VehicleProfileSheet.swift in Sources */, A10000000000000000000039 /* StopScoringRouteAdapter.swift in Sources */, A1000000000000000000003A /* StopScoringSheet.swift in Sources */, A1000000000000000000003F /* RegionalTimetableAdapter.swift in Sources */, A10000000000000000000040 /* TimetableControlSheet.swift in Sources */, A10000000000000000000041 /* TrainPhysicsProfileAdapter.swift in Sources */, A10000000000000000000042 /* TrainPhysicsDetailsSheet.swift in Sources */, A10000000000000000000046 /* GameModeSessionSheet.swift in Sources */, A10000000000000000000047 /* RegionalGameModeAdapter.swift in Sources */, A10000000000000000000048 /* SessionSaveSheet.swift in Sources */, A10000000000000000000049 /* SimulatorRuntimeSnapshot.swift in Sources */, A1000000000000000000004A /* DoorProcedureScoringRouteAdapter.swift in Sources */, A1000000000000000000004B /* DoorProcedureScoringSheet.swift in Sources */, A1000000000000000000004F /* ScenarioProgressSheet.swift in Sources */, A100000000000000000000A4 /* SampledMotorSound.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 		A60000000000000000000005 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000005 /* TrainPhysicsTests.swift in Sources */, A1000000000000000000001A /* RegionalIntegrationTests.swift in Sources */, A10000000000000000000043 /* GameSystemsIntegrationTests.swift in Sources */, A10000000000000000000050 /* PackageIntegrationTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 	/* Begin PBXResourcesBuildPhase section */
-		A60000000000000000000004 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000F /* FictionalRegionalMainline.json in Resources */, A10000000000000000000011 /* FictionalOperationsPlan.json in Resources */, A1000000000000000000004C /* FictionalDoorProcedureScoring.json in Resources */, A10000000000000000000060 /* door_chime_resistance.wav in Resources */, A10000000000000000000061 /* door_open_chopper.wav in Resources */, A10000000000000000000062 /* door_close_chopper.wav in Resources */, A10000000000000000000063 /* door_open_vvvf.wav in Resources */, A10000000000000000000064 /* door_close_vvvf.wav in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000004 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000F /* FictionalRegionalMainline.json in Resources */, A10000000000000000000011 /* FictionalOperationsPlan.json in Resources */, A1000000000000000000004C /* FictionalDoorProcedureScoring.json in Resources */, A10000000000000000000060 /* door_chime_resistance.wav in Resources */, A10000000000000000000061 /* door_open_chopper.wav in Resources */, A10000000000000000000062 /* door_close_chopper.wav in Resources */, A10000000000000000000063 /* door_open_vvvf.wav in Resources */, A10000000000000000000064 /* door_close_vvvf.wav in Resources */, A10000000000000000000065 /* motor_chopper_00.wav in Resources */, A10000000000000000000066 /* motor_chopper_01.wav in Resources */, A10000000000000000000067 /* motor_chopper_02.wav in Resources */, A10000000000000000000068 /* motor_chopper_03.wav in Resources */, A10000000000000000000069 /* motor_chopper_04.wav in Resources */, A1000000000000000000006A /* motor_chopper_05.wav in Resources */, A1000000000000000000006B /* motor_chopper_06.wav in Resources */, A1000000000000000000006C /* motor_chopper_07.wav in Resources */, A1000000000000000000006D /* motor_chopper_08.wav in Resources */, A1000000000000000000006E /* motor_chopper_09.wav in Resources */, A1000000000000000000006F /* motor_chopper_10.wav in Resources */, A10000000000000000000070 /* motor_chopper_11.wav in Resources */, A10000000000000000000071 /* motor_res_00.wav in Resources */, A10000000000000000000072 /* motor_res_01.wav in Resources */, A10000000000000000000073 /* motor_res_02.wav in Resources */, A10000000000000000000074 /* motor_res_03.wav in Resources */, A10000000000000000000075 /* motor_res_04.wav in Resources */, A10000000000000000000076 /* motor_res_05.wav in Resources */, A10000000000000000000077 /* motor_res_06.wav in Resources */, A10000000000000000000078 /* motor_res_07.wav in Resources */, A10000000000000000000079 /* motor_res_08.wav in Resources */, A1000000000000000000007A /* motor_res_09.wav in Resources */, A1000000000000000000007B /* motor_res_10.wav in Resources */, A1000000000000000000007C /* motor_res_11.wav in Resources */, A1000000000000000000007D /* motor_res_12.wav in Resources */, A1000000000000000000007E /* motor_res_13.wav in Resources */, A1000000000000000000007F /* motor_res_14.wav in Resources */, A10000000000000000000080 /* motor_res_15.wav in Resources */, A10000000000000000000081 /* motor_res_16.wav in Resources */, A10000000000000000000082 /* motor_res_17.wav in Resources */, A10000000000000000000083 /* motor_vvvf_00.wav in Resources */, A10000000000000000000084 /* motor_vvvf_01.wav in Resources */, A10000000000000000000085 /* motor_vvvf_02.wav in Resources */, A10000000000000000000086 /* motor_vvvf_03.wav in Resources */, A10000000000000000000087 /* motor_vvvf_04.wav in Resources */, A10000000000000000000088 /* motor_vvvf_05.wav in Resources */, A10000000000000000000089 /* motor_vvvf_06.wav in Resources */, A1000000000000000000008A /* motor_vvvf_07.wav in Resources */, A1000000000000000000008B /* motor_vvvf_08.wav in Resources */, A1000000000000000000008C /* motor_vvvf_09.wav in Resources */, A1000000000000000000008D /* motor_vvvf_10.wav in Resources */, A1000000000000000000008E /* motor_vvvf_11.wav in Resources */, A1000000000000000000008F /* motor_vvvf_12.wav in Resources */, A10000000000000000000090 /* motor_vvvf_13.wav in Resources */, A10000000000000000000091 /* motor_vvvf_14.wav in Resources */, A10000000000000000000092 /* motor_vvvf_15.wav in Resources */, A10000000000000000000093 /* motor_vvvf_16.wav in Resources */, A10000000000000000000094 /* motor_vvvf_17.wav in Resources */, A10000000000000000000095 /* motor_vvvf_18.wav in Resources */, A10000000000000000000096 /* motor_vvvf_19.wav in Resources */, A10000000000000000000097 /* motor_vvvf_20.wav in Resources */, A10000000000000000000098 /* motor_vvvf_21.wav in Resources */, A10000000000000000000099 /* motor_vvvf_22.wav in Resources */, A1000000000000000000009A /* motor_vvvf_26.wav in Resources */, A1000000000000000000009B /* motor_vvvf_27.wav in Resources */, A1000000000000000000009C /* motor_vvvf_28.wav in Resources */, A1000000000000000000009D /* run_ballast.wav in Resources */, A1000000000000000000009E /* run_ballast25.wav in Resources */, A1000000000000000000009F /* run_bridge.wav in Resources */, A100000000000000000000A0 /* run_slab.wav in Resources */, A100000000000000000000A1 /* run_tunnel.wav in Resources */, A100000000000000000000A2 /* vvvf_run_loop_9301.wav in Resources */, A100000000000000000000A3 /* motor_curves.json in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
 		A60000000000000000000006 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
