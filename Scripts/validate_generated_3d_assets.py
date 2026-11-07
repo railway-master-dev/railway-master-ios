@@ -173,13 +173,13 @@ def main() -> None:
     # (IHDR width/height are big-endian uint32 at bytes 16..24).
     texture_root = ROOT / "Packages/RailwaySceneFidelity/Sources/RailwaySceneFidelity/Resources"
     textures = sorted(texture_root.glob("scenery_*.png"))
-    require(len(textures) == 13, f"expected 13 scenery textures, found {len(textures)}")
+    require(len(textures) == 16, f"expected 16 scenery textures, found {len(textures)}")
     for texture in textures:
         header = texture.read_bytes()[:24]
         require(header[:8] == b"\x89PNG\r\n\x1a\n", f"not a PNG: {texture.name}")
         width, height = struct.unpack(">II", header[16:24])
         require((width, height) == (512, 512), f"scenery texture is {width}x{height}, expected 512x512: {texture.name}")
-    print("PASS: 13 scenery textures are 512x512 PNGs")
+    print("PASS: 16 scenery textures are 512x512 PNGs")
 
     # (b) Enhancement meshes must exist in all six enhance-target GLBs.
     station_prefixes = ("bench_", "platform_sign_", "canopy_fixture_", "vending_", "bin_", "white_line_", "end_fence_")
