@@ -344,3 +344,20 @@ private struct SceneMeshAccumulator {
     }
 }
 #endif
+
+/// Shared access to the bundled scenery textures so that app-side scene
+/// builders can apply the same photographic surfaces as this adapter
+/// instead of flat colors. Textures are loaded once and cached. Callers
+/// load during scene construction on the main actor, mirroring the
+/// adapter's own texture cache.
+public enum SceneTextureProvider {
+    private static var cache: [String: TextureResource] = [:]
+
+    public static func texture(named name: String) -> TextureResource? {
+        if let cached = cache[name] { return cached }
+        guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
+              let texture = try? TextureResource.load(contentsOf: url) else { return nil }
+        cache[name] = texture
+        return texture
+    }
+}
