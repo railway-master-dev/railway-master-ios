@@ -67,3 +67,10 @@ SwiftUI画面 `RailwayMasterPhase1/VehicleLibrarySheet.swift` は `@Binding var 
 - 詳細な[CSV在庫](Research/BVE/inventory_final.csv)、[JSON在庫](Research/BVE/inventory_final.json)、[制限ソース記録](Research/BVE/restricted_sources.json)、[集計JSON](Research/BVE/summary_final.json)と[根拠・制限メモ](Research/BVE/sources_and_limits.md)も同梱しています。
 
 上記BVE素材・音声・画像・モデル・プラグインはアプリへコピーせず、調査でコード等を実行していません。
+
+## 同梱音声サンプルの記録（2026-11-07 追記）
+
+- `RailwayMasterPhase1/Resources/door_chime_resistance.wav`：抵抗制御車用のドアチャイム。当初「商用利用可」とされたが、同日提供者が「商用利用不可かもしれない」と訂正したため、当該ファイルはプロジェクトへ同梱しない。代わりに抵抗制御車の閉扉チャイムには、提供者提供の界磁チョッパ車ドア閉音（door_close_chopper.wav と同一ファイル）を流用する（2026-11-07 提供者決定）。ファイル名は door_chime_resistance.wav。閉扉はチャイム再生終了後に行う仕様で実装。
+- `RailwayMasterPhase1/Resources/door_open_chopper.wav` / `door_close_chopper.wav`：界磁チョッパ車用のドア開・閉音。提供者提供の実車録音（2026-11-07）。抵抗制御車の開扉音にも流用する。
+- `RailwayMasterPhase1/Resources/door_open_vvvf.wav` / `door_close_vvvf.wav`：VVVF車用のドア開・閉音。JR西日本223系5000番台の録音（ニコニコモンズ素材 nc180330「ドア開音」／nc180331「ドア閉音」）。商用利用可を提供者が確認済み（2026-11-07）。
+- 上記以外の音声は従来どおり独自合成のみ（BVE Workshop 素材・自前録音のVVVF走行音は本ビルドには未同梱。将来同梱する場合は CC BY-NC 等の条件を本書へ個別に記録する）。
