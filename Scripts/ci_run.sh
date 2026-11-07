@@ -56,6 +56,45 @@ case "$mode" in
       -resultBundlePath TestResults.xcresult \
       CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ENABLE_TESTABILITY=YES \
       | tee test.log
+    test_status=$?
+    # Extract per-test failure details (assertion messages) as plain text.
+    # The raw .xcresult bundle cannot be read off-runner, and the plain
+    # xcodebuild log omits the assertion lines, so dump them here into
+    # test.log (already uploaded as an artifact) and the job log.
+    {
+      echo '===== xcresult test summary ====='
+      xcrun xcresulttool get test-results summary --path TestResults.xcresult 2>&1 || true
+      echo '===== failed tests (details) ====='
+      xcrun xcresulttool get test-results tests --path TestResults.xcresult > test-results-tests.json 2>/dev/null || true
+      python3 - << 'PYEOF' || true
+import json
+try:
+    data = json.load(open("test-results-tests.json"))
+except Exception as e:
+    print("could not parse test-results-tests.json:", e)
+    raise SystemExit(0)
+
+def walk(node, depth=0):
+    if isinstance(node, dict):
+        result = node.get("result")
+        ntype = node.get("nodeType", "")
+        name = node.get("name", "")
+        if ntype == "Test Case" and result == "Failed":
+            print("FAILED TEST:", name)
+            print(json.dumps(node, ensure_ascii=False, indent=1)[:6000])
+            print("-----")
+        for v in node.values():
+            walk(v, depth + 1)
+    elif isinstance(node, list):
+        for item in node:
+            walk(item, depth + 1)
+
+walk(data)
+PYEOF
+    } > test-failures.txt 2>&1 || true
+    cat test-failures.txt || true
+    cat test-failures.txt >> test.log || true
+    exit "$test_status"
     ;;
   screenshots)
     xcodebuild -version
