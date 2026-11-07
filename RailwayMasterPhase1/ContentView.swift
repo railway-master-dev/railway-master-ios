@@ -94,11 +94,8 @@ struct ContentView: View {
                     nextStopName: nextStopName,
                     distanceToNextStopM: distanceToNextStopM
                 )
-                // Phase 2: the 3D view renders only into the region above the
-                // cab desk. Full-bleed rendering hid the near lineside scenery
-                // (track, platform) behind the desk overlay, leaving only sky
-                // and the far horizon visible.
-                .padding(.bottom, geometry.size.height * (geometry.size.width > geometry.size.height ? 0.40 : 0.36))
+                // Full-bleed 3D: the cab interior in the scene is the desk;
+                // no SwiftUI panel overlays the lower screen any more.
                 VStack(spacing: 0) {
                     header
                         .frame(height: 38)
@@ -106,9 +103,23 @@ struct ContentView: View {
                         .padding(.top, 7)
                         .background(Color.black.opacity(0.30))
 
-                    HStack {
+                    HStack(alignment: .top) {
                         operationsHUD
                         Spacer()
+                        // Air / electric state as small text only, top-right.
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("MR \(Int(model.telemetry.mainReservoirPressureKPa.rounded())) · BP \(Int(model.telemetry.brakePipePressureKPa.rounded())) · BC \(Int(model.telemetry.brakeCylinderPressureKPa.rounded())) kPa")
+                            Text("引張 \(Int(model.telemetry.tractionForceN / 1_000)) kN · 制動 \(Int(model.telemetry.brakingForceN / 1_000)) kN")
+                            if model.telemetry.isWheelSlipActive || model.telemetry.isBrakeSlipActive {
+                                Text("滑走")
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                        .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                     .padding(.horizontal, 8)
                     .padding(.top, 6)
@@ -130,32 +141,71 @@ struct ContentView: View {
                     .padding(.horizontal, 8)
                     .padding(.bottom, 6)
 
-                    // Cab desk: the three existing panels recomposed as one
-                    // continuous console surface along the bottom edge.
-                    HStack(spacing: 8) {
-                        instrumentPanel
-                            .frame(width: geometry.size.width * 0.275)
-                        controllerPanel
-                            .frame(width: geometry.size.width * 0.425)
-                        pneumaticPanel
-                            .frame(maxWidth: .infinity)
+                    // No panel desk: the 3D cab interior is the desk.
+                    Color.clear.frame(height: 52)
+                }
+
+                // Driving levers docked at the left edge (the driver's
+                // side), slim enough not to cover the view.
+                VStack {
+                    Spacer()
+                    HStack {
+                        VStack {
+                            CombinedNotchLever(
+                                value: model.controls.brakeNotch > 0 ? model.controls.brakeNotch : -model.controls.throttleNotch,
+                                brakeMaximum: 7,
+                                powerMaximum: max(model.train.tractionNotchFractions.count - 1, 1)
+                            ) { combined in
+                                if combined > 0 {
+                                    model.setBrake(combined)
+                                } else if combined < 0 {
+                                    model.setThrottle(-combined)
+                                } else {
+                                    model.setThrottle(0)
+                                    model.setBrake(0)
+                                }
+                            }
+                            .frame(height: geometry.size.height * 0.5)
+                        }
+                        .frame(width: 92)
+                        .padding(8)
+                        .background(Color.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(.leading, 8)
+
+                        Spacer()
                     }
-                    .frame(height: geometry.size.height * (geometry.size.width > geometry.size.height ? 0.40 : 0.36))
-                    .padding(.horizontal, max(10, geometry.size.width * 0.018))
-                    .padding(.top, 7)
-                    .padding(.bottom, 8)
-                    .background(
-                        LinearGradient(
-                            colors: [Color(red: 0.05, green: 0.07, blue: 0.09).opacity(0.92), Color(red: 0.02, green: 0.03, blue: 0.045).opacity(0.96)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay(alignment: .top) {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.14))
-                            .frame(height: 1)
+                    .padding(.bottom, 64)
+                }
+
+                // Bottom row: speed readout on the left of the auxiliary
+                // buttons; horn / ATS acknowledge / emergency brake are
+                // buttons at the bottom-right edge.
+                VStack {
+                    Spacer()
+                    HStack(alignment: .bottom, spacing: 8) {
+                        Text("\(Int(speedKmh.rounded())) km/h")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.black.opacity(0.34), in: Capsule())
+                        Spacer()
+                        cabAuxButton(symbol: "speaker.wave.3.fill", label: "警笛") { model.playHorn() }
+                        cabAuxButton(symbol: "checkmark.shield.fill", label: "ATS確認") { _ = model.acknowledgeATS() }
+                        Button {
+                            model.setEmergencyBrake(!model.controls.emergencyBrake)
+                        } label: {
+                            VStack(spacing: 2) {
+                                Image(systemName: "octagon.fill").font(.system(size: 17, weight: .semibold))
+                                Text("非常").font(.system(size: 8, weight: .bold, design: .rounded))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(width: 54, height: 46)
+                            .background(Color.red.opacity(model.controls.emergencyBrake ? 1 : 0.7), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 10)
                 }
             }
         }
@@ -298,6 +348,20 @@ struct ContentView: View {
                     EmptyView()
                 }
             }
+        }
+    }
+
+    /// Small auxiliary cab button used at the bottom-right edge
+    /// (horn, ATS acknowledge).
+    private func cabAuxButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: symbol).font(.system(size: 17, weight: .semibold))
+                Text(label).font(.system(size: 8, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(.white)
+            .frame(width: 54, height: 46)
+            .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
     }
 
@@ -1008,6 +1072,107 @@ private struct NotchLever: View {
 
     private func select(_ proposedValue: Int) {
         let next = min(max(proposedValue, 0), maximum)
+        guard next != value else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        onChange(next)
+    }
+}
+
+/// One-handle master controller: brake steps at the top, N in the
+/// middle, power notches at the bottom. `value` is >0 for a brake
+/// step, 0 for N, and <0 for a power notch (absolute value = notch).
+private struct CombinedNotchLever: View {
+    let value: Int
+    let brakeMaximum: Int
+    let powerMaximum: Int
+    let onChange: (Int) -> Void
+
+    private var span: Int { brakeMaximum + powerMaximum }
+    private var currentLabel: String {
+        if value > 0 { return "B\(value)" }
+        if value < 0 { return "P\(-value)" }
+        return "N"
+    }
+    private var currentTint: Color {
+        if value > 0 { return .orange }
+        if value < 0 { return .cyan }
+        return .white
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("マスコン")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Spacer(minLength: 2)
+                Text(currentLabel)
+                    .font(.system(size: 13, weight: .black, design: .rounded).monospacedDigit())
+                    .foregroundStyle(currentTint)
+            }
+
+            GeometryReader { geometry in
+                let height = max(geometry.size.height, 60)
+                let travel = max(height - 16, 1)
+                ZStack(alignment: .topLeading) {
+                    Capsule()
+                        .fill(Color.black.opacity(0.55))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.11), lineWidth: 1))
+                        .frame(width: 13, height: travel)
+                        .position(x: 20, y: height / 2)
+
+                    ForEach(0...span, id: \.self) { index in
+                        let combined = brakeMaximum - index
+                        let y = 8 + travel - CGFloat(combined + powerMaximum) / CGFloat(span) * travel
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(combined == value ? currentTint : Color.white.opacity(0.30))
+                                .frame(width: combined == value ? 5 : 3, height: combined == value ? 5 : 3)
+                            Text(combined > 0 ? "B\(combined)" : combined < 0 ? "P\(-combined)" : "N")
+                                .font(.system(size: 8, weight: combined == value ? .black : .medium, design: .rounded).monospacedDigit())
+                                .foregroundStyle(combined == value ? .white : .white.opacity(0.43))
+                        }
+                        .position(x: 59, y: y)
+                        .contentShape(Rectangle())
+                        .onTapGesture { select(combined) }
+                    }
+
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(LinearGradient(colors: [currentTint, currentTint.opacity(0.68)], startPoint: .top, endPoint: .bottom))
+                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(.white.opacity(0.6), lineWidth: 0.7))
+                        .frame(width: 25, height: 12)
+                        .shadow(color: currentTint.opacity(0.38), radius: 5)
+                        .position(x: 20, y: 8 + travel - CGFloat(value + powerMaximum) / CGFloat(span) * travel)
+                        .allowsHitTesting(false)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0).onChanged { gesture in
+                    let fraction = min(max(1 - (gesture.location.y - 8) / travel, 0), 1)
+                    select(Int((fraction * CGFloat(span)).rounded()) - powerMaximum)
+                })
+            }
+            .accessibilityElement()
+            .accessibilityLabel("マスコン")
+            .accessibilityValue(currentLabel)
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: select(min(value + 1, brakeMaximum))
+                case .decrement: select(max(value - 1, -powerMaximum))
+                @unknown default: break
+                }
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.opacity(0.17), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private func select(_ proposedValue: Int) {
+        let next = min(max(proposedValue, -powerMaximum), brakeMaximum)
         guard next != value else { return }
         UISelectionFeedbackGenerator().selectionChanged()
         onChange(next)
