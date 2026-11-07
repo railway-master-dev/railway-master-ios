@@ -144,11 +144,11 @@ final class SimulatorModel: ObservableObject {
             nativeStationID: stationID,
             stationEvent: event?.event,
             visibleLandmarkID: gameModeVisibleLandmarkID(),
+            trainingPromptID: promptID,
             vehicleID: selectedVehicleProfile.physicsProfileIdentifier,
             weather: weather,
             timeOfDayID: environmentSelection.environment.dayPeriod.rawValue,
             seasonID: environmentSelection.environment.season.rawValue,
-            trainingPromptID: promptID,
             trains: context.trains
         )
     }
@@ -2451,7 +2451,9 @@ final class SimulatorModel: ObservableObject {
             }
         }
         var candidateTraffic = try runtime.traffic.map { snapshot -> TrafficSimulationEngine in
-            let scenario = trafficScenario ?? Self.makeTrafficScenario()
+            guard let scenario = trafficScenario ?? Self.makeTrafficScenario() else {
+                throw SimulationSaveStateError.incompatibleSave
+            }
             var engine = try TrafficSimulationEngine(scenario: scenario)
             try engine.restoreState(from: snapshot)
             guard abs(snapshot.simulationTimeSeconds - saved.simulation.simulationTimeSeconds) < 1e-6 else {

@@ -526,7 +526,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for (index, model) in vehicleModels.enumerated() {
             let consistIndex = index + (highFidelityLeadVehicle == nil ? 0 : 1)
             let chainage = max(0, positionM - 9.75 - Double(consistIndex) * 19.5)
-            let carSample = sample(at: chainage)
+            let carSample = self.sample(at: chainage)
             let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
             let trackSide: Float = travelDirection == .up ? -2.1 : 2.1
             model.root.position = SIMD3<Float>(
@@ -538,9 +538,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         if let model = highFidelityLeadVehicle {
             let carChainage = max(0, positionM - 9.75)
-            let carSample = sample(at: carChainage)
-            let frontBogieSample = sample(at: max(0, carChainage - 6.35))
-            let rearBogieSample = sample(at: carChainage + 6.35)
+            let carSample = self.sample(at: carChainage)
+            let frontBogieSample = self.sample(at: max(0, carChainage - 6.35))
+            let rearBogieSample = self.sample(at: carChainage + 6.35)
             let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
             let trackSide: Float = travelDirection == .up ? -2.1 : 2.1
             model.root.position = SIMD3<Float>(
@@ -619,9 +619,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             curveRadiusMeters: curve.curveRadiusM, curveDirection: curveDirection
         )
         let precipitation: Double
-        if weather == .heavyRain {
-            precipitation = 1
-        } else if renderingWeather == .dry || renderingWeather == .fog {
+        if renderingWeather == .dry || renderingWeather == .fog {
             precipitation = 0
         } else {
             precipitation = 0.65
@@ -842,7 +840,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let roof = addBox(parent: world, name: "roof-\(index)", size: SIMD3<Float>(width + 0.45, 0.24, depth + 0.35), position: SIMD3<Float>(x, height + 0.14, z), material: roofMaterials[index % roofMaterials.count], orientation: simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0)))
                 roof.orientation = roof.orientation * simd_quatf(angle: Float(index.isMultiple(of: 2) ? 0.04 : -0.04), axis: SIMD3<Float>(0, 0, 1))
             } else {
-                let balconySample = sample(at: distance - Double(depth * 0.52))
+                let balconySample = self.sample(at: distance - Double(depth * 0.52))
                 let balconyPoint = routeOffsetPoint(balconySample, lateral: offset)
                 let balcony = addBox(parent: world, name: "balcony-\(index)", size: SIMD3<Float>(width + 0.35, 0.12, 0.35), position: SIMD3<Float>(balconyPoint.x, height * 0.56, balconyPoint.z), material: concreteMaterial)
                 balcony.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -850,7 +848,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
             let facadeLateral = offset - sign * (width / 2 + 0.035)
             for window in 0..<2 {
-                let windowSample = sample(at: distance + Double((Float(window) - 0.5) * depth * 0.42))
+                let windowSample = self.sample(at: distance + Double((Float(window) - 0.5) * depth * 0.42))
                 let windowPoint = routeOffsetPoint(windowSample, lateral: facadeLateral)
                 let pane = addBox(parent: world, name: "window-\(index)-\(window)", size: SIMD3<Float>(0.07, 0.72, 0.78), position: SIMD3<Float>(windowPoint.x, min(height * 0.72, 2.45), windowPoint.z), material: glassMaterial)
                 pane.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -860,13 +858,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             door.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
 
             if index.isMultiple(of: 2), foliageCount < renderQualitySettings.foliageInstanceLimit {
-                let treeSample = sample(at: distance + 5)
+                let treeSample = self.sample(at: distance + 5)
                 let treePoint = routeOffsetPoint(treeSample, lateral: offset + sign * width * 0.65)
                 addTree(parent: world, name: "tree-\(index)", x: treePoint.x, z: treePoint.z, height: 3.1 + Float(index % 4) * 0.35, material: foliageMaterials[index % foliageMaterials.count])
                 foliageCount += 1
             }
             if index.isMultiple(of: 5) {
-                let poleSample = sample(at: distance + 7)
+                let poleSample = self.sample(at: distance + 7)
                 let polePoint = routeOffsetPoint(poleSample, lateral: offset + sign * 4.2)
                 addBox(parent: world, name: "utility-pole-\(index)", size: SIMD3<Float>(0.13, 5.2, 0.13), position: SIMD3<Float>(polePoint.x, 2.55, polePoint.z), material: poleMaterial)
             }
@@ -901,7 +899,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             addBox(parent: world, name: "arrival-platform-\(Int(side))", size: SIMD3<Float>(2.0, 0.48, 115), position: SIMD3<Float>(x, 0.24, z), material: concreteMaterial, orientation: yaw)
             addBox(parent: world, name: "tactile-strip-\(Int(side))", size: SIMD3<Float>(0.22, 0.035, 115), position: SIMD3<Float>(x - Float(side) * 0.83 * cos(sample.heading), 0.50, z + Float(side) * 0.83 * sin(sample.heading)), material: roofMaterials[0], orientation: yaw)
         }
-        let signSample = sample(at: max(route.stopMarkerM - 42, 0))
+        let signSample = self.sample(at: max(route.stopMarkerM - 42, 0))
         let signYaw = simd_quatf(angle: signSample.heading, axis: SIMD3<Float>(0, 1, 0))
         addBox(parent: world, name: "fictional-station-sign-post", size: SIMD3<Float>(0.12, 2.8, 0.12), position: SIMD3<Float>(signSample.x + 3.4, 1.4, signSample.z), material: poleMaterial)
         addBox(parent: world, name: "fictional-station-sign", size: SIMD3<Float>(2.4, 0.75, 0.14), position: SIMD3<Float>(signSample.x + 3.4, 2.6, signSample.z), material: glassMaterial, orientation: signYaw)

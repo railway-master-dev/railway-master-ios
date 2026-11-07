@@ -1068,7 +1068,7 @@ private struct TrackPanorama: View {
                 let t = (Double(sleeper) / 22 + phase).truncatingRemainder(dividingBy: 1)
                 let depth = t * t
                 let y = horizon + (size.height - horizon) * depth
-                let half = 4 + (size.width * 0.31 - 4) * depth
+                let half = 4 + (size.width * 0.31 - 4) * CGFloat(depth)
                 var path = Path()
                 path.move(to: CGPoint(x: centerX - half, y: y))
                 path.addLine(to: CGPoint(x: centerX + half, y: y))

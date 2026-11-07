@@ -265,15 +265,15 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     public func announceNextStation(_ station: String) {
-        speak("まもなく、\(Self.safeStationName(station))、\(Self.safeStationName(station))です。")
+        speak("まもなく、\(safeStationName(station))、\(safeStationName(station))です。")
     }
 
     public func announceStop(at station: String) {
-        speak("\(Self.safeStationName(station))、\(Self.safeStationName(station))に停車いたします。")
+        speak("\(safeStationName(station))、\(safeStationName(station))に停車いたします。")
     }
 
     public func announceDeparture(from station: String) {
-        speak("\(Self.safeStationName(station))を発車いたします。")
+        speak("\(safeStationName(station))を発車いたします。")
     }
 
     public func announceNextStation(_ station: String, withDoorChime: Bool) {
