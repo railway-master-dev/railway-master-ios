@@ -19,6 +19,11 @@
 			A1000000000000000000000D /* DrivingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* DrivingSession.swift */; };
 			A1000000000000000000000E /* RoutePackage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* RoutePackage.swift */; };
 			A1000000000000000000000F /* FictionalRegionalMainline.json in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* FictionalRegionalMainline.json */; };
+			A10000000000000000000060 /* door_chime_resistance.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000060 /* door_chime_resistance.wav */; };
+			A10000000000000000000061 /* door_open_chopper.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000061 /* door_open_chopper.wav */; };
+			A10000000000000000000062 /* door_close_chopper.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* door_close_chopper.wav */; };
+			A10000000000000000000063 /* door_open_vvvf.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000063 /* door_open_vvvf.wav */; };
+			A10000000000000000000064 /* door_close_vvvf.wav in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000064 /* door_close_vvvf.wav */; };
 			A10000000000000000000010 /* ServiceOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* ServiceOperations.swift */; };
 			A10000000000000000000011 /* FictionalOperationsPlan.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* FictionalOperationsPlan.json */; };
 			A10000000000000000000012 /* ServicePlanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* ServicePlanSheet.swift */; };
@@ -122,6 +127,11 @@ A1000000000000000000005C /* ProtectionSystems test dependency in Test Frameworks
 			A20000000000000000000016 /* DrivingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingSession.swift; sourceTree = "<group>"; };
 			A20000000000000000000017 /* RoutePackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePackage.swift; sourceTree = "<group>"; };
 			A20000000000000000000018 /* FictionalRegionalMainline.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/FictionalRegionalMainline.json; sourceTree = "<group>"; };
+			A20000000000000000000060 /* door_chime_resistance.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/door_chime_resistance.wav; sourceTree = "<group>"; };
+			A20000000000000000000061 /* door_open_chopper.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/door_open_chopper.wav; sourceTree = "<group>"; };
+			A20000000000000000000062 /* door_close_chopper.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/door_close_chopper.wav; sourceTree = "<group>"; };
+			A20000000000000000000063 /* door_open_vvvf.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/door_open_vvvf.wav; sourceTree = "<group>"; };
+			A20000000000000000000064 /* door_close_vvvf.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Resources/door_close_vvvf.wav; sourceTree = "<group>"; };
 			A20000000000000000000019 /* ServiceOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceOperations.swift; sourceTree = "<group>"; };
 			A2000000000000000000001A /* FictionalOperationsPlan.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Resources/FictionalOperationsPlan.json; sourceTree = "<group>"; };
 			A2000000000000000000001B /* ServicePlanSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicePlanSheet.swift; sourceTree = "<group>"; };
@@ -199,6 +209,11 @@ A20000000000000000000037 /* GameSystemsIntegrationTests.swift */ = {isa = PBXFil
 							A20000000000000000000019 /* ServiceOperations.swift */,
 							A2000000000000000000001B /* ServicePlanSheet.swift */,
 										A20000000000000000000018 /* FictionalRegionalMainline.json */,
+										A20000000000000000000060 /* door_chime_resistance.wav */,
+										A20000000000000000000061 /* door_open_chopper.wav */,
+										A20000000000000000000062 /* door_close_chopper.wav */,
+										A20000000000000000000063 /* door_open_vvvf.wav */,
+										A20000000000000000000064 /* door_close_vvvf.wav */,
 							A2000000000000000000001A /* FictionalOperationsPlan.json */,
 					A2000000000000000000001C /* AudioModels.swift */,
 					A2000000000000000000001D /* ProceduralAudioDSP.swift */,
@@ -291,7 +306,7 @@ A20000000000000000000036 /* TrainPhysicsDetailsSheet.swift */,
 /* End PBXSourcesBuildPhase section */
 
 	/* Begin PBXResourcesBuildPhase section */
-		A60000000000000000000004 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000F /* FictionalRegionalMainline.json in Resources */, A10000000000000000000011 /* FictionalOperationsPlan.json in Resources */, A1000000000000000000004C /* FictionalDoorProcedureScoring.json in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000004 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A1000000000000000000000F /* FictionalRegionalMainline.json in Resources */, A10000000000000000000011 /* FictionalOperationsPlan.json in Resources */, A1000000000000000000004C /* FictionalDoorProcedureScoring.json in Resources */, A10000000000000000000060 /* door_chime_resistance.wav in Resources */, A10000000000000000000061 /* door_open_chopper.wav in Resources */, A10000000000000000000062 /* door_close_chopper.wav in Resources */, A10000000000000000000063 /* door_open_vvvf.wav in Resources */, A10000000000000000000064 /* door_close_vvvf.wav in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 		A60000000000000000000006 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
