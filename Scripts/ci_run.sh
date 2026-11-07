@@ -140,14 +140,17 @@ PYEOF
       xcrun simctl spawn "$SIMULATOR_UDID" launchctl list 2>/dev/null | grep -i 'railwaymaster' || echo 'app process not found'
     } > screenshots/diagnostics.txt 2>&1 || true
     cp -f ~/Library/Logs/DiagnosticReports/RailwayMasterPhase1* screenshots/ 2>/dev/null || true
-    xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 3m --predicate 'process == "RailwayMasterPhase1"' 2>/dev/null | tail -c 150000 > screenshots/device-log.txt || true
-    # A much later shot tests the slow-startup theory; a home-screen shot
-    # tests whether the simulator display itself renders at all.
-    sleep 20
+    xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 6m --predicate 'process == "RailwayMasterPhase1"' 2>/dev/null | tail -c 150000 > screenshots/device-log.txt || true
+    # Much later shots test the slow-startup theory (CI #102 was still
+    # building the world at +46 s and every frame came out black); a
+    # home-screen shot tests whether the simulator display renders at all.
+    sleep 75
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/04-app-late.png 2>/dev/null || true
+    sleep 70
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/05-app-later.png 2>/dev/null || true
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     sleep 3
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/05-home.png 2>/dev/null || true
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/06-home.png 2>/dev/null || true
     ls -la screenshots/
     ;;
   packages)
