@@ -1,0 +1,22 @@
+name: Unsigned IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build unsigned IPA
+        run: bash Scripts/ci_run.sh ipa
+      - name: Upload IPA
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ipa
+          path: RailwayMaster.ipa
+          if-no-files-found: error
