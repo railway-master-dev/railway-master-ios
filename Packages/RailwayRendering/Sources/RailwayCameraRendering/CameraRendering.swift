@@ -147,7 +147,10 @@ public final class CameraController {
     private static func preset(for mode: CameraViewMode) -> CameraPose {
         switch mode {
         case .cab:
-            return CameraPose(position: RenderVector3(x: 0, y: 1.55, z: 0.25), target: RenderVector3(x: 0, y: 1.52, z: 60), fieldOfViewDegrees: 66)
+            // The eye sits ~2.45 m behind the train's front face: just
+            // behind the desk gauge line (1.73 m behind the face), so
+            // the desk and cab interior actually frame the view.
+            return CameraPose(position: RenderVector3(x: 0, y: 1.55, z: -2.45), target: RenderVector3(x: 0, y: 1.52, z: 60), fieldOfViewDegrees: 66)
         case .forward:
             return CameraPose(position: RenderVector3(x: 0, y: 2.15, z: 2.0), target: RenderVector3(x: 0, y: 1.65, z: 100), fieldOfViewDegrees: 70)
         case .chase:
