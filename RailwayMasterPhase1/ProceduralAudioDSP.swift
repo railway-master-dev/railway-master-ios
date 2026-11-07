@@ -5,6 +5,7 @@ private struct AudioControlState {
     var snapshot = RailwaySimulationSnapshot()
     var settings = RailwayAudioSettings()
     var speechActive = false
+    var sampledTractionActive = false
 }
 
 private struct ProceduralVoice {
@@ -148,6 +149,15 @@ public final class ProceduralAudioDSP: @unchecked Sendable {
         controlLock.unlock()
     }
 
+    /// While sampled traction sound (BVE-style motor samples) is active
+    /// for the selected profile, the synthesized motor/regen tones are
+    /// muted so the two never layer over each other.
+    public func setSampledTractionActive(_ active: Bool) {
+        controlLock.lock()
+        control.sampledTractionActive = active
+        controlLock.unlock()
+    }
+
     /// AVAudioSourceNode向けのリアルタイムPCM描画。left/rightはframeCount以上の領域であること。
     public func render(
         frameCount: Int,
@@ -258,8 +268,9 @@ public final class ProceduralAudioDSP: @unchecked Sendable {
                 let inverterSideband = sinf(inverterPhase * 0.5 + enginePhase * 0.08) * switchingGain * driveDemand * 0.18
                 motor = vvvfMotor * motorAmplitude * loadPulse + inverterTone + inverterSideband
             }
-            let tractionSound = motor
-            let regenSound = sinf(regenPhase) * regen * brake * speedFactor * 0.042 * cabinGain
+            let tractionScale: Float = current.sampledTractionActive ? 0 : 1
+            let tractionSound = motor * tractionScale
+            let regenSound = sinf(regenPhase) * regen * brake * speedFactor * 0.042 * cabinGain * tractionScale
 
             let white = nextNoise()
             railLowPass += (white - railLowPass) * 0.12

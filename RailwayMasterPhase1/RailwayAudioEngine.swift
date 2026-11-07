@@ -29,6 +29,7 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     private var outputVolume: Float = 0.65
     private var latestSnapshot = RailwaySimulationSnapshot()
     private let melodyCatalog = DepartureMelodyCatalog()
+    private let sampledMotor = SampledMotorSound()
 
     public override init() {
         let dsp = ProceduralAudioDSP()
@@ -388,6 +389,12 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     private func applyCurrentSnapshot() {
         var effective = settings
         effective.masterVolume = isEnabled ? outputVolume : 0
+        if sampledMotor.attachHandler == nil {
+            sampledMotor.attachHandler = { [weak self] node in self?.attachLicensedSamplePlayer(node) }
+            sampledMotor.startHandler = { [weak self] in self?.start() }
+        }
+        sampledMotor.update(snapshot: latestSnapshot, settings: effective, isEnabled: isEnabled, engineRunning: engine.isRunning)
+        dsp.setSampledTractionActive(isEnabled && sampledMotor.isActive)
         dsp.update(snapshot: latestSnapshot, settings: effective)
         reverb.wetDryMix = latestSnapshot.isInTunnel ? min(1, max(0, effective.tunnelReverbMix)) * 100 : 0
     }
