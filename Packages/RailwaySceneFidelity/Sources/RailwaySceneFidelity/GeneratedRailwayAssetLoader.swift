@@ -201,6 +201,26 @@ private struct ParsedGeneratedGLB {
         }
     }
 
+    func makeFloat2Accessor(_ accessorIndex: Int) throws -> [SIMD2<Float>] {
+        let accessor = try accessor(at: accessorIndex)
+        guard accessor["type"] as? String == "VEC2",
+              (accessor["componentType"] as? Int) == 5126,
+              let count = accessor["count"] as? Int,
+              let viewIndex = accessor["bufferView"] as? Int else {
+            throw GeneratedGLBFormatError.unsupportedGeometry("TEXCOORD_0 must be float VEC2")
+        }
+        let view = try bufferView(at: viewIndex)
+        let offset = (view["byteOffset"] as? Int ?? 0) + (accessor["byteOffset"] as? Int ?? 0)
+        let stride = view["byteStride"] as? Int ?? 8
+        guard count >= 0, stride >= 8, offset >= 0, offset + max(count - 1, 0) * stride + (count > 0 ? 8 : 0) <= binary.count else {
+            throw GeneratedGLBFormatError.invalidReference("TEXCOORD_0 accessor range")
+        }
+        return (0..<count).map { index in
+            let start = offset + index * stride
+            return SIMD2(Self.float32(binary, at: start), Self.float32(binary, at: start + 4))
+        }
+    }
+
     func makeIndexAccessor(_ accessorIndex: Int?, vertexCount: Int) throws -> [UInt32] {
         guard let accessorIndex else { return (0..<vertexCount).map(UInt32.init) }
         let accessor = try accessor(at: accessorIndex)
@@ -414,6 +434,7 @@ public enum RailwayGeneratedAssetLoader {
                     throw GeneratedGLBFormatError.unsupportedGeometry("triangle index count")
                 }
                 let meshCacheKey = "\(asset.rawValue):\(meshIndex):\(primitiveIndex)"
+                let hasUVs = attributes["TEXCOORD_0"] != nil
                 let meshResource: MeshResource
                 if let cached = meshes[meshCacheKey] {
                     meshResource = cached
@@ -421,16 +442,34 @@ public enum RailwayGeneratedAssetLoader {
                     var descriptor = MeshDescriptor(name: meshCacheKey)
                     descriptor.positions = MeshBuffers.Positions(positions)
                     descriptor.normals = MeshBuffers.Normals(Self.vertexNormals(positions: positions, indices: indices))
+                    if let uvIndex = attributes["TEXCOORD_0"],
+                       let uvs = try? document.makeFloat2Accessor(uvIndex),
+                       uvs.count == positions.count {
+                        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+                    }
                     descriptor.primitives = .triangles(indices)
                     meshResource = try MeshResource.generate(from: [descriptor])
                     meshes[meshCacheKey] = meshResource
                 }
                 let color = try document.colorAccessor(attributes["COLOR_0"])
-                let material = SimpleMaterial(
+                var material = SimpleMaterial(
                     color: UIColor(red: CGFloat(color.x), green: CGFloat(color.y), blue: CGFloat(color.z), alpha: CGFloat(color.w)),
                     roughness: .init(floatLiteral: Self.roughness(for: name)),
                     isMetallic: Self.isMetallic(name)
                 )
+                // Station surfaces with generated UVs get the package photo
+                // texture for their role; the texture carries the color, so
+                // the tint stays white. Anything unmapped keeps its flat
+                // vertex color exactly as before.
+                if hasUVs,
+                   let textureName = Self.stationTextureName(
+                       nodeName: name,
+                       meshName: mesh["name"] as? String,
+                       materialName: Self.materialName(in: document, primitive: primitive)),
+                   let texture = Self.stationTexture(named: textureName) {
+                    material.baseColor = .texture(texture)
+                    material.tintColor = .white
+                }
                 let model = ModelEntity(mesh: meshResource, materials: [material])
                 model.name = "\(name)_primitive_\(primitiveIndex)"
                 entity.addChild(model)
@@ -460,6 +499,57 @@ public enum RailwayGeneratedAssetLoader {
             normals[c] += face
         }
         return normals.map { simd_length_squared($0) > 1e-10 ? simd_normalize($0) : SIMD3<Float>(0, 1, 0) }
+    }
+
+    private static var stationTextures: [String: TextureResource] = [:]
+
+    private static func stationTexture(named resourceName: String) -> TextureResource? {
+        if let cached = stationTextures[resourceName] { return cached }
+        guard let url = Bundle.module.url(forResource: resourceName, withExtension: "png"),
+              let texture = try? TextureResource.load(contentsOf: url) else { return nil }
+        stationTextures[resourceName] = texture
+        return texture
+    }
+
+    private static func materialName(in document: ParsedGeneratedGLB, primitive: [String: Any]) -> String? {
+        guard let index = primitive["material"] as? Int,
+              let materials = document.json["materials"] as? [[String: Any]],
+              materials.indices.contains(index) else { return nil }
+        return materials[index]["name"] as? String
+    }
+
+    /// Photo texture for a station surface, chosen by hub material name or
+    /// by mesh/node name. Mirrors the tile-size table in
+    /// Scripts/texturize_station_glbs.py. Small fittings (signs, tactile
+    /// paving, vending machines, glazing, lights) keep their flat colors.
+    private static func stationTextureName(nodeName: String, meshName: String?, materialName: String?) -> String? {
+        if let materialName {
+            switch materialName {
+            case "fictional_concrete": return "scenery_concrete"
+            case "fictional_gravel": return "scenery_trackbed"
+            case "fictional_sleeper": return "scenery_timber"
+            case "fictional_building": return "scenery_brick_warm"
+            case "fictional_canopy", "fictional_roof": return "scenery_steel"
+            case "fictional_rail": return "scenery_steel"
+            default: return nil
+            }
+        }
+        let name = meshName ?? nodeName
+        if name.contains("sign") || name.contains("tactile") || name.contains("vending")
+            || name.contains("bin") || name.contains("glazing") || name.contains("light")
+            || name.contains("white_line") || name.contains("fixture") {
+            return nil
+        }
+        if name.hasPrefix("sleeper") { return "scenery_timber" }
+        if name.hasPrefix("trackbed") { return "scenery_trackbed" }
+        if name.hasPrefix("platform") { return "scenery_concrete" }
+        if name.hasPrefix("canopy_column") || name.hasPrefix("canopy_roof") { return "scenery_steel" }
+        if name.hasPrefix("footbridge_deck") { return "scenery_steel" }
+        if name.hasPrefix("footbridge_stair") { return "scenery_concrete" }
+        if name.hasPrefix("bench_") && (name.contains("_seat") || name.contains("_back")) { return "scenery_timber" }
+        if name.hasPrefix("station_main_building") { return "scenery_brick_warm" }
+        if name.hasPrefix("rail_") { return "scenery_steel" }
+        return nil
     }
 
     private static func roughness(for name: String) -> Float {
