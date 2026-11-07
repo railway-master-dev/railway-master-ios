@@ -201,8 +201,36 @@ PYEOF
     fi
     echo "All local packages passed."
     ;;
+  ipa)
+    # Unsigned device build, packaged as an .ipa so the owner can sign it
+    # with a free Apple ID on their own Windows PC (Sideloadly) and install
+    # it on their iPhone. Free provisioning expires after 7 days.
+    xcodebuild -version
+    xcodebuild -resolvePackageDependencies \
+      -project RailwayMasterPhase1.xcodeproj \
+      -scheme RailwayMasterPhase1
+    set -o pipefail
+    xcodebuild build \
+      -project RailwayMasterPhase1.xcodeproj \
+      -scheme RailwayMasterPhase1 \
+      -configuration Debug \
+      -destination 'generic/platform=iOS' \
+      -derivedDataPath build/DerivedDataIPA \
+      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 \
+      | tee ipa-build.log
+    build_status=$?
+    if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
+    APP_PATH="$(find build/DerivedDataIPA/Build/Products/Debug-iphoneos -maxdepth 1 -name '*.app' | head -n 1)"
+    if [ -z "$APP_PATH" ]; then echo "Built .app not found" >&2; exit 1; fi
+    echo "Built app: $APP_PATH"
+    rm -rf Payload RailwayMaster.ipa
+    mkdir -p Payload
+    cp -R "$APP_PATH" Payload/
+    zip -qry RailwayMaster.ipa Payload
+    ls -la RailwayMaster.ipa
+    ;;
   *)
-    echo "usage: ci_run.sh [static|build|packages|screenshots]" >&2
+    echo "usage: ci_run.sh [static|build|packages|screenshots|ipa]" >&2
     exit 2
     ;;
 esac
