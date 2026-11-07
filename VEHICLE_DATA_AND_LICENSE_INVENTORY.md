@@ -74,3 +74,10 @@ SwiftUI画面 `RailwayMasterPhase1/VehicleLibrarySheet.swift` は `@Binding var 
 - `RailwayMasterPhase1/Resources/door_open_chopper.wav` / `door_close_chopper.wav`：界磁チョッパ車用のドア開・閉音。提供者提供の実車録音（2026-11-07）。抵抗制御車の開扉音にも流用する。
 - `RailwayMasterPhase1/Resources/door_open_vvvf.wav` / `door_close_vvvf.wav`：VVVF車用のドア開・閉音。JR西日本223系5000番台の録音（ニコニコモンズ素材 nc180330「ドア開音」／nc180331「ドア閉音」）。商用利用可を提供者が確認済み（2026-11-07）。
 - 上記以外の音声は従来どおり独自合成のみ（BVE Workshop 素材・自前録音のVVVF走行音は本ビルドには未同梱。将来同梱する場合は CC BY-NC 等の条件を本書へ個別に記録する）。
+
+## 同梱音声サンプルの記録（2026-11-08 追記：audio2）
+
+- `RailwayMasterPhase1/Resources/motor_vvvf_*.wav`（26点）／`motor_chopper_*.wav`（12点）／`motor_res_*.wav`（18点）／`run_ballast.wav`／`run_ballast25.wav`／`run_bridge.wav`／`run_slab.wav`／`run_tunnel.wav`：BVE Workshop（https://bvews.jpn.org/）の自作音声素材。東急5000系（VVVF）・東急8500系（界磁チョッパ）・名鉄5300系（抵抗制御相当）のモータ音と、阪急9300系セットの走行音5種。モノラル44.1kHzへ変換して同梱。ライセンスは **CC BY-NC 2.1 日本**（クレジット「BVE Workshop」表記＋非営利のみ。営利利用は要相談）。**本アプリを有料化・広告・課金する場合は、公開前に本素材を除去するか BVE Workshop の許諾を得ること。**
+- `RailwayMasterPhase1/Resources/motor_curves.json`：上記素材の MotorNoise ボリューム表（Bvets形式）から生成した速度→音量カーブ。`Scripts/build_motor_curves.py` で再生成可能。
+- `RailwayMasterPhase1/Resources/vvvf_run_loop_9301.wav`：提供者が自ら録音したVVVF車両の走行音（2026-11-07 提供・利用許可済み）。VVVF車の走行音ループとして使用。
+- 再生は `SampledMotorSound`（力行／制動カーブのクロスフェード＋区間別走行音ループ）。サンプル再生が有効な間、手続き合成側のモータ音はミュートされる。
