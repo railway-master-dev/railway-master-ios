@@ -150,7 +150,17 @@ final class SampledMotorSound {
             }
             return
         }
-        ensurePlayers()
+        // Decide what should sound before touching the audio graph:
+        // attaching player nodes is deferred until a sample is actually
+        // wanted, and the engine is started first (CI #138 launch crash).
+        let speedKmhNow = max(0, snapshot.speedMetersPerSecond) * 3.6
+        let wantsMotor = snapshot.powerNotch > 0 || snapshot.brakeCommand > 0.03 || snapshot.regenerativeBrakeRatio > 0.03
+        let wantsRun = speedKmhNow >= 2 && !snapshot.doorsOpen
+        if motorPlayers.isEmpty {
+            guard wantsMotor || wantsRun else { return }
+            startHandler?()
+            ensurePlayers()
+        }
         if family != currentFamily {
             currentFamily = family
             for index in motorPlayers.indices {
