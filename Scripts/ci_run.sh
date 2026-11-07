@@ -44,7 +44,7 @@ case "$mode" in
       -scheme RailwayMasterPhase1 \
       -configuration Debug \
       -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
-      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 \
+      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ENABLE_TESTABILITY=YES \
       | tee build.log
     build_status=$?
     if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
@@ -54,7 +54,7 @@ case "$mode" in
       -configuration Debug \
       -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
       -resultBundlePath TestResults.xcresult \
-      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 \
+      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ENABLE_TESTABILITY=YES \
       | tee test.log
     ;;
   screenshots)
