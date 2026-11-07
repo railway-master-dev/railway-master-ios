@@ -43,6 +43,7 @@ jobs:
           retention-days: 14
   screenshots:
     needs: build-and-test
+    if: ${{ !cancelled() }}
     runs-on: macos-15
     timeout-minutes: 60
     steps:
