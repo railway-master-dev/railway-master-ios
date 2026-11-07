@@ -1,0 +1,26 @@
+name: Fix inventory
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q -r Scripts/requirements.txt
+      - run: python3 Scripts/generate_package_inventory.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add PACKAGE_INVENTORY.md
+          git commit -m "Regenerate package inventory" || echo "no changes"
+          git push
+      - run: rm .github/workflows/fix-inventory.yml
+      - run: |
+          git add .github/workflows/fix-inventory.yml
+          git commit -m "Remove one-shot fix-inventory workflow" || echo "nothing to remove"
+          git push
