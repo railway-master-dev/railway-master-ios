@@ -550,7 +550,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 simd_quatf(angle: -carSample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
             generatedLeadVehicleRoot?.position = model.root.position
             generatedLeadVehicleRoot?.orientation = model.root.orientation
-            func relativeBogieYaw(_ heading: Double) -> Float {
+            func relativeBogieYaw(_ heading: Float) -> Float {
                 let delta = atan2(sin(heading - carSample.heading), cos(heading - carSample.heading))
                 return Float(-delta)
             }

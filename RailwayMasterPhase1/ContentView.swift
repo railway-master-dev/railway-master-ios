@@ -1079,7 +1079,7 @@ private struct TrackPanorama: View {
                 var rail = Path()
                 for point in 0...20 {
                     let t = Double(point) / 20
-                    let x = centerX + side * (3 + (size.width * 0.265 - 3) * t)
+                    let x = centerX + CGFloat(side) * (3 + (size.width * 0.265 - 3) * CGFloat(t))
                     let y = horizon + (size.height - horizon) * t
                     if point == 0 { rail.move(to: CGPoint(x: x, y: y)) } else { rail.addLine(to: CGPoint(x: x, y: y)) }
                 }
