@@ -94,6 +94,11 @@ struct ContentView: View {
                     nextStopName: nextStopName,
                     distanceToNextStopM: distanceToNextStopM
                 )
+                // Phase 2: the 3D view renders only into the region above the
+                // cab desk. Full-bleed rendering hid the near lineside scenery
+                // (track, platform) behind the desk overlay, leaving only sky
+                // and the far horizon visible.
+                .padding(.bottom, geometry.size.height * (geometry.size.width > geometry.size.height ? 0.40 : 0.36))
                 VStack(spacing: 0) {
                     header
                         .frame(height: 38)
@@ -135,7 +140,7 @@ struct ContentView: View {
                         pneumaticPanel
                             .frame(maxWidth: .infinity)
                     }
-                    .frame(height: geometry.size.height * (geometry.size.width > geometry.size.height ? 0.46 : 0.40))
+                    .frame(height: geometry.size.height * (geometry.size.width > geometry.size.height ? 0.40 : 0.36))
                     .padding(.horizontal, max(10, geometry.size.width * 0.018))
                     .padding(.top, 7)
                     .padding(.bottom, 8)
