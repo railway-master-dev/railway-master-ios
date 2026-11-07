@@ -140,6 +140,11 @@ final class SampledMotorSound {
     }
 
     func update(snapshot: RailwaySimulationSnapshot, settings: RailwayAudioSettings, isEnabled: Bool, engineRunning: Bool) {
+        // BISECTION (CI #138/#141): the test host aborts before running any
+        // test since the sampled motor sound landed. Disable the whole
+        // subsystem for one CI round to confirm or clear it as the cause.
+        isActive = false
+        return
         loadCurvesIfNeeded()
         let family = familyKey(for: settings.tractionSoundProfile)
         isActive = curves[family] != nil
