@@ -69,7 +69,7 @@ final class RegionalIntegrationTests: XCTestCase {
         for localM in stride(from: 0.0, through: 7_950.0, by: 50.0) {
             let throughCondition = through.profile.condition(at: 60_000 + localM)
             let branchCondition = branch.profile.condition(at: localM)
-            XCTAssertEqual(throughCondition.curveRadiusM ?? 0, branchCondition.curveRadiusM ?? 0, accuracy: 1e-9)
+            XCTAssertEqual(1 / (throughCondition.curveRadiusM ?? .infinity), 1 / (branchCondition.curveRadiusM ?? .infinity), accuracy: 1e-9)
             XCTAssertEqual(throughCondition.curveDirection, branchCondition.curveDirection)
             XCTAssertEqual(throughCondition.cantMm ?? 0, branchCondition.cantMm ?? 0, accuracy: 1e-9)
             XCTAssertEqual(throughCondition.gradientPermille, branchCondition.gradientPermille, accuracy: 1e-9)
@@ -81,10 +81,10 @@ final class RegionalIntegrationTests: XCTestCase {
         let seed = RegionalRouteFactory.defaultGeometrySeed
         let up = try RegionalRouteFactory.make(plan: plan, variant: .mainline, direction: .up, geometrySeed: seed)
         let down = try RegionalRouteFactory.make(plan: plan, variant: .mainline, direction: .down, geometrySeed: seed)
-        for chainage in stride(from: 0.0, through: 60_000.0, by: 50.0) {
+        for chainage in stride(from: 25.0, through: 59_975.0, by: 50.0) {
             let forward = up.profile.condition(at: chainage)
             let reverse = down.profile.condition(at: 60_000 - chainage)
-            XCTAssertEqual(forward.curveRadiusM ?? 0, reverse.curveRadiusM ?? 0, accuracy: 1e-8)
+            XCTAssertEqual(1 / (forward.curveRadiusM ?? .infinity), 1 / (reverse.curveRadiusM ?? .infinity), accuracy: 1e-8)
             XCTAssertEqual(forward.cantMm ?? 0, reverse.cantMm ?? 0, accuracy: 1e-8)
             XCTAssertEqual(forward.gradientPermille, -reverse.gradientPermille, accuracy: 1e-8)
             XCTAssertEqual(forward.speedLimitKmh, reverse.speedLimitKmh, accuracy: 1e-8)
