@@ -131,8 +131,8 @@ final class TrainPhysicsTests: XCTestCase {
                                                 sections: [RouteSection(startM: 0, endM: 100, speedLimitKmh: 40)])
         let curvedRoute = RailwayRouteProfile(lineName: "曲線（架空）", departureStation: "甲", arrivalStation: "乙", distanceM: 100, stopMarkerM: 90,
                                               sections: [RouteSection(startM: 0, endM: 100, curveRadiusM: 400, speedLimitKmh: 40)])
-        tick(&straight, count: 1, controls: TrainControls(throttleNotch: 5), route: straightRoute, weather: .dry)
-        tick(&curved, count: 1, controls: TrainControls(throttleNotch: 5), route: curvedRoute, weather: .dry)
+        tick(&straight, count: 60, controls: TrainControls(throttleNotch: 5), route: straightRoute, weather: .dry)
+        tick(&curved, count: 60, controls: TrainControls(throttleNotch: 5), route: curvedRoute, weather: .dry)
         XCTAssertGreaterThan(curved.telemetry(route: curvedRoute).curveResistanceN, 0)
         XCTAssertLessThan(curved.accelerationMps2, straight.accelerationMps2)
     }
