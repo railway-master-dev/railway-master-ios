@@ -176,7 +176,10 @@ PYEOF
     # is photographed standing at the station and running.
     sleep 3
     xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMCabView
-    sleep 55
+    # CI #199: 55 s left the cab shot black (scene still loading on the
+    # simulator); wait 90 s so the cab has rendered, accepting that the
+    # train has just departed by then.
+    sleep 90
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/15-cab-station.png 2>/dev/null || true
     sleep 105
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/16-cab-running.png 2>/dev/null || true
@@ -185,6 +188,10 @@ PYEOF
     APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
       cp "$APP_DATA/Documents/demo-drive-log.txt" screenshots/ || true
+    fi
+    # CI #199: the cab relaunch now writes its own log file; keep it too.
+    if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log-cab.txt" ]; then
+      cp "$APP_DATA/Documents/demo-drive-log-cab.txt" screenshots/ || true
     fi
     sleep 3
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/14-home.png 2>/dev/null || true
