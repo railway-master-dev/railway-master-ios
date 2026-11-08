@@ -171,6 +171,16 @@ PYEOF
     sleep 35
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/13-tour-10-sea-terminus.png 2>/dev/null || true
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+    # Cab check: relaunch in the cab view and let the demo drive the
+    # showcase section (origin to Matsubaramachi) so the rebuilt cab
+    # is photographed standing at the station and running.
+    sleep 3
+    xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMCabView
+    sleep 55
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/15-cab-station.png 2>/dev/null || true
+    sleep 105
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/16-cab-running.png 2>/dev/null || true
+    xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     # Demo-drive state log (the app writes it in -RMDemoDrive mode).
     APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
