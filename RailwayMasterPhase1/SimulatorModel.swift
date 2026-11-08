@@ -1281,7 +1281,7 @@ final class SimulatorModel: ObservableObject {
                     demoServedStopIndex = nextStopIndex
                     demoDoorsOpenedAt = t
                     if !gameModeDoorState.isOpen {
-                        handleGameModeHostEffects([.setGameDoorState(.open)])
+                        handleGameModeHostEffects([.setGameDoorState(travelDirection == .up ? .openRight : .openLeft)])
                     }
                 } else if t - demoDoorsOpenedAt >= 12 && gameModeDoorState.isOpen {
                     handleGameModeHostEffects([.setGameDoorState(.closed)])

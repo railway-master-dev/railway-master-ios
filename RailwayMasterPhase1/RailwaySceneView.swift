@@ -861,6 +861,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                        size: SIMD3<Float>(1, 110, backdropSegment),
                        position: SIMD3<Float>(Float(side) * 680, 40, -backdropSegment * (Float(i) + 0.5)),
                        material: isUrban ? skylineMaterial : backdropMaterial)
+                // Mid-distance tree line (the forest texture that has
+                // been bundled unused until now): a second, nearer
+                // backdrop layer so the far view has depth instead of
+                // one wall of mountains. Skipped in the city and on
+                // the sea side of the coast, where it would stand in
+                // the water.
+                if !isUrban {
+                    var forestMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_mountain_forest")
+                    forestMaterial.faceCulling = .none
+                    let midSeaSign = seaSideSign(travelDirection: travelDirection)
+                    if !(Float(side) == midSeaSign && isCoastal(distanceM: centerM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)) {
+                        addBox(parent: world, name: "forest-mid-\(side)-\(i)",
+                               size: SIMD3<Float>(1, 24, backdropSegment),
+                               position: SIMD3<Float>(Float(side) * 300, 9, -backdropSegment * (Float(i) + 0.5)),
+                               material: forestMaterial)
+                    }
+                }
             }
         }
 
@@ -991,6 +1008,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
         }
 
+        buildRailsAndShoulders(trackOffsetsSeen: trackOffsetsSeen, availableOffsets: offsetsFor)
+        buildTracksideMarkers(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+
         let wallLandmarks = fictionalCorridorLandmarks(for: route)
         for index in samples.indices {
             let sample = samples[index]
@@ -1012,19 +1032,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let centerX = sample.x + lateral * cos(sample.heading)
                     let centerZ = sample.z - lateral * sin(sample.heading)
                     addSurfaceBox(parent: world, name: "ballast-\(index)-\(trackIndex)", size: SIMD3<Float>(3.2, 0.15, segmentLength), position: SIMD3<Float>(centerX, -0.01, centerZ), color: UIColor(red: 0.25, green: 0.26, blue: 0.25, alpha: 1), roughness: 0.96, orientation: trackOrientation)
-                    for side in [-1.0, 1.0] {
-                        let railLateral = lateral + Float(side) * 0.72
-                        let railX = sample.x + railLateral * cos(sample.heading)
-                        let railZ = sample.z - railLateral * sin(sample.heading)
-                        let railY = 0.24 - Float(side) * 0.72 * sin(sample.bankRadians)
-                        addSurfaceBox(parent: world, name: "rail-\(index)-\(trackIndex)-\(Int(side))", size: SIMD3<Float>(0.12, 0.15, segmentLength), position: SIMD3<Float>(railX, railY, railZ), color: UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27, orientation: trackOrientation)
-                    }
+                    // Rails are no longer boxes: buildRailsAndShoulders
+                    // extrudes a true head/web/base profile along the
+                    // line (see below).
                 }
             }
             for (trackIndex, lateral) in trackOffsets.enumerated() {
                 let x = sample.x + lateral * cos(sample.heading)
                 let z = sample.z - lateral * sin(sample.heading)
-                addSurfaceBox(parent: world, name: "sleeper-\(index)-\(trackIndex)", size: SIMD3<Float>(2.55, 0.13, 0.26), position: SIMD3<Float>(x, 0.105, z), color: UIColor(red: 0.34, green: 0.27, blue: 0.19, alpha: 1), roughness: 0.88, orientation: trackOrientation)
+                // Per-sleeper shade variation: real sleepers weather
+                // unevenly, and a perfectly uniform row reads fake.
+                let sleeperShade = 0.82 + Float((index * 37 + trackIndex * 11) % 5) * 0.09
+                addSurfaceBox(parent: world, name: "sleeper-\(index)-\(trackIndex)", size: SIMD3<Float>(2.55, 0.13, 0.26), position: SIMD3<Float>(x, 0.105, z), color: UIColor(red: 0.34 * CGFloat(sleeperShade), green: 0.27 * CGFloat(sleeperShade), blue: 0.19 * CGFloat(sleeperShade), alpha: 1), roughness: 0.88, orientation: trackOrientation)
             }
 
             // Continuous lineside walls (noise barriers), laid as
@@ -1367,7 +1386,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let farOnSeaSide = isCoastal(distanceM: farDistance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                     && farSign == seaSideSign(travelDirection: travelDirection)
                 if !farOnSeaSide && !corridorReserved(at: farDistance, landmarks: landmarks) {
-                    let farSample = sample(at: farDistance)
+                    let farSample = self.sample(at: farDistance)
                     let farLateral = farSign * (23 + Float((index * 7) % 6))
                     let fx = farSample.x + farLateral * cos(farSample.heading)
                     let fz = farSample.z - farLateral * sin(farSample.heading)
@@ -1851,6 +1870,27 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     addBox(parent: train, name: "window-\(carIndex)-\(window)-\(Int(side))", size: SIMD3<Float>(0.035, 0.72, 1.65), position: SIMD3<Float>(Float(side) * 1.435, 2.55, z), material: glassMaterial)
                 }
             }
+            // Bogies: without them the cars float above the rails.
+            for bogie in [-1.0, 1.0] {
+                addBox(parent: train, name: "bogie-\(carIndex)-\(Int(bogie))", size: SIMD3<Float>(2.0, 0.55, 2.6), position: SIMD3<Float>(0, 0.48, centerZ + Float(bogie) * 6.4), material: poleMaterial)
+            }
+        }
+        // Pantograph on the second car: base, crossed arms, contact strip.
+        let pantographZ: Float = 27.5
+        addBox(parent: train, name: "pantograph-base", size: SIMD3<Float>(1.6, 0.08, 1.2), position: SIMD3<Float>(0, 3.60, pantographZ), material: poleMaterial)
+        for armSide in [-1.0, 1.0] {
+            let arm = addBox(parent: train, name: "pantograph-arm-\(Int(armSide))", size: SIMD3<Float>(0.06, 1.15, 0.06), position: SIMD3<Float>(0, 4.05, pantographZ + Float(armSide) * 0.35), material: poleMaterial)
+            arm.orientation = simd_quatf(angle: -Float(armSide) * 0.62, axis: SIMD3<Float>(1, 0, 0))
+        }
+        addBox(parent: train, name: "pantograph-strip", size: SIMD3<Float>(1.8, 0.05, 0.32), position: SIMD3<Float>(0, 4.52, pantographZ), material: poleMaterial)
+        // Cab ends: window band, destination display, headlights.
+        let displayMaterial = Self.pbr(UIColor(red: 0.65, green: 0.85, blue: 0.90, alpha: 1), metallic: 0.1, roughness: 0.4)
+        for endZ: Float in [-0.54, 74.54] {
+            addBox(parent: train, name: "cab-window-\(Int(endZ))", size: SIMD3<Float>(2.4, 0.85, 0.07), position: SIMD3<Float>(0, 2.62, endZ), material: glassMaterial)
+            addBox(parent: train, name: "destination-\(Int(endZ))", size: SIMD3<Float>(0.95, 0.3, 0.06), position: SIMD3<Float>(0, 3.28, endZ), material: displayMaterial)
+            for lightSide in [-1.0, 1.0] {
+                addBox(parent: train, name: "headlight-\(Int(endZ))-\(Int(lightSide))", size: SIMD3<Float>(0.28, 0.22, 0.06), position: SIMD3<Float>(Float(lightSide) * 0.95, 1.15, endZ), material: displayMaterial)
+            }
         }
         return train
     }
@@ -2266,6 +2306,202 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// runs along the line in tileLength-metre repeats, so the texture
     /// keeps its real-world scale over any distance (BVE-style trackbed
     /// and ground aprons without UV stretching).
+    /// One station of a profile extrusion: the track centre at ground
+    /// level plus the bank-rotated local axes (x = lateral, y = up).
+    private struct ProfileStation {
+        var center: SIMD3<Float>
+        var xAxis: SIMD3<Float>
+        var yAxis: SIMD3<Float>
+        var distanceM: Double
+    }
+
+    private func profileStation(at distanceM: Double, trackLateral: Float) -> ProfileStation {
+        let s = sample(at: distanceM)
+        let h = s.heading
+        let bank = s.bankRadians
+        let center = SIMD3<Float>(s.x + trackLateral * cos(h), 0, s.z - trackLateral * sin(h))
+        let xAxis = SIMD3<Float>(cos(bank) * cos(h), -sin(bank), -cos(bank) * sin(h))
+        let yAxis = SIMD3<Float>(sin(bank) * cos(h), cos(bank), -sin(bank) * sin(h))
+        return ProfileStation(center: center, xAxis: xAxis, yAxis: yAxis, distanceM: distanceM)
+    }
+
+    /// Extrudes a 2D profile (lateral, height) along profile stations
+    /// into one mesh. Used for the rail cross-section (closed) and the
+    /// ballast shoulders (open, textured).
+    private func profileStripEntity(name: String, stations: [ProfileStation], profile: [(x: Float, y: Float)], closed: Bool, material: PhysicallyBasedMaterial, uvVTileLength: Float? = nil) -> ModelEntity? {
+        guard stations.count > 1, profile.count > 1 else { return nil }
+        let cols = profile.count
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+        positions.reserveCapacity(stations.count * cols)
+        // Cumulative profile length, for texture u along the profile.
+        var profileU: [Float] = [0]
+        for j in 1..<cols {
+            let dx = profile[j].x - profile[j - 1].x
+            let dy = profile[j].y - profile[j - 1].y
+            profileU.append(profileU[j - 1] + sqrt(dx * dx + dy * dy))
+        }
+        for station in stations {
+            let tangent = -simd_cross(station.xAxis, station.yAxis)
+            for j in 0..<cols {
+                let p = profile[j]
+                positions.append(station.center + p.x * station.xAxis + p.y * station.yAxis)
+                let next = profile[closed ? (j + 1) % cols : min(j + 1, cols - 1)]
+                let edge = (next.x - p.x) * station.xAxis + (next.y - p.y) * station.yAxis
+                var normal = simd_cross(tangent, edge)
+                if simd_length(normal) < 1e-6 { normal = SIMD3<Float>(0, 1, 0) }
+                normals.append(simd_normalize(normal))
+                if let uvVTileLength {
+                    uvs.append(SIMD2<Float>(profileU[j], Float(station.distanceM) / uvVTileLength))
+                }
+            }
+        }
+        let edgeCount = closed ? cols : cols - 1
+        for i in 0..<(stations.count - 1) {
+            for j in 0..<edgeCount {
+                let jNext = (j + 1) % cols
+                let a = UInt32(i * cols + j)
+                let b = UInt32(i * cols + jNext)
+                let c = UInt32((i + 1) * cols + j)
+                let d = UInt32((i + 1) * cols + jNext)
+                indices.append(contentsOf: [a, c, b, b, c, d])
+            }
+        }
+        var descriptor = MeshDescriptor(name: name)
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        if uvVTileLength != nil {
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+        }
+        descriptor.primitives = .triangles(indices)
+        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
+        var material = material
+        material.faceCulling = .none
+        return ModelEntity(mesh: mesh, materials: [material])
+    }
+
+    /// Rails with a real cross-section (base, web, head) plus a
+    /// polished running band on the head, and sloped ballast shoulders
+    /// either side of the flat trackbed ribbon. Built in ~600 m runs
+    /// per rail, following heading and cant from the route samples —
+    /// the same frames the train itself rides on.
+    private func buildRailsAndShoulders(trackOffsetsSeen: [Float], availableOffsets: (RouteSample) -> [Float]) {
+        guard let first = samples.first, let last = samples.last else { return }
+        let railSteel = Self.pbr(UIColor(red: 0.52, green: 0.57, blue: 0.60, alpha: 1), metallic: 0.85, roughness: 0.36)
+        let runningBand = Self.pbr(UIColor(red: 0.78, green: 0.82, blue: 0.85, alpha: 1), metallic: 0.95, roughness: 0.12)
+        let shoulderMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_ballast", normalName: "normal_ballast")
+        // 60 kg/m rail outline, base at sleeper-top height. Heights
+        // are absolute (profile y), widths relative to the rail centre.
+        let railProfile: [(x: Float, y: Float)] = [
+            (-0.075, 0.145), (0.075, 0.145), (0.075, 0.175), (0.018, 0.185),
+            (0.018, 0.255), (0.037, 0.265), (0.037, 0.305), (-0.037, 0.305),
+            (-0.037, 0.265), (-0.018, 0.255), (-0.018, 0.185), (-0.075, 0.175)
+        ]
+        let bandProfile: [(x: Float, y: Float)] = [(-0.026, 0.3065), (0.026, 0.3065)]
+        let shoulderLeft: [(x: Float, y: Float)] = [(-2.65, 0.03), (-1.72, 0.165)]
+        let shoulderRight: [(x: Float, y: Float)] = [(1.72, 0.165), (2.65, 0.03)]
+        let step = 10.5
+        for trackOffset in trackOffsetsSeen {
+            var run: [ProfileStation] = []
+            var runIndex = 0
+            func flushRun() {
+                guard run.count > 1 else { run = []; return }
+                for side: Float in [-0.72, 0.72] {
+                    let profile = railProfile.map { (x: $0.x + side, y: $0.y) }
+                    if let rail = profileStripEntity(name: "rail-profile-\(trackOffset)-\(side)-\(runIndex)", stations: run, profile: profile, closed: true, material: railSteel) {
+                        world.addChild(rail)
+                    }
+                    let band = bandProfile.map { (x: $0.x + side, y: $0.y) }
+                    if let bandEntity = profileStripEntity(name: "rail-band-\(trackOffset)-\(side)-\(runIndex)", stations: run, profile: band, closed: false, material: runningBand) {
+                        world.addChild(bandEntity)
+                    }
+                }
+                if let left = profileStripEntity(name: "ballast-shoulder-l-\(trackOffset)-\(runIndex)", stations: run, profile: shoulderLeft, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+                    world.addChild(left)
+                }
+                if let right = profileStripEntity(name: "ballast-shoulder-r-\(trackOffset)-\(runIndex)", stations: run, profile: shoulderRight, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+                    world.addChild(right)
+                }
+                runIndex += 1
+                run = []
+            }
+            var d = first.distanceM
+            while d <= last.distanceM {
+                let available = availableOffsets(sample(at: d))
+                if available.contains(trackOffset) {
+                    let station = profileStation(at: d, trackLateral: trackOffset)
+                    if let previous = run.last, station.distanceM - previous.distanceM > 600 {
+                        let bridge = previous
+                        flushRun()
+                        run = [bridge]
+                    }
+                    run.append(station)
+                } else {
+                    flushRun()
+                }
+                d += step
+            }
+            flushRun()
+        }
+    }
+
+    /// Trackside furniture that sells the railway at a glance:
+    /// kilometre posts every 1,000 m and ATS balises (ground coils)
+    /// between the running rails just before each signal.
+    private func buildTracksideMarkers(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        let isMainlineKind = routeVariant == .mainline || routeVariant == .throughBranch
+        func matchValue(_ sample: RouteSample) -> Double {
+            if isMainlineKind {
+                return chainageFromCenter(distanceM: sample.distanceM, route: route, travelDirection: travelDirection)
+            }
+            return sample.distanceM
+        }
+        func bestSample(for target: Double, mainlineOnly: Bool) -> RouteSample? {
+            var best: RouteSample?
+            var bestDelta = Double.greatestFiniteMagnitude
+            for sample in samples {
+                if mainlineOnly && !isMainlineSection(distanceM: sample.distanceM, routeVariant: routeVariant, travelDirection: travelDirection) { continue }
+                let delta = abs(matchValue(sample) - target)
+                if delta < bestDelta {
+                    bestDelta = delta
+                    best = sample
+                }
+            }
+            return best
+        }
+        // Kilometre posts on the left of the running direction.
+        let postLateral: Float = travelDirection == .up ? -4.6 : 4.6
+        let limit = isMainlineKind ? 60_000.0 : route.distanceM
+        let markerLandmarks = fictionalCorridorLandmarks(for: route)
+        var km = 1_000.0
+        while km < limit {
+            if let sample = bestSample(for: km, mainlineOnly: false), !corridorReserved(at: sample.distanceM, landmarks: markerLandmarks) {
+                let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let base = routeOffsetPoint(sample, lateral: postLateral)
+                addBox(parent: world, name: "km-post-\(Int(km))", size: SIMD3<Float>(0.12, 0.95, 0.12),
+                       position: SIMD3<Float>(base.x, 0.48, base.z), material: concreteMaterial, orientation: yaw)
+                addBox(parent: world, name: "km-post-cap-\(Int(km))", size: SIMD3<Float>(0.15, 0.2, 0.15),
+                       position: SIMD3<Float>(base.x, 0.98, base.z), material: poleMaterial, orientation: yaw)
+            }
+            km += 1_000
+        }
+        // ATS balises on the running track before each signal.
+        guard isMainlineKind else { return }
+        let baliseMaterial = Self.pbr(UIColor(red: 0.80, green: 0.66, blue: 0.20, alpha: 1), metallic: 0.05, roughness: 0.7)
+        let runningTrack: Float = travelDirection == .up ? -2.1 : 2.1
+        for target in stride(from: 0.0, to: 60_000.0, by: 3_000.0) {
+            for approach in [target - 30, target] {
+                guard let sample = bestSample(for: approach, mainlineOnly: true) else { continue }
+                let orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0)) * simd_quatf(angle: -sample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
+                let center = routeOffsetPoint(sample, lateral: runningTrack)
+                addBox(parent: world, name: "ats-balise-\(Int(approach))", size: SIMD3<Float>(0.34, 0.07, 0.55),
+                       position: SIMD3<Float>(center.x, 0.22, center.z), material: baliseMaterial, orientation: orientation)
+            }
+        }
+    }
+
     private func ribbonEntity(name: String, width: Float, y: Float, tileLength: Float, offsets: [Float], material: PhysicallyBasedMaterial, range: Range<Int>? = nil, uTileLength: Float? = nil) -> ModelEntity? {
         guard offsets.count == samples.count, samples.count > 1 else { return nil }
         let sampleRange = range ?? samples.indices
