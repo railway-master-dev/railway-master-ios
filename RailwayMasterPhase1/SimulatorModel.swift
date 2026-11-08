@@ -314,6 +314,7 @@ final class SimulatorModel: ObservableObject {
             return
         }
         lastFrameTime = time
+        logDemoStateIfDue(wall: time)
         guard !isPaused, runPhase == .running else { return }
         let realDelta = min(max(time - previous, 0), 0.5)
         guard realDelta > 0 else { return }
@@ -1252,6 +1253,9 @@ final class SimulatorModel: ObservableObject {
     private var demoStuckSince: Double = -1
     private var demoCreepUntilM: Double = -1
     private var demoCreepStage2FromM: Double = -1
+    private var demoLogHandle: FileHandle?
+    private var demoLogStarted = false
+    private var lastDemoLogWall: TimeInterval = -10
 
     /// Scripted drive for screenshot runs: close the doors, depart
     /// after the (shortened) origin wait, then run the service like a
@@ -1261,6 +1265,40 @@ final class SimulatorModel: ObservableObject {
     /// once a second. Ignoring the stop pattern stopped the train
     /// mid-section in CI #169; ignoring the confirmation deadline
     /// stopped it in CI #166.
+    /// Demo-mode diagnostics: one state line per second into
+    /// Documents/demo-drive-log.txt, pulled by the CI screenshots
+    /// job. Exists because the demo stall in CI #177/#179 could not
+    /// be diagnosed from screenshots alone (several HUD values are
+    /// mutually inconsistent in the stall, so the true holder of
+    /// the brake must be read from the model's own state).
+    private func logDemoStateIfDue(wall: TimeInterval) {
+        guard demoDriveEnabled, wall - lastDemoLogWall >= 1 else { return }
+        lastDemoLogWall = wall
+        if !demoLogStarted {
+            demoLogStarted = true
+            if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                let url = dir.appendingPathComponent("demo-drive-log.txt")
+                FileManager.default.createFile(atPath: url.path, contents: nil)
+                demoLogHandle = try? FileHandle(forWritingTo: url)
+            }
+        }
+        guard let handle = demoLogHandle else { return }
+        let nextPos = activeStops.indices.contains(nextStopIndex) ? activeStops[nextStopIndex].positionM : -1
+        let line = String(format: "t=%.0f wall=%.0f pos=%.1f spd=%.2f drv=%d/%d app=%d/%d prot=%@ auto=%d reason=%@ perm=%.1f nidx=%d npos=%.0f door=%@ phase=%@ stuck=%.0f creep=%.0f bc=%.0f dwell=%.1f\n",
+                          simulationTime, wall, engine.positionM, engine.speedMps * 3.6,
+                          controls.throttleNotch, controls.brakeNotch,
+                          appliedDrivingControls.throttleNotch, appliedDrivingControls.brakeNotch,
+                          protectionActingSystems.isEmpty ? "-" : protectionActingSystems.joined(separator: ","),
+                          (latestOperationsSnapshot?.automaticBrakeActive ?? false) ? 1 : 0,
+                          latestOperationsSnapshot?.automaticBrakeReason ?? "-",
+                          latestOperationsSnapshot?.permittedSpeedKmh ?? -1,
+                          nextStopIndex, nextPos,
+                          String(describing: gameModeDoorState), runPhase.rawValue,
+                          demoStuckSince, demoCreepUntilM,
+                          trainPhysicsTelemetry.brakeCylinderPressureKPa, arrivalDwellSeconds)
+        if let data = line.data(using: .utf8) { handle.write(data) }
+    }
+
     private func driveDemoIfEnabled() {
         guard demoDriveEnabled, runPhase == .running else { return }
         let t = simulationTime
