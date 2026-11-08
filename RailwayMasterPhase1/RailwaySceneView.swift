@@ -1010,6 +1010,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
         buildRailsAndShoulders(trackOffsetsSeen: trackOffsetsSeen, availableOffsets: offsetsFor)
         buildTracksideMarkers(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
 
         let wallLandmarks = fictionalCorridorLandmarks(for: route)
         for index in samples.indices {
@@ -1372,11 +1373,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 addTree(parent: world, name: "tree-\(index)", x: treePoint.x, z: treePoint.z, height: 3.1 + Float(index % 4) * 0.35, material: foliageMaterials[index % foliageMaterials.count])
                 foliageCount += 1
             }
-            if index.isMultiple(of: 5) {
-                let poleSample = self.sample(at: distance + 7)
-                let polePoint = routeOffsetPoint(poleSample, lateral: offset + sign * 4.2)
-                addBox(parent: world, name: "utility-pole-\(index)", size: SIMD3<Float>(0.13, 5.2, 0.13), position: SIMD3<Float>(polePoint.x, 2.55, polePoint.z), material: poleMaterial)
-            }
+            // (Utility poles used to be a single thin box here every
+            // fifth house. They are now a full distribution-pole
+            // system — see buildUtilityPoles.)
             // A second, simpler house row further back on the opposite
             // side, so the suburb reads as a settled area with depth
             // rather than a single line of houses along the fence.
@@ -2499,6 +2498,201 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 addBox(parent: world, name: "ats-balise-\(Int(approach))", size: SIMD3<Float>(0.34, 0.07, 0.55),
                        position: SIMD3<Float>(center.x, 0.22, center.z), material: baliseMaterial, orientation: orientation)
             }
+        }
+    }
+
+    /// Accumulates boxes and prisms into one mesh, so a whole street
+    /// of detailed small parts costs a handful of entities instead of
+    /// thousands. Faces carry flat normals; materials come from the
+    /// caller, one batch per material family.
+    private struct MeshBatchBuilder {
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var indices: [UInt32] = []
+
+        mutating func addBoxAxes(center: SIMD3<Float>, size: SIMD3<Float>, ax: SIMD3<Float>, ay: SIMD3<Float>, az: SIMD3<Float>) {
+            let hx = size.x / 2, hy = size.y / 2, hz = size.z / 2
+            func corner(_ sx: Float, _ sy: Float, _ sz: Float) -> SIMD3<Float> {
+                center + ax * (sx * hx) + ay * (sy * hy) + az * (sz * hz)
+            }
+            // Six faces as (normal, four corners CCW from outside).
+            let faces: [(SIMD3<Float>, [SIMD3<Float>])] = [
+                (ax, [corner(1, -1, -1), corner(1, -1, 1), corner(1, 1, 1), corner(1, 1, -1)]),
+                (-ax, [corner(-1, -1, 1), corner(-1, -1, -1), corner(-1, 1, -1), corner(-1, 1, 1)]),
+                (ay, [corner(-1, 1, -1), corner(1, 1, -1), corner(1, 1, 1), corner(-1, 1, 1)]),
+                (-ay, [corner(-1, -1, 1), corner(1, -1, 1), corner(1, -1, -1), corner(-1, -1, -1)]),
+                (az, [corner(-1, -1, 1), corner(1, -1, 1), corner(1, 1, 1), corner(-1, 1, 1)]),
+                (-az, [corner(1, -1, -1), corner(-1, -1, -1), corner(-1, 1, -1), corner(1, 1, -1)])
+            ]
+            for (normal, corners) in faces {
+                let base = UInt32(positions.count)
+                for c in corners {
+                    positions.append(c)
+                    normals.append(normal)
+                }
+                indices.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
+            }
+        }
+
+        mutating func addBox(center: SIMD3<Float>, size: SIMD3<Float>, yaw: Float) {
+            let c = cos(yaw), s = sin(yaw)
+            addBoxAxes(center: center, size: size,
+                       ax: SIMD3<Float>(c, 0, -s), ay: SIMD3<Float>(0, 1, 0), az: SIMD3<Float>(-s, 0, c))
+        }
+
+        /// Vertical hexagonal prism (pole, transformer can, insulator).
+        mutating func addPrism(baseCenter: SIMD3<Float>, radius: Float, height: Float, yaw: Float) {
+            let sides = 6
+            var ringBottom: [SIMD3<Float>] = []
+            var ringTop: [SIMD3<Float>] = []
+            for i in 0..<sides {
+                let a = yaw + Float(i) * (Float.pi / 3)
+                let dir = SIMD3<Float>(cos(a), 0, -sin(a))
+                ringBottom.append(baseCenter + dir * radius)
+                ringTop.append(baseCenter + dir * radius + SIMD3<Float>(0, height, 0))
+            }
+            for i in 0..<sides {
+                let j = (i + 1) % sides
+                let mid = (ringBottom[i] + ringBottom[j]) / 2 - baseCenter
+                var normal = SIMD3<Float>(mid.x, 0, mid.z)
+                normal = simd_normalize(normal)
+                let base = UInt32(positions.count)
+                positions.append(contentsOf: [ringBottom[i], ringBottom[j], ringTop[j], ringTop[i]])
+                for _ in 0..<4 { normals.append(normal) }
+                indices.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
+            }
+            // Top cap as a fan.
+            let capCenter = baseCenter + SIMD3<Float>(0, height, 0)
+            for i in 0..<sides {
+                let j = (i + 1) % sides
+                let base = UInt32(positions.count)
+                positions.append(contentsOf: [capCenter, ringTop[j], ringTop[i]])
+                for _ in 0..<3 { normals.append(SIMD3<Float>(0, 1, 0)) }
+                indices.append(contentsOf: [base, base + 1, base + 2])
+            }
+        }
+
+        /// A straight wire segment between two points, as a thin box.
+        mutating func addSegment(from: SIMD3<Float>, to: SIMD3<Float>, thickness: Float) {
+            let dir = to - from
+            let length = simd_length(dir)
+            guard length > 0.01 else { return }
+            let az = dir / length
+            var ax = simd_cross(SIMD3<Float>(0, 1, 0), az)
+            if simd_length(ax) < 0.01 { ax = SIMD3<Float>(1, 0, 0) }
+            ax = simd_normalize(ax)
+            let ay = simd_cross(az, ax)
+            addBoxAxes(center: (from + to) / 2, size: SIMD3<Float>(thickness, thickness, length), ax: ax, ay: ay, az: az)
+        }
+
+        func build(name: String, material: PhysicallyBasedMaterial) -> ModelEntity? {
+            guard !positions.isEmpty else { return nil }
+            var descriptor = MeshDescriptor(name: name)
+            descriptor.positions = MeshBuffers.Positions(positions)
+            descriptor.normals = MeshBuffers.Normals(normals)
+            descriptor.primitives = .triangles(indices)
+            guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
+            var material = material
+            material.faceCulling = .none
+            return ModelEntity(mesh: mesh, materials: [material])
+        }
+    }
+
+    /// Full distribution-pole system for the suburban sections:
+    /// tapered concrete poles with two steel crossarms, porcelain
+    /// insulators, a transformer can on every sixth pole, and wires
+    /// that actually sag between poles. Replaces the old single-stick
+    /// poles. Geometry is batched per ~1.2 km chunk into three meshes
+    /// (concrete / steel / porcelain) to keep the entity count low.
+    private func buildUtilityPoles(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        let concrete = Self.pbr(UIColor(red: 0.62, green: 0.62, blue: 0.60, alpha: 1), metallic: 0.02, roughness: 0.9)
+        let steel = Self.pbr(UIColor(red: 0.23, green: 0.25, blue: 0.26, alpha: 1), metallic: 0.55, roughness: 0.55)
+        let porcelain = Self.pbr(UIColor(red: 0.88, green: 0.87, blue: 0.84, alpha: 1), metallic: 0.05, roughness: 0.35)
+        let landmarks = fictionalCorridorLandmarks(for: route)
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        struct PoleSpot { var chainage: Double; var sample: RouteSample; var lateral: Float }
+        for sideSign: Float in [-1, 1] {
+            // Collect this side's pole spots first so wires can be
+            // strung between consecutive poles.
+            var spots: [PoleSpot] = []
+            var d = 60.0 + (sideSign > 0 ? 22.5 : 0.0)
+            while d < route.distanceM - 60 {
+                let band = urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                let onSeaSide = isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) && sideSign == seaSign
+                if band == 0 && !onSeaSide && !corridorReserved(at: d, landmarks: landmarks) {
+                    spots.append(PoleSpot(chainage: d, sample: sample(at: d), lateral: sideSign * 18.6))
+                }
+                d += 45
+            }
+            var concreteBatch = MeshBatchBuilder()
+            var steelBatch = MeshBatchBuilder()
+            var porcelainBatch = MeshBatchBuilder()
+            var chunkIndex = 0
+            var chunkStart = spots.first?.chainage ?? 0
+            func flush() {
+                let tag = "\(sideSign > 0 ? "r" : "l")-\(chunkIndex)"
+                if let e = concreteBatch.build(name: "utility-concrete-\(tag)", material: concrete) { world.addChild(e) }
+                if let e = steelBatch.build(name: "utility-steel-\(tag)", material: steel) { world.addChild(e) }
+                if let e = porcelainBatch.build(name: "utility-porcelain-\(tag)", material: porcelain) { world.addChild(e) }
+                concreteBatch = MeshBatchBuilder()
+                steelBatch = MeshBatchBuilder()
+                porcelainBatch = MeshBatchBuilder()
+                chunkIndex += 1
+            }
+            // Wire runs: attach offsets (lateral from pole centre,
+            // height) for the two crossarms.
+            let wireRuns: [(offset: Float, height: Float)] = [(-0.8, 8.44), (0.8, 8.44), (-0.65, 7.64), (0.65, 7.64)]
+            for (index, spot) in spots.enumerated() {
+                if spot.chainage - chunkStart > 1_200 {
+                    flush()
+                    chunkStart = spot.chainage
+                }
+                let s = spot.sample
+                let base = routeOffsetPoint(s, lateral: spot.lateral)
+                let bc = SIMD3<Float>(base.x, 0, base.z)
+                // Tapered pole: two stacked prisms.
+                concreteBatch.addPrism(baseCenter: bc, radius: 0.17, height: 5.0, yaw: s.heading)
+                concreteBatch.addPrism(baseCenter: bc + SIMD3<Float>(0, 5.0, 0), radius: 0.125, height: 4.0, yaw: s.heading)
+                // Crossarms across the line of the street.
+                for (armHeight, armWidth) in [(Float(8.3), Float(1.9)), (Float(7.5), Float(1.6))] {
+                    steelBatch.addBox(center: bc + SIMD3<Float>(0, armHeight, 0),
+                                      size: SIMD3<Float>(armWidth, 0.1, 0.09), yaw: s.heading)
+                }
+                // Insulators on the arm ends.
+                for run in wireRuns {
+                    let p = routeOffsetPoint(s, lateral: spot.lateral + run.offset)
+                    porcelainBatch.addPrism(baseCenter: SIMD3<Float>(p.x, run.height - 0.14, p.z), radius: 0.045, height: 0.14, yaw: s.heading)
+                }
+                // Transformer can on every sixth pole, track side.
+                if index % 6 == 3 {
+                    let t = routeOffsetPoint(s, lateral: spot.lateral - sideSign * 0.52)
+                    steelBatch.addPrism(baseCenter: SIMD3<Float>(t.x, 5.6, t.z), radius: 0.34, height: 0.95, yaw: s.heading)
+                }
+                // Sagging wires to the previous pole on this side.
+                if index > 0 {
+                    let prev = spots[index - 1]
+                    let span = spot.chainage - prev.chainage
+                    if span <= 60 {
+                        for run in wireRuns {
+                            let a = routeOffsetPoint(prev.sample, lateral: prev.lateral + run.offset)
+                            let b = routeOffsetPoint(s, lateral: spot.lateral + run.offset)
+                            var lastPoint = SIMD3<Float>(a.x, run.height, a.z)
+                            let steps = 7
+                            for k in 1...steps {
+                                let t = Float(k) / Float(steps)
+                                let sag = 0.85 * 4 * t * (1 - t)
+                                let point = SIMD3<Float>(
+                                    a.x + (b.x - a.x) * t,
+                                    run.height - sag,
+                                    a.z + (b.z - a.z) * t)
+                                steelBatch.addSegment(from: lastPoint, to: point, thickness: 0.035)
+                                lastPoint = point
+                            }
+                        }
+                    }
+                }
+            }
+            flush()
         }
     }
 

@@ -1249,6 +1249,9 @@ final class SimulatorModel: ObservableObject {
     private var lastDemoAckSeconds: Double = -10
     private var demoServedStopIndex: Int = -1
     private var demoDoorsOpenedAt: Double = -1
+    private var demoStuckSince: Double = -1
+    private var demoCreepUntilM: Double = -1
+    private var demoCreepStage2FromM: Double = -1
 
     /// Scripted drive for screenshot runs: close the doors, depart
     /// after the (shortened) origin wait, then run the service like a
@@ -1294,9 +1297,37 @@ final class SimulatorModel: ObservableObject {
             }
         }
 
+        // The fictional protection layer has its own stop targets
+        // (an ATS-P profile target every 4 km) that the operations
+        // snapshot does not show. When it stops the train away from
+        // a station, do what a driver does: wait for the reset (the
+        // per-second acknowledgement above requests it), then creep
+        // past the target — slowly at first, then at 40 km/h — so
+        // the pattern is not exceeded again on the way out.
+        let distanceToNextStop = activeStops.indices.contains(nextStopIndex)
+            ? activeStops[nextStopIndex].positionM - engine.positionM
+            : Double.greatestFiniteMagnitude
+        if speedKmh <= 0.5 && distanceToNextStop > 10 && !gameModeDoorState.isOpen {
+            if demoStuckSince < 0 { demoStuckSince = t }
+        } else if speedKmh > 0.5 {
+            demoStuckSince = -1
+        }
+        if demoStuckSince >= 0 && t - demoStuckSince >= 4 && demoCreepUntilM < engine.positionM {
+            demoCreepStage2FromM = engine.positionM + 30
+            demoCreepUntilM = engine.positionM + 200
+            demoStuckSince = -1
+        }
+
         // Cruise under the protection's permitted speed, with a
         // gentle final approach to the next scheduled stop.
         var target = min(65, (latestOperationsSnapshot?.permittedSpeedKmh ?? 65) - 2)
+        if engine.positionM < demoCreepUntilM {
+            if engine.positionM < demoCreepStage2FromM {
+                target = min(target, 10)
+            } else {
+                target = min(target, 40)
+            }
+        }
         if activeStops.indices.contains(nextStopIndex) {
             let distanceToStop = activeStops[nextStopIndex].positionM - engine.positionM
             if distanceToStop < 60 { target = min(target, 12) }
