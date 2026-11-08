@@ -154,7 +154,9 @@ public final class CameraController {
             // ~1.86 m, console/instruments ~1.92-2.17 m, windscreen
             // 2.62-3.34 m. The previous y of 1.55 put the eye at cushion
             // height, staring into the dashboard and the front bulkhead.
-            return CameraPose(position: RenderVector3(x: 0, y: 2.32, z: -2.45), target: RenderVector3(x: 0, y: 2.30, z: 60), fieldOfViewDegrees: 66)
+            // The E231 cab seats the driver left of centre, so the eye
+            // shifts to x -0.35 (user decision 2026-11-08).
+            return CameraPose(position: RenderVector3(x: -0.35, y: 2.32, z: -2.45), target: RenderVector3(x: -0.35, y: 2.30, z: 60), fieldOfViewDegrees: 66)
         case .forward:
             // Scenery-only front view (user decision 2026-11-08: the cab
             // interior is no longer shown). The eye floats just ahead of
