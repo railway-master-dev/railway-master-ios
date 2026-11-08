@@ -143,9 +143,16 @@ public enum FictionalLiveProtectionLayout {
             let profile = origin + 900
             let target = min(lengthM, profile + 500)
             if profile < target {
+                // A 45 km/h supervision target, as ATS-P normally
+                // supervises speed restrictions. This used to be a
+                // 0 km/h stop target, which was impassable in normal
+                // play: its 8 m safety margin makes the permitted
+                // speed exactly 0 for the last 8 m, so any train
+                // that stops inside that zone can never move again
+                // (reset -> one tick of traction -> instant re-latch).
                 place(try RouteEquipment(
                     id: "fictional-ats-p-\(pattern)", trackID: trackID, kind: .atsPProfileTarget,
-                    positionM: profile, targetPositionM: target, targetSpeedKmh: 0
+                    positionM: profile, targetPositionM: target, targetSpeedKmh: 45
                 ))
             }
             let point = origin + 1_600
