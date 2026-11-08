@@ -18,10 +18,12 @@ data. Idempotent: primitives that already have TEXCOORD_0 are skipped.
 
 Role/tile table (mirrors the loader's texture-name table in
 GeneratedRailwayAssetLoader.swift — keep the two in sync):
-  sleeper 2.0 m, trackbed 4.0 m, platform 4.0 m, canopy 3.0 m,
-  footbridge 3.0 m, bench seat/back 1.0 m, building 6.0 m, rail 2.0 m,
-  hub materials: concrete 4.0, gravel 4.0, sleeper 2.0, building 6.0,
-  canopy/roof/rail 3.0/3.0/2.0. Default 4.0 m.
+  sleeper 2.0 m, trackbed 4.0 m, platform 6.0 m, canopy 4.5 m,
+  footbridge 4.0 m, bench seat/back 1.0 m, building 8.0 m, rail 2.0 m,
+  hub materials: concrete 6.0, gravel 4.0, sleeper 2.0, building 8.0,
+  canopy/roof/rail 4.5/4.5/2.0. Default 4.0 m.
+  (quality12: platform/canopy/building tiles enlarged so the photo
+  textures repeat more calmly at stopping distance.)
 """
 from __future__ import annotations
 
@@ -47,12 +49,12 @@ STATION_FILES = [
 def tile_for(mesh_name: str, material_name: str | None) -> float:
     if material_name:
         table = {
-            "fictional_concrete": 4.0,
+            "fictional_concrete": 6.0,
             "fictional_gravel": 4.0,
             "fictional_sleeper": 2.0,
-            "fictional_building": 6.0,
-            "fictional_canopy": 3.0,
-            "fictional_roof": 3.0,
+            "fictional_building": 8.0,
+            "fictional_canopy": 4.5,
+            "fictional_roof": 4.5,
             "fictional_rail": 2.0,
         }
         return table.get(material_name, 4.0)
@@ -62,15 +64,15 @@ def tile_for(mesh_name: str, material_name: str | None) -> float:
     if name.startswith("trackbed"):
         return 4.0
     if name.startswith("platform"):
-        return 4.0
+        return 6.0
     if name.startswith("canopy_"):
-        return 3.0
+        return 4.5
     if name.startswith("footbridge_"):
-        return 3.0
+        return 4.0
     if name.startswith("bench_"):
         return 1.0
     if name.startswith("station_main_building"):
-        return 6.0
+        return 8.0
     if name.startswith("rail_"):
         return 2.0
     return 4.0
