@@ -140,7 +140,13 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
-        view.backgroundColor = RailwaySkyPalette.color(for: environmentSelection)
+        // The renderer clears with environment.background, not with the
+        // UIView's backgroundColor: setting only the latter left the
+        // sky black in every running shot (CI #166) even though the
+        // palette itself was correct.
+        let skyColor = RailwaySkyPalette.color(for: environmentSelection)
+        view.backgroundColor = skyColor
+        view.environment.background = .color(skyColor)
         context.coordinator.lastSkySelection = environmentSelection
         context.coordinator.scene.prepare(
             route: route, quality: environmentSelection.renderQuality,
@@ -166,7 +172,9 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
 
     func updateUIView(_ view: ARView, context: Context) {
         if context.coordinator.lastSkySelection != environmentSelection {
-            view.backgroundColor = RailwaySkyPalette.color(for: environmentSelection)
+            let skyColor = RailwaySkyPalette.color(for: environmentSelection)
+            view.backgroundColor = skyColor
+            view.environment.background = .color(skyColor)
             context.coordinator.lastSkySelection = environmentSelection
         }
         context.coordinator.scene.update(

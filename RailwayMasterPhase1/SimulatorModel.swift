@@ -1246,9 +1246,14 @@ final class SimulatorModel: ObservableObject {
         ProcessInfo.processInfo.arguments.contains("-RMDemoDrive")
     }
 
+    private var lastDemoAckSeconds: Double = -10
+
     /// Scripted drive for screenshot runs: close the doors, depart
     /// after the (shortened) origin wait, and hold an urban-core
     /// cruising speed so the later screenshots show running scenery.
+    /// The fictional ATS is acknowledged once a second, as a driver
+    /// would; without that it stops the train for a missed
+    /// confirmation (CI #166 running shots).
     private func driveDemoIfEnabled() {
         guard demoDriveEnabled, runPhase == .running else { return }
         let t = simulationTime
@@ -1256,7 +1261,11 @@ final class SimulatorModel: ObservableObject {
             handleGameModeHostEffects([.setGameDoorState(.closed)])
         }
         guard t >= 50 else { return }
-        if t >= 260 {
+        if t - lastDemoAckSeconds >= 1 {
+            lastDemoAckSeconds = t
+            acknowledgeATS()
+        }
+        if t >= 430 {
             setThrottle(0)
             setBrake(3)
             return
