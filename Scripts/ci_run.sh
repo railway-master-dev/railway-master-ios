@@ -123,9 +123,10 @@ PYEOF
     xcrun simctl boot "$SIMULATOR_UDID" || true
     xcrun simctl bootstatus "$SIMULATOR_UDID" -b
     xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
-    # -RMDemoDrive enables the app's scripted drive (doors close, the
-    # train departs and cruises) so the late shots show running scenery.
-    xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive
+    # -RMDemoDrive -RMTour: the app teleports the standing train to a
+    # new scenic chainage every ~35 s of frame time (first at ~40 s),
+    # so one launch photographs ten different places along the line.
+    xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour
     xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 screenshots/launch-video.mov &
     VIDEO_PID=$!
     sleep 4
@@ -143,20 +144,32 @@ PYEOF
     } > screenshots/diagnostics.txt 2>&1 || true
     cp -f ~/Library/Logs/DiagnosticReports/RailwayMasterPhase1* screenshots/ 2>/dev/null || true
     xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 6m --predicate 'process == "RailwayMasterPhase1"' 2>/dev/null | tail -c 150000 > screenshots/device-log.txt || true
-    # Much later shots test the slow-startup theory (CI #102 was still
-    # building the world at +46 s and every frame came out black); a
-    # home-screen shot tests whether the simulator display renders at all.
-    sleep 75
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/04-app-late.png 2>/dev/null || true
-    sleep 70
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/05-app-later.png 2>/dev/null || true
-    # With -RMDemoDrive the train departs at about +1 min of sim time
-    # and cruises the urban core, so these two shots catch open-line
-    # running scenery instead of the origin platform.
-    sleep 150
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/06-running.png 2>/dev/null || true
-    sleep 60
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/07-running.png 2>/dev/null || true
+    # Location tour (teleports at frame-time ~40 s + 35 s steps; the
+    # sleeps below land ~20 s after each teleport so the view has
+    # settled): 500 m urban core, 5.5 km fringe, 7.5 km suburb with
+    # the new poles, 9.7 km river bridge, 13.5 km suburb, 17.65 km
+    # tunnel portal, 24.1 km Kannyoshi station, 33 km fields,
+    # 45.5 km and 56.5 km along the sea.
+    sleep 31
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/04-tour-01-urban-core.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/05-tour-02-fringe.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/06-tour-03-suburb-poles.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/07-tour-04-river-bridge.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/08-tour-05-suburb.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/09-tour-06-tunnel-portal.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/10-tour-07-station.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/11-tour-08-fields.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/12-tour-09-sea.png 2>/dev/null || true
+    sleep 35
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/13-tour-10-sea-terminus.png 2>/dev/null || true
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     # Demo-drive state log (the app writes it in -RMDemoDrive mode).
     APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
@@ -164,7 +177,7 @@ PYEOF
       cp "$APP_DATA/Documents/demo-drive-log.txt" screenshots/ || true
     fi
     sleep 3
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/08-home.png 2>/dev/null || true
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/14-home.png 2>/dev/null || true
     ls -la screenshots/
     ;;
   packages)
