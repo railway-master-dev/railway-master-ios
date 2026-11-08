@@ -18,6 +18,28 @@ final class SceneryVarietyTests: XCTestCase {
         XCTAssertEqual(Set(SceneSurfaceTextureCatalog.resourceNames).count, 9)
     }
 
+    func testBalancedDensityMeetsBveBenchmarkMinimum() throws {
+        let route = try straight(length: 4_500)
+        let plan = RailwaySceneFidelityBuilder.build(
+            route: route,
+            corridor: SceneCorridorSpecification(generateUrbanScenery: true),
+            camera: camera(on: route, at: 200, far: 4_200),
+            density: .preset(.balanced)
+        )
+        // BVE benchmark (Toyoko/Tojo analysis): no kilometre may read as
+        // empty; the all-line minimum target is 150 scenery objects/km.
+        // The balanced build window here is about 1.04 km, so 200
+        // assemblies is roughly 190/km, above the minimum with margin.
+        let sceneryRoles: Set<SceneAssemblyRole> = [
+            .building, .vegetation, .roadVehicle, .catenarySupport, .tracksideSign
+        ]
+        let scenery = plan.assemblies.filter { sceneryRoles.contains($0.role) }
+        XCTAssertGreaterThanOrEqual(scenery.count, 200)
+        XCTAssertTrue(plan.assemblies.contains { $0.role == .tracksideSign })
+        let buildingSides = Set(plan.assemblies.filter { $0.role == .building }.map { $0.position.x > 0 })
+        XCTAssertEqual(buildingSides, [true, false], "Buildings must line both sides of the track")
+    }
+
     func testCabViewGetsMoreThanOneBuildingAndPlantForm() throws {
         let route = try straight(length: 4_500)
         let platform = ScenePlatformSpecification(id: "fictional-platform", startChainageM: 40, endChainageM: 220, side: 1)
