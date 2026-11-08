@@ -345,6 +345,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var didBuild = false
     private var routeSignature = ""
     private var samples: [RouteSample] = []
+    /// Ground level under the track, per sample (see
+    /// `computeViaductGround`). In a viaduct zone it is the
+    /// valley-floor datum (rolling minimum of the elevation); under
+    /// stations and outside zones it is the track elevation; 300 m
+    /// smooth tapers join the two, so the ground never steps. Ground
+    /// -level scenery stands on this; track furniture stays on
+    /// `elevationM`.
+    private var viaductGround: [Float] = []
     private var trafficSceneRoute: SceneChainageRoute?
     private var trafficActorAdapter = RailwayTrafficActorRealityKitAdapter()
     private var previousTrafficSnapshot: TrafficSnapshot?
@@ -361,7 +369,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var renderQualitySettings = RenderQualityResolver.resolve(profile: .balanced, thermalCondition: .nominal)
     private var precipitationEntities: [ModelEntity] = []
     private var precipitationKind: RenderingWeather?
-    private var currentSample = RouteSample(distanceM: 0, x: 0, z: 0, heading: 0, bankRadians: 0)
+    private var currentSample = RouteSample(distanceM: 0, x: 0, z: 0, heading: 0, bankRadians: 0, elevationM: 0)
     private var currentSimulationTime = 0.0
     private var previousRenderTime: Double?
     private var cameraWorldPosition = SIMD3<Float>(0, 0, 0)
@@ -494,6 +502,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let sampleBudget = max(300, min(1_600, renderQualitySettings.sceneryInstanceLimit))
         let sampleInterval = max(profileInterval, route.distanceM / Double(sampleBudget))
         samples = makeSamples(route: route, interval: sampleInterval)
+        viaductGround = computeViaductGround(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
         trafficSceneRoute = makeSceneFidelityRoute()
         sceneFidelityRoute = trafficSceneRoute
         sceneFidelityAdapter = RailwayRealityKitSceneAdapter()
@@ -579,9 +588,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let sample = RouteSample(
             distanceM: centerSample.distanceM,
             x: centerSample.x + playerLateral * cos(centerSample.heading),
-            z: centerSample.z - playerLateral * sin(centerSample.heading),
+            z: centerSample.z + playerLateral * sin(centerSample.heading),
             heading: centerSample.heading,
-            bankRadians: centerSample.bankRadians
+            bankRadians: centerSample.bankRadians,
+            elevationM: centerSample.elevationM
         )
         currentSample = sample
         currentSimulationTime = simulationTime
@@ -592,23 +602,40 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
             let trackSide: Float = travelDirection == .up ? -2.1 : 2.1
             model.root.position = SIMD3<Float>(
-                carSample.x + trackSide * carLateral.x, 0, carSample.z + trackSide * carLateral.z
+                carSample.x + trackSide * carLateral.x, carSample.elevationM, carSample.z + trackSide * carLateral.z
+            )
+            // Pitch the body about its lateral axis from the two bogie
+            // heights, so the car follows the grade instead of staying
+            // level while the rail climbs or falls under it.
+            let carPitch = RegionalRouteGeometrySampler.carBodyPitchRadians(
+                frontBogieElevationM: self.sample(at: chainage + 6.35).elevationM,
+                rearBogieElevationM: self.sample(at: chainage - 6.35).elevationM
             )
             // Vehicle meshes face local -Z; negative route yaw aligns that end with route-forward.
             model.root.orientation = simd_quatf(angle: -carSample.heading, axis: SIMD3<Float>(0, 1, 0)) *
+                simd_quatf(angle: carPitch, axis: SIMD3<Float>(1, 0, 0)) *
                 simd_quatf(angle: -carSample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
         }
         if let model = highFidelityLeadVehicle {
             let carChainage = positionM - 9.75
             let carSample = self.sample(at: carChainage)
-            let frontBogieSample = self.sample(at: carChainage - 6.35)
-            let rearBogieSample = self.sample(at: carChainage + 6.35)
+            // Bogies sit ±6.35 m from the car centre; the front bogie is
+            // toward increasing chainage (the mesh front, local -Z,
+            // faces route-forward). These were previously swapped, so
+            // each bogie yawed as if it stood at the other end.
+            let frontBogieSample = self.sample(at: carChainage + 6.35)
+            let rearBogieSample = self.sample(at: carChainage - 6.35)
             let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
             let trackSide: Float = travelDirection == .up ? -2.1 : 2.1
             model.root.position = SIMD3<Float>(
-                carSample.x + trackSide * carLateral.x, 0, carSample.z + trackSide * carLateral.z
+                carSample.x + trackSide * carLateral.x, carSample.elevationM, carSample.z + trackSide * carLateral.z
+            )
+            let leadPitch = RegionalRouteGeometrySampler.carBodyPitchRadians(
+                frontBogieElevationM: frontBogieSample.elevationM,
+                rearBogieElevationM: rearBogieSample.elevationM
             )
             model.root.orientation = simd_quatf(angle: -carSample.heading, axis: SIMD3<Float>(0, 1, 0)) *
+                simd_quatf(angle: leadPitch, axis: SIMD3<Float>(1, 0, 0)) *
                 simd_quatf(angle: -carSample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
             generatedLeadVehicleRoot?.position = model.root.position
             generatedLeadVehicleRoot?.orientation = model.root.orientation
@@ -739,9 +766,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let right = SIMD3<Float>(cos(heading), 0, sin(heading))
         let forward = SIMD3<Float>(sin(heading), 0, -cos(heading))
         func worldPoint(_ point: RenderVector3) -> SIMD3<Float> {
-            SIMD3<Float>(
+            // Take the elevation at the point's own chainage, not the
+            // car centre's: on a grade the look-at target 100 m ahead
+            // sits up to 2.5 m above/below the centre, and a level look
+            // direction would make the track ahead sink or climb away.
+            let pointElevationM = sample(at: currentSample.distanceM + point.z).elevationM
+            return SIMD3<Float>(
                 currentSample.x + right.x * Float(point.x) + forward.x * Float(point.z),
-                Float(point.y),
+                // The camera preset's heights are above the rail head,
+                // so they ride on the track elevation.
+                Float(point.y) + pointElevationM,
                 currentSample.z + right.z * Float(point.x) + forward.z * Float(point.z)
             )
         }
@@ -858,52 +892,274 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         travelDirection == .up ? 1 : -1
     }
 
+    /// Mainline station chainages (m from Kanun-Chuo), from
+    /// `Packages/RailwayRouteData/Data/fictional_70km_network.json`.
+    /// Stations sit on filled ground, never on piers: the viaduct
+    /// ground rises to track level under each station (see
+    /// `computeViaductGround`).
+    private static let mainlineStationChainagesM: [Double] = [
+        0, 1_839, 3_871, 6_000, 8_226, 10_355, 12_387, 14_613,
+        16_935, 19_161, 21_290, 24_194, 26_323, 28_452, 30_677,
+        32_903, 35_129, 37_355, 39_581, 41_806, 44_032, 46_258,
+        48_484, 50_710, 52_935, 55_161, 57_387, 60_000
+    ]
+
+    /// Chainages of the physical tunnels, where the ground must stay
+    /// at track level (the tunnel bore carries the line, not piers).
+    private func isTunnelChainage(_ chainageM: Double) -> Bool {
+        (chainageM >= 17_800 && chainageM <= 19_300)
+            || (chainageM >= 24_000 && chainageM <= 25_846)
+            || (chainageM >= 42_100 && chainageM <= 43_600)
+    }
+
+    /// Ground level under the track, one value per sample. A viaduct
+    /// is where the line rides high above its valley floor: the datum
+    /// is the lowest track elevation within +/-1.5 km, and a zone
+    /// opens where the track sits >= 10 m above it (measured: three
+    /// zones, about 10.5 km of the 60 km mainline, tallest pier
+    /// about 33 m in the downtown climb). Short runs are dropped and
+    /// gaps under 300 m are merged, tunnels and the coast are
+    /// excluded, and stations get filled ground with 300 m tapers so
+    /// no station, house, tower or pole ever floats. The tapers are
+    /// smoothstep blends centred on each zone edge, so the ground is
+    /// a continuous ramp (an embankment approach) rather than a step.
+    private func computeViaductGround(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) -> [Float] {
+        guard samples.count > 1 else { return samples.map(\.elevationM) }
+        let datumWindowM = 1_500.0
+        let zoneThresholdM: Float = 10
+        let minRunM = 300.0
+        let mergeGapM = 300.0
+        let taperM = 300.0
+        let stationHalfWidthM = 250.0
+        // 1. Valley-floor datum: rolling minimum of the elevation.
+        var datum = [Float](repeating: 0, count: samples.count)
+        for i in samples.indices {
+            var low = samples[i].elevationM
+            var j = i
+            while j > 0, samples[i].distanceM - samples[j - 1].distanceM <= datumWindowM {
+                j -= 1
+                low = min(low, samples[j].elevationM)
+            }
+            j = i
+            while j + 1 < samples.count, samples[j + 1].distanceM - samples[i].distanceM <= datumWindowM {
+                j += 1
+                low = min(low, samples[j].elevationM)
+            }
+            datum[i] = low
+        }
+        // 2. Raw zones, excluding tunnels and the coast.
+        var inZone = [Bool](repeating: false, count: samples.count)
+        for i in samples.indices {
+            guard isMainlineSection(distanceM: samples[i].distanceM, routeVariant: routeVariant, travelDirection: travelDirection) else { continue }
+            let chainage = chainageFromCenter(distanceM: samples[i].distanceM, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(chainage) { continue }
+            if isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) { continue }
+            inZone[i] = samples[i].elevationM - datum[i] >= zoneThresholdM
+        }
+        // 3. Merge gaps under 300 m, drop runs under 300 m.
+        var runs: [(Int, Int)] = []
+        var runStart: Int? = nil
+        for i in samples.indices {
+            if inZone[i], runStart == nil { runStart = i }
+            if !inZone[i], let start = runStart {
+                runs.append((start, i - 1))
+                runStart = nil
+            }
+        }
+        if let start = runStart { runs.append((start, samples.count - 1)) }
+        var mergedRuns: [(Int, Int)] = []
+        for run in runs {
+            if let last = mergedRuns.last,
+               samples[run.0].distanceM - samples[last.1].distanceM < mergeGapM {
+                mergedRuns[mergedRuns.count - 1] = (last.0, run.1)
+            } else {
+                mergedRuns.append(run)
+            }
+        }
+        var zone = [Bool](repeating: false, count: samples.count)
+        for run in mergedRuns where samples[run.1].distanceM - samples[run.0].distanceM >= minRunM {
+            for i in run.0...run.1 { zone[i] = true }
+        }
+        // 4. Zone edges (chainage positions where the zone flag flips),
+        // tagged entry (ground falls away) vs exit (ground returns).
+        var edges: [(Double, Bool)] = []
+        for i in 1..<samples.count where zone[i] != zone[i - 1] {
+            edges.append(((samples[i].distanceM + samples[i - 1].distanceM) / 2, zone[i]))
+        }
+        func smoothstep(_ x: Float) -> Float {
+            let clamped = min(max(x, 0), 1)
+            return clamped * clamped * (3 - 2 * clamped)
+        }
+        // 5. Ground level: blend from elevation (outside) to datum
+        // (inside) across a 300 m taper centred on each edge, and
+        // force filled ground under stations with the same taper.
+        var ground = [Float](repeating: 0, count: samples.count)
+        for i in samples.indices {
+            let sample = samples[i]
+            var blend: Float = zone[i] ? 1 : 0
+            if let nearestEdge = edges.min(by: { abs($0.0 - sample.distanceM) < abs($1.0 - sample.distanceM) }) {
+                // Distance from the edge into the zone: positive
+                // inside, negative outside, whichever side the edge is.
+                let intoZone = nearestEdge.1 ? (sample.distanceM - nearestEdge.0) : (nearestEdge.0 - sample.distanceM)
+                blend = smoothstep(Float((intoZone + taperM / 2) / taperM))
+            }
+            if isMainlineSection(distanceM: sample.distanceM, routeVariant: routeVariant, travelDirection: travelDirection) {
+                let chainage = chainageFromCenter(distanceM: sample.distanceM, route: route, travelDirection: travelDirection)
+                if let nearestStation = Self.mainlineStationChainagesM.min(by: { abs($0 - chainage) < abs($1 - chainage) }) {
+                    let stationBlend = smoothstep(Float((abs(chainage - nearestStation) - stationHalfWidthM) / taperM))
+                    blend = min(blend, stationBlend)
+                }
+            }
+            ground[i] = sample.elevationM - blend * (sample.elevationM - datum[i])
+        }
+        return ground
+    }
+
+    /// Ground height at an arbitrary chainage, interpolating the
+    /// per-sample viaduct ground the way `sample(at:)` interpolates
+    /// elevation. Falls back to the track elevation if the ground
+    /// has not been computed yet.
+    private func groundLevelM(at distanceM: Double) -> Float {
+        guard viaductGround.count == samples.count, samples.count > 1 else {
+            return sample(at: distanceM).elevationM
+        }
+        if distanceM <= samples[0].distanceM { return viaductGround[0] }
+        guard let upperIndex = samples.firstIndex(where: { $0.distanceM >= distanceM }) else {
+            return viaductGround[viaductGround.count - 1]
+        }
+        guard upperIndex > 0 else { return viaductGround[upperIndex] }
+        let lower = samples[upperIndex - 1]
+        let upper = samples[upperIndex]
+        let span = max(upper.distanceM - lower.distanceM, 0.001)
+        let fraction = Float(min(max((distanceM - lower.distanceM) / span, 0), 1))
+        return viaductGround[upperIndex - 1] + (viaductGround[upperIndex] - viaductGround[upperIndex - 1]) * fraction
+    }
+
+    private func groundLevelM(at sample: RouteSample) -> Float {
+        groundLevelM(at: sample.distanceM)
+    }
+
+    /// `routeOffsetPoint` for ground-level scenery: same plan
+    /// position, but standing on the viaduct ground instead of the
+    /// track elevation.
+    private func groundOffsetPoint(_ sample: RouteSample, lateral: Float) -> SIMD3<Float> {
+        SIMD3<Float>(
+            sample.x + lateral * cos(sample.heading),
+            groundLevelM(at: sample),
+            sample.z + lateral * sin(sample.heading)
+        )
+    }
+
     private func buildTrack(
         route: RailwayRouteProfile,
         routeVariant: RegionalRouteVariant,
         travelDirection: RegionalTravelDirection
     ) {
-        let distance = Float(route.distanceM)
-        addSurfaceBox(parent: world, name: "formation-ground", size: SIMD3<Float>(1_400, 0.38, distance + 100), position: SIMD3<Float>(0, -0.28, -distance / 2), color: UIColor(red: 0.24, green: 0.28, blue: 0.24, alpha: 1), roughness: 1)
+        // Formation ground: the base fill under everything. It used
+        // to be one straight 1,400 m box on the global -z axis, but
+        // the route wanders up to 31 km off that axis (plan view), so
+        // beyond the first kilometres the train ran over void. Two
+        // route-following ribbons now carry it along the line at
+        // rail-head minus 9 cm. On the sea side of the coast the
+        // ribbons stop: the beach and the sea cover that ground, and
+        // a ribbon following the rising track would poke through the
+        // flat water. Where the line is on a viaduct the ribbons
+        // drop to the valley floor instead (see `viaductGround`):
+        // the deck and piers below carry the track there.
+        let groundOffsets = samples.map { groundLevelM(at: $0) - $0.elevationM }
+        let slabMaterial = Self.pbr(UIColor(red: 0.24, green: 0.28, blue: 0.24, alpha: 1), roughness: 1)
+        let slabSeaSign = seaSideSign(travelDirection: travelDirection)
+        for sideSign: Float in [-1, 1] {
+            let slabSpan = clampedRibbonSpan(route: route, centerOffset: sideSign * 350, width: 700)
+            var runStart = 0
+            var runSeaCoastal = sideSign == slabSeaSign && isCoastal(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            for i in 1...samples.count {
+                let coastal = i < samples.count ? (sideSign == slabSeaSign && isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)) : false
+                if coastal != runSeaCoastal {
+                    let runEnd = min(i + 1, samples.count)
+                    if !runSeaCoastal {
+                        if let slab = ribbonEntity(name: "formation-ground-\(sideSign > 0 ? "r" : "l")-\(runStart)", width: 700, y: -0.09, tileLength: 12,
+                                                   offsets: slabSpan.centers, material: slabMaterial, range: runStart..<runEnd, yOffsets: groundOffsets, widths: slabSpan.widths) {
+                            world.addChild(slab)
+                        }
+                    }
+                    runStart = i
+                    runSeaCoastal = coastal
+                }
+            }
+        }
 
-        // Distant backdrop planes repeated along the line, so the horizon
-        // is never empty (BVE-style background). City skyline inside the
-        // urban bands, mountain ranges elsewhere — real BVE routes swap
-        // backgrounds per section the same way.
+        // Distant backdrops that follow the route (BVE-style
+        // background): city skyline inside the urban bands, mountain
+        // ranges elsewhere — real BVE routes swap backgrounds per
+        // section the same way. The old version was a straight 4 km
+        // box on the global -z axis; the route leaves that axis
+        // within kilometres, so the horizon was empty past the
+        // suburbs and the straight walls sliced through the line
+        // wherever the route crossed x = +/-680 m. A 4 km straight
+        // wall fitted to the local chord still drifts up to 1,134 m
+        // off the track (measured), so the wall is a vertical strip
+        // following the samples instead, pulled in inside tight
+        // curves so it can never fold through the track.
         var backdropMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_mountains")
         backdropMaterial.faceCulling = .none
         var skylineMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_skyline")
         skylineMaterial.faceCulling = .none
-        let backdropSegment: Float = 4_000
-        let backdropCount = max(1, Int((distance / backdropSegment).rounded(.up)))
-        for side in [-1, 1] {
-            for i in 0..<backdropCount {
-                let centerM = Double(backdropSegment) * (Double(i) + 0.5)
-                let startM = Double(backdropSegment) * Double(i)
-                let endM = Double(backdropSegment) * Double(i + 1)
-                let isUrban = urbanBand(distanceM: centerM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
-                    || urbanBand(distanceM: startM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
-                    || urbanBand(distanceM: endM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
-                addBox(parent: world, name: "backdrop-\(isUrban ? "skyline" : "mountains")-\(side)-\(i)",
-                       size: SIMD3<Float>(1, 110, backdropSegment),
-                       position: SIMD3<Float>(Float(side) * 680, 40, -backdropSegment * (Float(i) + 0.5)),
-                       material: isUrban ? skylineMaterial : backdropMaterial)
-                // Mid-distance tree line (the forest texture that has
-                // been bundled unused until now): a second, nearer
-                // backdrop layer so the far view has depth instead of
-                // one wall of mountains. Skipped in the city and on
-                // the sea side of the coast, where it would stand in
-                // the water.
-                if !isUrban {
-                    var forestMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_mountain_forest")
-                    forestMaterial.faceCulling = .none
-                    let midSeaSign = seaSideSign(travelDirection: travelDirection)
-                    if !(Float(side) == midSeaSign && isCoastal(distanceM: centerM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)) {
-                        addBox(parent: world, name: "forest-mid-\(side)-\(i)",
-                               size: SIMD3<Float>(1, 24, backdropSegment),
-                               position: SIMD3<Float>(Float(side) * 300, 9, -backdropSegment * (Float(i) + 0.5)),
-                               material: forestMaterial)
+        let backdropLaterals: [Float] = samples.map { clampedWallLateral(side: 1, standoff: 680, route: route, sample: $0) }
+        let backdropBottoms: [Float] = samples.map { groundLevelM(at: $0) - 15 }
+        let backdropTops: [Float] = samples.map { $0.elevationM + 95 }
+        for sideSign: Float in [-1, 1] {
+            let laterals = backdropLaterals.map { $0 * sideSign }
+            var runStart = 0
+            var runUrban = urbanBand(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
+            for i in 1...samples.count {
+                let urban = i < samples.count ? urbanBand(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0 : !runUrban
+                if urban != runUrban {
+                    let runEnd = min(i + 1, samples.count)
+                    if let wall = verticalRibbonEntity(name: "backdrop-\(runUrban ? "skyline" : "mountains")-\(sideSign > 0 ? "r" : "l")-\(runStart)",
+                                                       lateralOffsets: laterals, bottomYs: backdropBottoms, topYs: backdropTops,
+                                                       tileLength: 4_000, material: runUrban ? skylineMaterial : backdropMaterial,
+                                                       range: runStart..<runEnd) {
+                        world.addChild(wall)
                     }
+                    runStart = i
+                    runUrban = urban
+                }
+            }
+        }
+        // Mid-distance tree line: a second, nearer backdrop layer so
+        // the far view has depth instead of one wall of mountains.
+        // Skipped in the city and on the sea side of the coast,
+        // where it would stand in the water.
+        var forestMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_mountain_forest")
+        forestMaterial.faceCulling = .none
+        let forestLaterals: [Float] = samples.map { clampedWallLateral(side: 1, standoff: 300, route: route, sample: $0) }
+        let forestBottoms: [Float] = samples.map { groundLevelM(at: $0) - 3 }
+        let forestTops: [Float] = samples.map { groundLevelM(at: $0) + 21 }
+        let forestSeaSign = seaSideSign(travelDirection: travelDirection)
+        for sideSign: Float in [-1, 1] {
+            let laterals = forestLaterals.map { $0 * sideSign }
+            func forestKey(_ i: Int) -> Int {
+                let urban = urbanBand(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0 ? 1 : 0
+                let sea = (sideSign == forestSeaSign && isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)) ? 1 : 0
+                return urban * 10 + sea
+            }
+            var runStart = 0
+            var runKey = forestKey(0)
+            for i in 1...samples.count {
+                let key = i < samples.count ? forestKey(i) : -1
+                if key != runKey {
+                    let runEnd = min(i + 1, samples.count)
+                    if runKey == 0 {
+                        if let forest = verticalRibbonEntity(name: "forest-mid-\(sideSign > 0 ? "r" : "l")-\(runStart)",
+                                                             lateralOffsets: laterals, bottomYs: forestBottoms, topYs: forestTops,
+                                                             tileLength: 4_000, material: forestMaterial,
+                                                             range: runStart..<runEnd) {
+                            world.addChild(forest)
+                        }
+                    }
+                    runStart = i
+                    runKey = key
                 }
             }
         }
@@ -929,7 +1185,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     if let apron = ribbonEntity(name: "ground-apron-\(runStart)", width: runCoastal ? 46 : 150, y: -0.04, tileLength: 12,
                                                 offsets: apronOffsets,
                                                 material: runBand > 0 ? cityApron : grassApron,
-                                                range: runStart..<runEnd, uTileLength: 12) {
+                                                range: runStart..<runEnd, uTileLength: 12, yOffsets: groundOffsets) {
                         world.addChild(apron)
                     }
                     runStart = i
@@ -939,21 +1195,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
         }
 
-        // Far ground: textured fields out to the backdrop wall, in
-        // ~3 km runs whose height steps gently (±1 m) so the land is
-        // not one flat slab. The sea side of the coastal stretch is
-        // skipped — that ground is beach and water.
+        // Far ground: textured fields out to the backdrop wall. The
+        // height used to step by up to ~1 m at every 3 km chunk
+        // boundary, which read from the train as hard rectangular
+        // patches and a black band at the horizon. The lift is now
+        // one smooth function of chainage, so adjacent runs share
+        // the same height at their boundary and the land rolls
+        // gently instead of stepping. The sea side of the coastal
+        // stretch is skipped — that ground is beach and water.
         if samples.count > 1 {
             let farGrassMaterial = Self.texturedPBR(UIColor(red: 0.80, green: 0.84, blue: 0.76, alpha: 1), roughness: 1, textureName: "scenery_grass")
             let farCityMaterial = Self.texturedPBR(UIColor(red: 0.82, green: 0.82, blue: 0.84, alpha: 1), roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
             let farSeaSign = seaSideSign(travelDirection: travelDirection)
+            // Gentle undulation: +/-0.45 m over ~10.9 km, continuous
+            // everywhere (no steps at run boundaries).
+            let farLifts: [Float] = samples.map { sample in
+                0.5 + 0.45 * Float(sin(sample.distanceM / 1_730 + 0.8))
+            }
+            // Far fields ride the viaduct ground too: under a viaduct
+            // they lie on the valley floor, not at rail level.
+            let farGroundOffsets = samples.indices.map { farLifts[$0] + groundOffsets[$0] }
             for sideSign: Float in [-1, 1] {
-                let farOffsets = samples.map { _ in sideSign * 375 }
+                let farSpan = clampedRibbonSpan(route: route, centerOffset: sideSign * 375, width: 600)
                 func farKey(_ i: Int) -> Int {
                     let band = urbanBand(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0 ? 1 : 0
-                    let chunk = Int(samples[i].distanceM / 3_000)
                     let blocked = (sideSign == farSeaSign && isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)) ? 1 : 0
-                    return band * 1_000_000 + chunk * 10 + blocked
+                    return band * 10 + blocked
                 }
                 var farRunStart = 0
                 var farRunKey = farKey(0)
@@ -963,12 +1230,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         let farRunEnd = min(i + 1, samples.count)
                         let wasBlocked = farRunKey % 10 == 1
                         if !wasBlocked {
-                            let chunk = (farRunKey / 10) % 100_000
-                            let lift = Float(((chunk * 37 + (sideSign > 0 ? 11 : 5)) % 10)) / 10 * 0.95
-                            if let far = ribbonEntity(name: "far-ground-\(sideSign > 0 ? "r" : "l")-\(farRunStart)", width: 600, y: 0.02 + lift, tileLength: 90,
-                                                      offsets: farOffsets,
-                                                      material: farRunKey >= 1_000_000 ? farCityMaterial : farGrassMaterial,
-                                                      range: farRunStart..<farRunEnd, uTileLength: 90) {
+                            if let far = ribbonEntity(name: "far-ground-\(sideSign > 0 ? "r" : "l")-\(farRunStart)", width: 600, y: 0.02, tileLength: 90,
+                                                      offsets: farSpan.centers,
+                                                      material: farRunKey >= 10 ? farCityMaterial : farGrassMaterial,
+                                                      range: farRunStart..<farRunEnd, uTileLength: 90, yOffsets: farGroundOffsets, widths: farSpan.widths) {
                                 world.addChild(far)
                             }
                         }
@@ -979,16 +1244,80 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
         }
 
+        // Viaduct: where the ground falls 2 m or more below the
+        // track, the formation is a concrete girder deck on piers
+        // instead of fill. Deck: 8.4 m wide slab, 0.8 m thick, top
+        // at rail-head minus 9 cm so the ballast sits on it exactly
+        // as it sits on the formation slab elsewhere. Piers: one
+        // every 30 m (real PC-girder span), a 3.0 x 2.2 m concrete
+        // column from the valley floor to the deck soffit with an
+        // 8.6 m crossbeam cap, batched into one mesh. The deck and
+        // the piers both end where the tapered ground has risen to
+        // within 2 m of the track, so they die into the embankment
+        // approach instead of stopping on a cliff edge.
+        if samples.count > 1 {
+            let deckOffsets = [Float](repeating: 0, count: samples.count)
+            let deckMaterial = Self.pbr(UIColor(red: 0.46, green: 0.48, blue: 0.47, alpha: 1), roughness: 0.84)
+            func deckLift(_ i: Int) -> Float { samples[i].elevationM - groundLevelM(at: samples[i]) }
+            var deckRunStart = 0
+            var deckRunOn = deckLift(0) >= 2
+            for i in 1...samples.count {
+                let onDeck = i < samples.count ? deckLift(i) >= 2 : !deckRunOn
+                if onDeck != deckRunOn {
+                    let runEnd = min(i + 1, samples.count)
+                    if deckRunOn {
+                        if let deck = ribbonEntity(name: "viaduct-deck-\(deckRunStart)", width: 8.4, y: -0.49, tileLength: 12,
+                                                   offsets: deckOffsets, material: deckMaterial, range: deckRunStart..<runEnd) {
+                            world.addChild(deck)
+                        }
+                    }
+                    deckRunStart = i
+                    deckRunOn = onDeck
+                }
+            }
+            var pierBatch = MeshBatchBuilder()
+            var pierCount = 0
+            var pierDistance = 15.0
+            while pierDistance < route.distanceM {
+                let pierSample = sample(at: pierDistance)
+                let pierGround = groundLevelM(at: pierSample)
+                let lift = pierSample.elevationM - pierGround
+                if lift >= 2 {
+                    let deckBottom = pierSample.elevationM - 0.89
+                    let columnHeight = deckBottom - (pierGround - 0.1)
+                    let centerX = pierSample.x
+                    let centerZ = pierSample.z
+                    pierBatch.addBox(center: SIMD3<Float>(centerX, pierGround - 0.1 + columnHeight / 2, centerZ),
+                                     size: SIMD3<Float>(3.0, columnHeight, 2.2), yaw: pierSample.heading)
+                    pierBatch.addBox(center: SIMD3<Float>(centerX, deckBottom - 0.6, centerZ),
+                                     size: SIMD3<Float>(8.6, 1.2, 1.6), yaw: pierSample.heading)
+                    pierCount += 1
+                }
+                pierDistance += 30
+            }
+            if pierCount > 0, let piers = pierBatch.build(name: "viaduct-piers", material: concreteMaterial) {
+                world.addChild(piers)
+            }
+        }
+
         // Coastal stretch: a sand beach just outside the ground apron
         // and open sea beyond it, as ribbons over the coastal samples.
         // The far edge of the sea meets the backdrop wall, which then
         // reads as a distant shore across the water.
+        // The sea is flat: it sits at the lowest track elevation of
+        // its run (the datum), it must not climb with the track the
+        // way the ground ribbons do. The track climbs up to ~11 m
+        // above the datum inside a coastal window, so a bluff strip
+        // closes the gap between the apron edge and the beach —
+        // otherwise a slit of void would show along the shoreline.
         if samples.count > 1 {
             let seaSign = seaSideSign(travelDirection: travelDirection)
             let beachOffsets = samples.map { _ in seaSign * 31 }
-            let seaOffsets = samples.map { _ in seaSign * 369 }
+            let seaSpan = clampedRibbonSpan(route: route, centerOffset: seaSign * 369, width: 660)
             let beachMaterial = Self.pbr(UIColor(red: 0.76, green: 0.69, blue: 0.52, alpha: 1), roughness: 1)
             let seaMaterial = Self.texturedPBR(.white, roughness: 0.55, textureName: "scenery_sea")
+            let bluffMaterial = Self.pbr(UIColor(red: 0.52, green: 0.48, blue: 0.40, alpha: 1), roughness: 1)
+            let bluffLaterals = samples.map { _ in seaSign * 23.5 }
             var runStart = 0
             var runCoastal = isCoastal(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             for i in 1...samples.count {
@@ -996,13 +1325,24 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 if coastal != runCoastal {
                     if runCoastal {
                         let runEnd = min(i + 1, samples.count)
+                        let datum = samples[runStart..<runEnd].map(\.elevationM).min() ?? 0
                         if let beach = ribbonEntity(name: "beach-\(runStart)", width: 16, y: -0.03, tileLength: 12,
-                                                    offsets: beachOffsets, material: beachMaterial, range: runStart..<runEnd) {
+                                                    offsets: beachOffsets, material: beachMaterial, range: runStart..<runEnd,
+                                                    absoluteY: datum - 0.03) {
                             world.addChild(beach)
                         }
                         if let sea = ribbonEntity(name: "sea-\(runStart)", width: 660, y: -0.06, tileLength: 30,
-                                                  offsets: seaOffsets, material: seaMaterial, range: runStart..<runEnd, uTileLength: 30) {
+                                                  offsets: seaSpan.centers, material: seaMaterial, range: runStart..<runEnd, uTileLength: 30,
+                                                  absoluteY: datum - 0.06, widths: seaSpan.widths) {
                             world.addChild(sea)
+                        }
+                        let bluffBottoms = samples.map { _ in datum - 0.03 }
+                        let bluffTops = samples.map { $0.elevationM - 0.04 }
+                        if let bluff = verticalRibbonEntity(name: "bluff-\(runStart)",
+                                                            lateralOffsets: bluffLaterals, bottomYs: bluffBottoms, topYs: bluffTops,
+                                                            tileLength: 30, material: bluffMaterial,
+                                                            range: runStart..<runEnd) {
+                            world.addChild(bluff)
                         }
                     }
                     runStart = i
@@ -1043,7 +1383,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let wallLandmarks = fictionalCorridorLandmarks(for: route)
         for index in samples.indices {
             let sample = samples[index]
-            let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
             let trackOrientation = yaw * simd_quatf(angle: -sample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
             let isMainlineSection = travelDirection == .up ? sample.distanceM < 60_000 : sample.distanceM >= 8_000
             let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
@@ -1059,8 +1399,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             if index.isMultiple(of: 3) {
                 for (trackIndex, lateral) in trackOffsets.enumerated() {
                     let centerX = sample.x + lateral * cos(sample.heading)
-                    let centerZ = sample.z - lateral * sin(sample.heading)
-                    addSurfaceBox(parent: world, name: "ballast-\(index)-\(trackIndex)", size: SIMD3<Float>(3.2, 0.15, segmentLength), position: SIMD3<Float>(centerX, -0.01, centerZ), color: UIColor(red: 0.25, green: 0.26, blue: 0.25, alpha: 1), roughness: 0.96, orientation: trackOrientation)
+                    let centerZ = sample.z + lateral * sin(sample.heading)
+                    addSurfaceBox(parent: world, name: "ballast-\(index)-\(trackIndex)", size: SIMD3<Float>(3.2, 0.15, segmentLength), position: SIMD3<Float>(centerX, sample.elevationM - 0.01, centerZ), color: UIColor(red: 0.25, green: 0.26, blue: 0.25, alpha: 1), roughness: 0.96, orientation: trackOrientation)
                     // Rails are no longer boxes: buildRailsAndShoulders
                     // extrudes a true head/web/base profile along the
                     // line (see below).
@@ -1068,11 +1408,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             for (trackIndex, lateral) in trackOffsets.enumerated() {
                 let x = sample.x + lateral * cos(sample.heading)
-                let z = sample.z - lateral * sin(sample.heading)
+                let z = sample.z + lateral * sin(sample.heading)
                 // Per-sleeper shade variation: real sleepers weather
                 // unevenly, and a perfectly uniform row reads fake.
                 let sleeperShade = 0.82 + Float((index * 37 + trackIndex * 11) % 5) * 0.09
-                addSurfaceBox(parent: world, name: "sleeper-\(index)-\(trackIndex)", size: SIMD3<Float>(2.55, 0.13, 0.26), position: SIMD3<Float>(x, 0.105, z), color: UIColor(red: 0.34 * CGFloat(sleeperShade), green: 0.27 * CGFloat(sleeperShade), blue: 0.19 * CGFloat(sleeperShade), alpha: 1), roughness: 0.88, orientation: trackOrientation)
+                addSurfaceBox(parent: world, name: "sleeper-\(index)-\(trackIndex)", size: SIMD3<Float>(2.55, 0.13, 0.26), position: SIMD3<Float>(x, sample.elevationM + 0.105, z), color: UIColor(red: 0.34 * CGFloat(sleeperShade), green: 0.27 * CGFloat(sleeperShade), blue: 0.19 * CGFloat(sleeperShade), alpha: 1), roughness: 0.88, orientation: trackOrientation)
             }
 
             // Continuous lineside walls (noise barriers), laid as
@@ -1080,18 +1420,24 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // they enclose the corridor and separate it from the parallel
             // roads and houses. Mainline sections only, kept clear of
             // stations and crossings.
+            // The walls used to alternate concrete and steel segment by
+            // segment; the metallic blue-grey steel halves read from
+            // the train as water running along both sides of the track
+            // (the "both sides water" in the sea screenshots, taken
+            // nowhere near the coast). All segments are concrete now,
+            // and the wall steps down outside the city so the rural
+            // view opens up instead of running inside a channel.
             if index.isMultiple(of: 3), hasPassingTrack, !corridorReserved(at: sample.distanceM, landmarks: wallLandmarks) {
                 let band = urbanBand(distanceM: sample.distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-                let wallHeight: Float = band == 2 ? 2.6 : band == 1 ? 2.2 : 1.8
-                let wallMaterial = (index / 3).isMultiple(of: 2) ? concreteMaterial : poleMaterial
+                let wallHeight: Float = band == 2 ? 2.6 : band == 1 ? 2.2 : 1.4
                 for side in [-1.0, 1.0] {
                     let wallLateral = Float(side) * 5.6
                     let wallX = sample.x + wallLateral * cos(sample.heading)
-                    let wallZ = sample.z - wallLateral * sin(sample.heading)
+                    let wallZ = sample.z + wallLateral * sin(sample.heading)
                     let wall = addBox(parent: world, name: "lineside-wall-\(index)-\(Int(side))",
                                       size: SIMD3<Float>(0.18, wallHeight, segmentLength + 0.3),
-                                      position: SIMD3<Float>(wallX, wallHeight / 2, wallZ),
-                                      material: wallMaterial)
+                                      position: SIMD3<Float>(wallX, sample.elevationM + wallHeight / 2, wallZ),
+                                      material: concreteMaterial)
                     wall.orientation = trackOrientation
                 }
             }
@@ -1118,12 +1464,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 }
             }
             guard let sample = best else { continue }
-            let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
             let base = routeOffsetPoint(sample, lateral: lateral)
             addBox(parent: world, name: "signal-post-\(Int(target))", size: SIMD3<Float>(0.14, 3.6, 0.14),
-                   position: SIMD3<Float>(base.x, 1.8, base.z), material: poleMaterial, orientation: yaw)
+                   position: SIMD3<Float>(base.x, base.y + 1.8, base.z), material: poleMaterial, orientation: yaw)
             addBox(parent: world, name: "signal-head-\(Int(target))", size: SIMD3<Float>(0.36, 1.1, 0.24),
-                   position: SIMD3<Float>(base.x, 3.9, base.z), material: headMaterial, orientation: yaw)
+                   position: SIMD3<Float>(base.x, base.y + 3.9, base.z), material: headMaterial, orientation: yaw)
             // Lamps sit on the face turned toward the approaching train
             // (opposite the direction of travel), red over yellow over
             // green.
@@ -1134,7 +1480,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             for lampY in [4.25, 3.9, 3.55] {
                 let lamp = ModelEntity(mesh: MeshResource.generateBox(size: SIMD3<Float>(0.17, 0.17, 0.05)),
                                        materials: [signalDarkLampMaterial])
-                lamp.position = SIMD3<Float>(lampX, Float(lampY), lampZ)
+                lamp.position = SIMD3<Float>(lampX, base.y + Float(lampY), lampZ)
                 lamp.orientation = yaw
                 world.addChild(lamp)
                 lamps.append(lamp)
@@ -1195,36 +1541,36 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             guard inside.count > 1 else { continue }
             for (offsetIndex, index) in inside.enumerated() where offsetIndex.isMultiple(of: 2) {
                 let sample = samples[index]
-                let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                 let nextIndex = inside[min(offsetIndex + 2, inside.count - 1)]
                 let length = max(Float(samples[nextIndex].distanceM - sample.distanceM), 8)
                 for side in [-1.0, 1.0] {
                     let lateral = Float(side) * 5.6
                     let x = sample.x + lateral * cos(sample.heading)
-                    let z = sample.z - lateral * sin(sample.heading)
+                    let z = sample.z + lateral * sin(sample.heading)
                     addBox(parent: world, name: "tunnel-wall-\(Int(range.start))-\(index)-\(Int(side))",
-                           size: SIMD3<Float>(0.5, 6.2, length), position: SIMD3<Float>(x, 3.1, z),
+                           size: SIMD3<Float>(0.5, 6.2, length), position: SIMD3<Float>(x, sample.elevationM + 3.1, z),
                            material: tunnelMaterial, orientation: yaw)
                 }
                 addBox(parent: world, name: "tunnel-roof-\(Int(range.start))-\(index)",
-                       size: SIMD3<Float>(11.7, 0.5, length), position: SIMD3<Float>(sample.x, 6.45, sample.z),
+                       size: SIMD3<Float>(11.7, 0.5, length), position: SIMD3<Float>(sample.x, sample.elevationM + 6.45, sample.z),
                        material: tunnelMaterial, orientation: yaw)
             }
             // Portal frames at both ends: two pillars and a lintel,
             // leaving the bore opening clear.
             for boundary in [range.start, range.end] {
                 let portalSample = sample(at: boundary)
-                let yaw = simd_quatf(angle: portalSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let yaw = simd_quatf(angle: -portalSample.heading, axis: SIMD3<Float>(0, 1, 0))
                 for side in [-1.0, 1.0] {
                     let lateral = Float(side) * 7.9
                     let x = portalSample.x + lateral * cos(portalSample.heading)
-                    let z = portalSample.z - lateral * sin(portalSample.heading)
+                    let z = portalSample.z + lateral * sin(portalSample.heading)
                     addBox(parent: world, name: "tunnel-portal-\(Int(boundary))-\(Int(side))",
-                           size: SIMD3<Float>(4.6, 9.2, 0.9), position: SIMD3<Float>(x, 4.6, z),
+                           size: SIMD3<Float>(4.6, 9.2, 0.9), position: SIMD3<Float>(x, portalSample.elevationM + 4.6, z),
                            material: concreteMaterial, orientation: yaw)
                 }
                 addBox(parent: world, name: "tunnel-portal-lintel-\(Int(boundary))",
-                       size: SIMD3<Float>(20.4, 3.0, 0.9), position: SIMD3<Float>(portalSample.x, 7.7, portalSample.z),
+                       size: SIMD3<Float>(20.4, 3.0, 0.9), position: SIMD3<Float>(portalSample.x, portalSample.elevationM + 7.7, portalSample.z),
                        material: concreteMaterial, orientation: yaw)
             }
         }
@@ -1238,19 +1584,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         while distance < route.distanceM {
             let sample = sample(at: distance)
             let heading = sample.heading
-            let yaw = simd_quatf(angle: heading, axis: SIMD3<Float>(0, 1, 0))
+            let yaw = simd_quatf(angle: -heading, axis: SIMD3<Float>(0, 1, 0))
             let poleOffsets: [Float] = [-3.2, 7.4]
             for (poleIndex, lateral) in poleOffsets.enumerated() {
                 let x = sample.x + lateral * cos(heading)
-                let z = sample.z - lateral * sin(heading)
-                addBox(parent: world, name: "catenary-mast-\(index)-\(poleIndex)", size: SIMD3<Float>(0.16, 5.6, 0.18), position: SIMD3<Float>(x, 2.7, z), material: poleMaterial, orientation: yaw)
+                let z = sample.z + lateral * sin(heading)
+                addBox(parent: world, name: "catenary-mast-\(index)-\(poleIndex)", size: SIMD3<Float>(0.16, 5.6, 0.18), position: SIMD3<Float>(x, sample.elevationM + 2.7, z), material: poleMaterial, orientation: yaw)
             }
-            addBox(parent: world, name: "double-track-crossbeam-\(index)", size: SIMD3<Float>(10.6, 0.10, 0.14), position: SIMD3<Float>(sample.x + 2.1 * cos(heading), 5.15, sample.z - 2.1 * sin(heading)), material: poleMaterial, orientation: yaw)
+            addBox(parent: world, name: "double-track-crossbeam-\(index)", size: SIMD3<Float>(10.6, 0.10, 0.14), position: SIMD3<Float>(sample.x + 2.1 * cos(heading), sample.elevationM + 5.15, sample.z + 2.1 * sin(heading)), material: poleMaterial, orientation: yaw)
             for (trackIndex, trackOffset) in [0.0, 4.2].enumerated() {
                 let offset = Float(trackOffset)
                 let wireX = sample.x + offset * cos(heading)
-                let wireZ = sample.z - offset * sin(heading)
-                addBox(parent: world, name: "contact-wire-\(index)-\(trackIndex)", size: SIMD3<Float>(0.035, 0.035, Float(interval)), position: SIMD3<Float>(wireX, 4.95, wireZ - Float(interval) / 2), material: wireMaterial, orientation: yaw)
+                let wireZ = sample.z + offset * sin(heading)
+                addBox(parent: world, name: "contact-wire-\(index)-\(trackIndex)", size: SIMD3<Float>(0.035, 0.035, Float(interval)), position: SIMD3<Float>(wireX - sin(heading) * Float(interval) / 2, sample.elevationM + 4.95, wireZ + cos(heading) * Float(interval) / 2), material: wireMaterial, orientation: yaw)
             }
             distance += interval
             index += 1
@@ -1262,6 +1608,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// ~3 m floor height instead of stretching over the whole tower).
     private func addTower(at distance: Double, side: Float, seed: Int, band: Int, route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, lateralOverride: Float? = nil, heightScale: Float = 1) {
         let sample = sample(at: distance)
+        // Towers stand on the ground, not on the track: under a
+        // viaduct they rise from the valley floor.
+        let groundY = groundLevelM(at: sample)
         let lateral: Float = lateralOverride ?? ((band == 2 ? 12.5 : 13.5) + Float(seed % 3) * 1.4)
         let width: Float = 11 + Float((seed / 3) % 4) * 1.4
         let depth: Float = 10 + Float((seed / 7) % 3) * 1.6
@@ -1276,8 +1625,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let segmentHeight = height / Float(segments)
         let offset = side * lateral
         let x = sample.x + offset * cos(sample.heading)
-        let z = sample.z - offset * sin(sample.heading)
-        let orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+        let z = sample.z + offset * sin(sample.heading)
+        let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
         // Apartment facades only on mid-rise towers; tall ones are
         // office or glass.
         let materialPool = height > 30 ? Array(officeMaterials.prefix(4)) : officeMaterials
@@ -1285,13 +1634,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for segment in 0..<segments {
             let box = addBox(parent: world, name: "office-tower-\(seed)-\(segment)",
                              size: SIMD3<Float>(width, segmentHeight, depth),
-                             position: SIMD3<Float>(x, segmentHeight * (Float(segment) + 0.5), z),
+                             position: SIMD3<Float>(x, groundY + segmentHeight * (Float(segment) + 0.5), z),
                              material: material)
             box.orientation = orientation
         }
         let roof = addBox(parent: world, name: "office-roof-\(seed)",
                           size: SIMD3<Float>(width + 0.4, 0.3, depth + 0.4),
-                          position: SIMD3<Float>(x, height + 0.15, z),
+                          position: SIMD3<Float>(x, groundY + height + 0.15, z),
                           material: roofMaterials[abs(seed) % roofMaterials.count])
         roof.orientation = orientation
         // Rooftop block (stair tower / tank) on some towers so the
@@ -1299,7 +1648,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         if seed % 2 == 0 {
             let block = addBox(parent: world, name: "office-rooftop-\(seed)",
                                size: SIMD3<Float>(width * 0.34, 2.3, depth * 0.4),
-                               position: SIMD3<Float>(x, height + 1.15, z),
+                               position: SIMD3<Float>(x, groundY + height + 1.15, z),
                                material: concreteMaterial)
             block.orientation = orientation
         }
@@ -1307,7 +1656,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // and reads as a storefront/podium base.
         let baseBand = addBox(parent: world, name: "office-base-\(seed)",
                               size: SIMD3<Float>(width + 0.18, 3.1, depth + 0.18),
-                              position: SIMD3<Float>(x, 1.55, z),
+                              position: SIMD3<Float>(x, groundY + 1.55, z),
                               material: band == 2 ? glassMaterial : concreteMaterial)
         baseBand.orientation = orientation
     }
@@ -1347,6 +1696,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 continue
             }
             let sample = sample(at: distance)
+            // Houses stand on the ground: under a viaduct they sit
+            // on the valley floor with the piers, not at rail level.
+            let groundY = groundLevelM(at: sample)
             let side = index.isMultiple(of: 2) ? 1.0 : -1.0
             let sign = Float(side)
             // No houses on the sea side of the coastal stretch: that
@@ -1364,41 +1716,41 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let height = (shed ? 2.6 : 3.6) + Float((index * 11) % 6) * 0.65
             let offset = sign * lateral
             let x = sample.x + offset * cos(sample.heading)
-            let z = sample.z - offset * sin(sample.heading)
+            let z = sample.z + offset * sin(sample.heading)
             // Every third house wears the full photo facade; its windows
             // and door are painted in, so the separate boxes are skipped.
             let useFacadeTexture = !shed && index % 3 == 2
             let bodyMaterial = useFacadeTexture ? houseFacadeMaterial : sceneryMaterials[index % sceneryMaterials.count]
-            let building = addBox(parent: world, name: shed ? "fictional-shed-\(index)" : "fictional-home-\(index)", size: SIMD3<Float>(width, height, depth), position: SIMD3<Float>(x, height / 2, z), material: bodyMaterial)
-            building.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            let building = addBox(parent: world, name: shed ? "fictional-shed-\(index)" : "fictional-home-\(index)", size: SIMD3<Float>(width, height, depth), position: SIMD3<Float>(x, groundY + height / 2, z), material: bodyMaterial)
+            building.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
 
             if !index.isMultiple(of: 3) {
-                let roof = addBox(parent: world, name: "roof-\(index)", size: SIMD3<Float>(width + 0.45, 0.24, depth + 0.35), position: SIMD3<Float>(x, height + 0.14, z), material: roofMaterials[index % roofMaterials.count], orientation: simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                let roof = addBox(parent: world, name: "roof-\(index)", size: SIMD3<Float>(width + 0.45, 0.24, depth + 0.35), position: SIMD3<Float>(x, groundY + height + 0.14, z), material: roofMaterials[index % roofMaterials.count], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
                 roof.orientation = roof.orientation * simd_quatf(angle: Float(index.isMultiple(of: 2) ? 0.04 : -0.04), axis: SIMD3<Float>(0, 0, 1))
             } else {
                 let balconySample = self.sample(at: distance - Double(depth * 0.52))
-                let balconyPoint = routeOffsetPoint(balconySample, lateral: offset)
-                let balcony = addBox(parent: world, name: "balcony-\(index)", size: SIMD3<Float>(width + 0.35, 0.12, 0.35), position: SIMD3<Float>(balconyPoint.x, height * 0.56, balconyPoint.z), material: concreteMaterial)
-                balcony.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let balconyPoint = groundOffsetPoint(balconySample, lateral: offset)
+                let balcony = addBox(parent: world, name: "balcony-\(index)", size: SIMD3<Float>(width + 0.35, 0.12, 0.35), position: SIMD3<Float>(balconyPoint.x, balconyPoint.y + height * 0.56, balconyPoint.z), material: concreteMaterial)
+                balcony.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
             }
 
             if !useFacadeTexture {
                 let facadeLateral = offset - sign * (width / 2 + 0.035)
                 for window in 0..<2 {
                     let windowSample = self.sample(at: distance + Double((Float(window) - 0.5) * depth * 0.42))
-                    let windowPoint = routeOffsetPoint(windowSample, lateral: facadeLateral)
-                    let pane = addBox(parent: world, name: "window-\(index)-\(window)", size: SIMD3<Float>(0.07, 0.72, 0.78), position: SIMD3<Float>(windowPoint.x, min(height * 0.72, 2.45), windowPoint.z), material: glassMaterial)
-                    pane.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let windowPoint = groundOffsetPoint(windowSample, lateral: facadeLateral)
+                    let pane = addBox(parent: world, name: "window-\(index)-\(window)", size: SIMD3<Float>(0.07, 0.72, 0.78), position: SIMD3<Float>(windowPoint.x, windowPoint.y + min(height * 0.72, 2.45), windowPoint.z), material: glassMaterial)
+                    pane.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                 }
-                let doorPoint = routeOffsetPoint(sample, lateral: facadeLateral)
-                let door = addBox(parent: world, name: "door-\(index)", size: SIMD3<Float>(0.07, 1.8, 0.78), position: SIMD3<Float>(doorPoint.x, 0.95, doorPoint.z), material: roofMaterials[(index + 1) % roofMaterials.count])
-                door.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let doorPoint = groundOffsetPoint(sample, lateral: facadeLateral)
+                let door = addBox(parent: world, name: "door-\(index)", size: SIMD3<Float>(0.07, 1.8, 0.78), position: SIMD3<Float>(doorPoint.x, doorPoint.y + 0.95, doorPoint.z), material: roofMaterials[(index + 1) % roofMaterials.count])
+                door.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
             }
 
             if index.isMultiple(of: 2), foliageCount < renderQualitySettings.foliageInstanceLimit {
                 let treeSample = self.sample(at: distance + 5)
-                let treePoint = routeOffsetPoint(treeSample, lateral: offset + sign * width * 0.65)
-                addTree(parent: world, name: "tree-\(index)", x: treePoint.x, z: treePoint.z, height: 3.1 + Float(index % 4) * 0.35, material: foliageMaterials[index % foliageMaterials.count])
+                let treePoint = groundOffsetPoint(treeSample, lateral: offset + sign * width * 0.65)
+                addTree(parent: world, name: "tree-\(index)", x: treePoint.x, z: treePoint.z, height: 3.1 + Float(index % 4) * 0.35, material: foliageMaterials[index % foliageMaterials.count], groundY: treePoint.y)
                 foliageCount += 1
             }
             // (Utility poles used to be a single thin box here every
@@ -1416,14 +1768,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let farSample = self.sample(at: farDistance)
                     let farLateral = farSign * (23 + Float((index * 7) % 6))
                     let fx = farSample.x + farLateral * cos(farSample.heading)
-                    let fz = farSample.z - farLateral * sin(farSample.heading)
+                    let fz = farSample.z + farLateral * sin(farSample.heading)
                     let fw = 5.2 + Float((index * 5) % 4) * 0.8
                     let fh = 3.4 + Float((index * 11) % 5) * 0.6
                     let fd = 5.6 + Float((index * 3) % 4) * 0.7
-                    let farOrientation = simd_quatf(angle: farSample.heading, axis: SIMD3<Float>(0, 1, 0))
-                    let farHouse = addBox(parent: world, name: "fictional-home-far-\(index)", size: SIMD3<Float>(fw, fh, fd), position: SIMD3<Float>(fx, fh / 2, fz), material: sceneryMaterials[(index + 2) % sceneryMaterials.count])
+                    let farOrientation = simd_quatf(angle: -farSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let farGroundY = groundLevelM(at: farSample)
+                    let farHouse = addBox(parent: world, name: "fictional-home-far-\(index)", size: SIMD3<Float>(fw, fh, fd), position: SIMD3<Float>(fx, farGroundY + fh / 2, fz), material: sceneryMaterials[(index + 2) % sceneryMaterials.count])
                     farHouse.orientation = farOrientation
-                    let farRoof = addBox(parent: world, name: "roof-far-\(index)", size: SIMD3<Float>(fw + 0.45, 0.24, fd + 0.35), position: SIMD3<Float>(fx, fh + 0.14, fz), material: roofMaterials[(index + 1) % roofMaterials.count])
+                    let farRoof = addBox(parent: world, name: "roof-far-\(index)", size: SIMD3<Float>(fw + 0.45, 0.24, fd + 0.35), position: SIMD3<Float>(fx, farGroundY + fh + 0.14, fz), material: roofMaterials[(index + 1) % roofMaterials.count])
                     farRoof.orientation = farOrientation
                 }
             }
@@ -1435,15 +1788,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private func buildLevelCrossings(route: RailwayRouteProfile) {
         for (index, distance) in [route.distanceM * 0.31, route.distanceM * 0.69].enumerated() {
             let sample = sample(at: distance)
-            let roadYaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
-            addBox(parent: world, name: "crossing-road-\(index)", size: SIMD3<Float>(18, 0.1, 5.5), position: SIMD3<Float>(sample.x, 0.19, sample.z), material: roadMaterial, orientation: roadYaw)
+            let roadYaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            addBox(parent: world, name: "crossing-road-\(index)", size: SIMD3<Float>(18, 0.1, 5.5), position: SIMD3<Float>(sample.x, sample.elevationM + 0.19, sample.z), material: roadMaterial, orientation: roadYaw)
             for side in [-1.0, 1.0] {
                 let lateral = Float(side) * 2.4
                 let x = sample.x + lateral * cos(sample.heading)
-                let z = sample.z - lateral * sin(sample.heading)
-                addBox(parent: world, name: "crossing-warning-post-\(index)-\(Int(side))", size: SIMD3<Float>(0.14, 1.4, 0.14), position: SIMD3<Float>(x, 0.9, z), material: roofMaterials[0])
-                let arm = addBox(parent: world, name: "crossing-arm-\(index)-\(Int(side))", size: SIMD3<Float>(0.12, 0.1, 3.0), position: SIMD3<Float>(x, 1.48, z), material: railMaterial)
-                arm.orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let z = sample.z + lateral * sin(sample.heading)
+                addBox(parent: world, name: "crossing-warning-post-\(index)-\(Int(side))", size: SIMD3<Float>(0.14, 1.4, 0.14), position: SIMD3<Float>(x, sample.elevationM + 0.9, z), material: roofMaterials[0])
+                let arm = addBox(parent: world, name: "crossing-arm-\(index)-\(Int(side))", size: SIMD3<Float>(0.12, 0.1, 3.0), position: SIMD3<Float>(x, sample.elevationM + 1.48, z), material: railMaterial)
+                arm.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
             }
         }
     }
@@ -1453,15 +1806,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for side in [-1.0, 1.0] {
             let lateral = Float(side) * 1.9
             let x = sample.x + lateral * cos(sample.heading)
-            let z = sample.z - lateral * sin(sample.heading)
-            let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
-            addBox(parent: world, name: "arrival-platform-\(Int(side))", size: SIMD3<Float>(2.0, 0.48, 115), position: SIMD3<Float>(x, 0.24, z), material: concreteMaterial, orientation: yaw)
-            addBox(parent: world, name: "tactile-strip-\(Int(side))", size: SIMD3<Float>(0.3, 0.035, 115), position: SIMD3<Float>(x - Float(side) * 0.8 * cos(sample.heading), 0.50, z + Float(side) * 0.8 * sin(sample.heading)), material: tactileMaterial, orientation: yaw)
+            let z = sample.z + lateral * sin(sample.heading)
+            let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            addBox(parent: world, name: "arrival-platform-\(Int(side))", size: SIMD3<Float>(2.0, 0.48, 115), position: SIMD3<Float>(x, sample.elevationM + 0.24, z), material: concreteMaterial, orientation: yaw)
+            addBox(parent: world, name: "tactile-strip-\(Int(side))", size: SIMD3<Float>(0.3, 0.035, 115), position: SIMD3<Float>(x - Float(side) * 0.8 * cos(sample.heading), sample.elevationM + 0.50, z - Float(side) * 0.8 * sin(sample.heading)), material: tactileMaterial, orientation: yaw)
         }
         let signSample = self.sample(at: max(route.stopMarkerM - 42, 0))
-        let signYaw = simd_quatf(angle: signSample.heading, axis: SIMD3<Float>(0, 1, 0))
-        addBox(parent: world, name: "fictional-station-sign-post", size: SIMD3<Float>(0.12, 2.8, 0.12), position: SIMD3<Float>(signSample.x + 3.4, 1.4, signSample.z), material: poleMaterial)
-        addBox(parent: world, name: "fictional-station-sign", size: SIMD3<Float>(2.4, 0.75, 0.14), position: SIMD3<Float>(signSample.x + 3.4, 2.6, signSample.z), material: glassMaterial, orientation: signYaw)
+        let signYaw = simd_quatf(angle: -signSample.heading, axis: SIMD3<Float>(0, 1, 0))
+        addBox(parent: world, name: "fictional-station-sign-post", size: SIMD3<Float>(0.12, 2.8, 0.12), position: SIMD3<Float>(signSample.x + 3.4, signSample.elevationM + 1.4, signSample.z), material: poleMaterial)
+        addBox(parent: world, name: "fictional-station-sign", size: SIMD3<Float>(2.4, 0.75, 0.14), position: SIMD3<Float>(signSample.x + 3.4, signSample.elevationM + 2.6, signSample.z), material: glassMaterial, orientation: signYaw)
     }
 
     private func buildRoadTraffic(
@@ -1486,11 +1839,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let sample = sample(at: chainage)
                     let lateral = Float(road.lateralOffsetM)
                     let x = sample.x + lateral * cos(sample.heading)
-                    let z = sample.z - lateral * sin(sample.heading)
-                    let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
-                    addBox(parent: world, name: "parallel-road-\(road.id)-\(segment)", size: SIMD3<Float>(7.2, 0.12, 120), position: SIMD3<Float>(x, 0.02, z), material: roadMaterial, orientation: yaw)
+                    let z = sample.z + lateral * sin(sample.heading)
+                    let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    // Roads lie on the ground: under a viaduct they
+                    // run along the valley floor with the poles.
+                    let roadGroundY = groundLevelM(at: sample)
+                    addBox(parent: world, name: "parallel-road-\(road.id)-\(segment)", size: SIMD3<Float>(7.2, 0.12, 120), position: SIMD3<Float>(x, roadGroundY + 0.02, z), material: roadMaterial, orientation: yaw)
                     if segment.isMultiple(of: 2) {
-                        addBox(parent: world, name: "road-lane-mark-\(road.id)-\(segment)", size: SIMD3<Float>(0.12, 0.025, 5.2), position: SIMD3<Float>(x, 0.09, z), material: roofMaterials[2], orientation: yaw)
+                        addBox(parent: world, name: "road-lane-mark-\(road.id)-\(segment)", size: SIMD3<Float>(0.12, 0.025, 5.2), position: SIMD3<Float>(x, roadGroundY + 0.09, z), material: roofMaterials[2], orientation: yaw)
                     }
                 }
                 pathPosition += pathStep
@@ -1637,7 +1993,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let sample = sample(at: chainageM)
         entity.position = SIMD3<Float>(
             sample.x + lateralOffsetM * cos(sample.heading),
-            verticalOffsetM,
+            sample.elevationM + verticalOffsetM,
             sample.z + lateralOffsetM * sin(sample.heading)
         )
         let alignment = simd_quatf(angle: Float.pi / 2 - sample.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -1809,11 +2165,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let sample = sample(at: chainage)
             let lateral = Float(track.lateralOffsetM)
             entity.position = SIMD3<Float>(
-                sample.x + lateral * cos(sample.heading), 0,
-                sample.z - lateral * sin(sample.heading)
+                sample.x + lateral * cos(sample.heading), sample.elevationM,
+                sample.z + lateral * sin(sample.heading)
             )
             let directionOffset: Float = (actor.serviceDirection == (travelDirection == .up ? .up : .down)) ? 0 : .pi
-            entity.orientation = simd_quatf(angle: sample.heading + directionOffset, axis: SIMD3<Float>(0, 1, 0))
+            entity.orientation = simd_quatf(angle: -sample.heading + directionOffset, axis: SIMD3<Float>(0, 1, 0))
         }
 
         let activeRoadVehicles = snapshot.roadVehicles.filter { $0.phase == .moving }
@@ -1834,9 +2190,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             let sample = sample(at: chainage)
             let lateral = Float(road.lateralOffsetM)
-            entity.position = SIMD3<Float>(sample.x + lateral * cos(sample.heading), 0, sample.z - lateral * sin(sample.heading))
+            entity.position = SIMD3<Float>(sample.x + lateral * cos(sample.heading), groundLevelM(at: sample), sample.z + lateral * sin(sample.heading))
             let directionOffset: Float = road.direction.serviceDirection == (travelDirection == .up ? .up : .down) ? 0 : .pi
-            entity.orientation = simd_quatf(angle: sample.heading + directionOffset, axis: SIMD3<Float>(0, 1, 0))
+            entity.orientation = simd_quatf(angle: -sample.heading + directionOffset, axis: SIMD3<Float>(0, 1, 0))
         }
 
         let activePeople = snapshot.passengers.filter { $0.phase == .walking || $0.phase == .waiting }
@@ -1862,8 +2218,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             let sample = sample(at: chainage)
             let lateral = Float(platform.lateralOffsetM + actor.lateralOffsetM)
-            entity.position = SIMD3<Float>(sample.x + lateral * cos(sample.heading), 0.48, sample.z - lateral * sin(sample.heading))
-            entity.orientation = simd_quatf(angle: sample.heading + Float(actor.headingRadians), axis: SIMD3<Float>(0, 1, 0))
+            entity.position = SIMD3<Float>(sample.x + lateral * cos(sample.heading), sample.elevationM + 0.48, sample.z + lateral * sin(sample.heading))
+            entity.orientation = simd_quatf(angle: -(sample.heading + Float(actor.headingRadians)), axis: SIMD3<Float>(0, 1, 0))
         }
     }
 
@@ -2016,7 +2372,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         surfaceMaterialTargets.append(SurfaceMaterialTarget(entity: entity, baseColor: color, metallic: metallic, roughness: roughness))
     }
 
-    private func addTree(parent: Entity, name: String, x: Float, z: Float, height: Float, material: PhysicallyBasedMaterial) {
+    private func addTree(parent: Entity, name: String, x: Float, z: Float, height: Float, material: PhysicallyBasedMaterial, groundY: Float = 0) {
         let trunkMesh: MeshResource
         if #available(iOS 18.0, *) {
             trunkMesh = .generateCylinder(height: height * 0.55, radius: 0.10)
@@ -2025,12 +2381,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         let trunk = ModelEntity(mesh: trunkMesh, materials: [sleeperMaterial])
         trunk.name = "\(name)-trunk"
-        trunk.position = SIMD3<Float>(x, height * 0.275, z)
+        trunk.position = SIMD3<Float>(x, groundY + height * 0.275, z)
         parent.addChild(trunk)
 
         let crown = ModelEntity(mesh: .generateSphere(radius: height * 0.32), materials: [material])
         crown.name = "\(name)-crown"
-        crown.position = SIMD3<Float>(x, height * 0.70, z)
+        crown.position = SIMD3<Float>(x, groundY + height * 0.70, z)
         crown.scale = SIMD3<Float>(1, 1.12, 0.92)
         parent.addChild(crown)
     }
@@ -2059,7 +2415,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 x: sample.x,
                 z: sample.z,
                 heading: sample.heading,
-                bankRadians: sample.bankRadians
+                bankRadians: sample.bankRadians,
+                elevationM: sample.elevationM
             )
         }
     }
@@ -2069,7 +2426,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let heading = Double(routeSample.heading)
             return SceneRouteControlPoint(
                 chainageM: routeSample.distanceM,
-                position: SceneVector3(Double(routeSample.x), 0, Double(routeSample.z)),
+                position: SceneVector3(Double(routeSample.x), Double(routeSample.elevationM), Double(routeSample.z)),
                 tangentPerMeter: SceneVector3(sin(heading), 0, -cos(heading)),
                 bankRadians: Double(routeSample.bankRadians)
             )
@@ -2134,35 +2491,35 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let samples = landmarkSampleChainages(landmark, limit: sampleLimit)
                 for (index, chainage) in samples.enumerated() {
                     let sample = sample(at: chainage)
-                    let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                     let length = Float(landmark.lengthM / Double(samples.count))
                     let center = routeOffsetPoint(sample, lateral: 0)
                     addSurfaceBox(parent: world, name: "\(landmark.id)-water-\(index)", size: SIMD3<Float>(18, 0.28, length),
-                                  position: SIMD3<Float>(center.x, -0.62, center.z), color: water, roughness: 0.18, orientation: yaw)
+                                  position: SIMD3<Float>(center.x, center.y - 0.62, center.z), color: water, roughness: 0.18, orientation: yaw)
                     addSurfaceBox(parent: world, name: "\(landmark.id)-deck-\(index)", size: SIMD3<Float>(8.4, 0.16, length),
-                                  position: SIMD3<Float>(center.x, -0.08, center.z), color: UIColor(red: 0.46, green: 0.48, blue: 0.47, alpha: 1),
+                                  position: SIMD3<Float>(center.x, center.y - 0.08, center.z), color: UIColor(red: 0.46, green: 0.48, blue: 0.47, alpha: 1),
                                   roughness: 0.84, orientation: yaw)
                     for side in [-1.0, 1.0] {
                         let edge = routeOffsetPoint(sample, lateral: Float(side) * 4.55)
                         addSurfaceBox(parent: world, name: "\(landmark.id)-parapet-\(index)-\(Int(side))",
                                       size: SIMD3<Float>(0.28, 1.2, length),
-                                      position: SIMD3<Float>(edge.x, 0.7, edge.z), color: UIColor(red: 0.52, green: 0.54, blue: 0.52, alpha: 1),
+                                      position: SIMD3<Float>(edge.x, edge.y + 0.7, edge.z), color: UIColor(red: 0.52, green: 0.54, blue: 0.52, alpha: 1),
                                       roughness: 0.8, orientation: yaw)
                     }
                     addBox(parent: world, name: "\(landmark.id)-pier-\(index)", size: SIMD3<Float>(0.7, 1.05, 0.7),
-                           position: SIMD3<Float>(center.x, -0.85, center.z), material: concreteMaterial, orientation: yaw)
+                           position: SIMD3<Float>(center.x, center.y - 0.85, center.z), material: concreteMaterial, orientation: yaw)
                 }
             case .cutting:
                 let samples = landmarkSampleChainages(landmark, limit: sampleLimit)
                 for (index, chainage) in samples.enumerated() {
                     let sample = sample(at: chainage)
-                    let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                     let length = Float(landmark.lengthM / Double(samples.count))
                     for side in [-1.0, 1.0] {
                         let edge = routeOffsetPoint(sample, lateral: Float(side) * 6.6)
                         addSurfaceBox(parent: world, name: "\(landmark.id)-wall-\(index)-\(Int(side))",
                                       size: SIMD3<Float>(0.7, 4.6, length),
-                                      position: SIMD3<Float>(edge.x, 2.15, edge.z),
+                                      position: SIMD3<Float>(edge.x, edge.y + 2.15, edge.z),
                                       color: UIColor(red: 0.45, green: 0.46, blue: 0.44, alpha: 1),
                                       roughness: 0.9, orientation: yaw)
                     }
@@ -2171,32 +2528,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let samples = landmarkSampleChainages(landmark, limit: sampleLimit)
                 for (index, chainage) in samples.enumerated() {
                     let sample = sample(at: chainage)
-                    let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                     let length = Float(landmark.lengthM / Double(samples.count))
                     for side in [-1.0, 1.0] {
                         let edge = routeOffsetPoint(sample, lateral: Float(side) * 6.8)
                         let roll = simd_quatf(angle: Float(side) * -0.48, axis: SIMD3<Float>(0, 0, 1))
                         addSurfaceBox(parent: world, name: "\(landmark.id)-slope-\(index)-\(Int(side))",
                                       size: SIMD3<Float>(6.5, 0.42, length),
-                                      position: SIMD3<Float>(edge.x, -0.35, edge.z),
+                                      position: SIMD3<Float>(edge.x, edge.y - 0.35, edge.z),
                                       color: grass, roughness: 0.95, orientation: yaw * roll)
                     }
                 }
             case .levelCrossing:
                 let sample = sample(at: (landmark.startChainageM + landmark.endChainageM) * 0.5)
-                let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                 for side in [-1.0, 1.0] {
                     let approach = routeOffsetPoint(sample, lateral: Float(side) * 8.0)
                     addSurfaceBox(parent: world, name: "\(landmark.id)-approach-\(Int(side))",
                                   size: SIMD3<Float>(11, 0.12, 6.4),
-                                  position: SIMD3<Float>(approach.x, 0.06, approach.z),
+                                  position: SIMD3<Float>(approach.x, approach.y + 0.06, approach.z),
                                   color: UIColor(red: 0.17, green: 0.18, blue: 0.18, alpha: 1),
                                   roughness: 0.78, orientation: yaw)
                     let post = routeOffsetPoint(sample, lateral: Float(side) * 4.3)
                     addBox(parent: world, name: "\(landmark.id)-post-\(Int(side))", size: SIMD3<Float>(0.16, 2.3, 0.16),
-                           position: SIMD3<Float>(post.x, 1.15, post.z), material: poleMaterial)
+                           position: SIMD3<Float>(post.x, post.y + 1.15, post.z), material: poleMaterial)
                     addBox(parent: world, name: "\(landmark.id)-raised-arm-\(Int(side))", size: SIMD3<Float>(0.12, 2.15, 0.1),
-                           position: SIMD3<Float>(post.x, 2.35, post.z), material: roofMaterials[0])
+                           position: SIMD3<Float>(post.x, post.y + 2.35, post.z), material: roofMaterials[0])
                 }
             }
         }
@@ -2213,7 +2570,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let routeSample = sample(at: safeChainage)
         let cameraPosition = useLiveCamera
             ? cameraWorldPosition
-            : SIMD3<Float>(routeSample.x, 2.7, routeSample.z)
+            : SIMD3<Float>(routeSample.x, routeSample.elevationM + 2.7, routeSample.z)
         let cameraForward = useLiveCamera
             ? simd_act(camera.orientation, SIMD3<Float>(0, 0, -1))
             : SIMD3<Float>(sin(routeSample.heading), 0, -cos(routeSample.heading))
@@ -2277,7 +2634,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 x: first.x + sin(first.heading) * delta,
                 z: first.z - cos(first.heading) * delta,
                 heading: first.heading,
-                bankRadians: first.bankRadians
+                bankRadians: first.bankRadians,
+                // Extrapolation holds the end elevation: the lead car
+                // extends only a few metres past the sampled range.
+                elevationM: first.elevationM
             )
         }
         guard let upperIndex = samples.firstIndex(where: { $0.distanceM >= distanceM }) else {
@@ -2288,10 +2648,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     x: last.x + sin(last.heading) * delta,
                     z: last.z - cos(last.heading) * delta,
                     heading: last.heading,
-                    bankRadians: last.bankRadians
+                    bankRadians: last.bankRadians,
+                    elevationM: last.elevationM
                 )
             }
-            return RouteSample(distanceM: distanceM, x: 0, z: Float(-distanceM), heading: 0, bankRadians: 0)
+            return RouteSample(distanceM: distanceM, x: 0, z: Float(-distanceM), heading: 0, bankRadians: 0, elevationM: 0)
         }
         guard upperIndex > 0 else { return samples[upperIndex] }
         let lower = samples[upperIndex - 1]
@@ -2303,15 +2664,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             x: lower.x + (upper.x - lower.x) * fraction,
             z: lower.z + (upper.z - lower.z) * fraction,
             heading: lower.heading + (upper.heading - lower.heading) * fraction,
-            bankRadians: lower.bankRadians + (upper.bankRadians - lower.bankRadians) * fraction
+            bankRadians: lower.bankRadians + (upper.bankRadians - lower.bankRadians) * fraction,
+            elevationM: lower.elevationM + (upper.elevationM - lower.elevationM) * fraction
         )
     }
 
     private func routeOffsetPoint(_ sample: RouteSample, lateral: Float) -> SIMD3<Float> {
         SIMD3<Float>(
             sample.x + lateral * cos(sample.heading),
-            0,
-            sample.z - lateral * sin(sample.heading)
+            sample.elevationM,
+            sample.z + lateral * sin(sample.heading)
         )
     }
 
@@ -2367,7 +2729,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let s = sample(at: distanceM)
         let h = s.heading
         let bank = s.bankRadians
-        let center = SIMD3<Float>(s.x + trackLateral * cos(h), 0, s.z - trackLateral * sin(h))
+        let center = SIMD3<Float>(s.x + trackLateral * cos(h), s.elevationM, s.z - trackLateral * sin(h))
         let xAxis = SIMD3<Float>(cos(bank) * cos(h), -sin(bank), -cos(bank) * sin(h))
         let yAxis = SIMD3<Float>(sin(bank) * cos(h), cos(bank), -sin(bank) * sin(h))
         return ProfileStation(center: center, xAxis: xAxis, yAxis: yAxis, distanceM: distanceM)
@@ -2526,12 +2888,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var km = 1_000.0
         while km < limit {
             if let sample = bestSample(for: km, mainlineOnly: false), !corridorReserved(at: sample.distanceM, landmarks: markerLandmarks) {
-                let yaw = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                 let base = routeOffsetPoint(sample, lateral: postLateral)
                 addBox(parent: world, name: "km-post-\(Int(km))", size: SIMD3<Float>(0.12, 0.95, 0.12),
-                       position: SIMD3<Float>(base.x, 0.48, base.z), material: concreteMaterial, orientation: yaw)
+                       position: SIMD3<Float>(base.x, base.y + 0.48, base.z), material: concreteMaterial, orientation: yaw)
                 addBox(parent: world, name: "km-post-cap-\(Int(km))", size: SIMD3<Float>(0.15, 0.2, 0.15),
-                       position: SIMD3<Float>(base.x, 0.98, base.z), material: poleMaterial, orientation: yaw)
+                       position: SIMD3<Float>(base.x, base.y + 0.98, base.z), material: poleMaterial, orientation: yaw)
             }
             km += 1_000
         }
@@ -2542,10 +2904,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for target in stride(from: 0.0, to: 60_000.0, by: 3_000.0) {
             for approach in [target - 30, target] {
                 guard let sample = bestSample(for: approach, mainlineOnly: true) else { continue }
-                let orientation = simd_quatf(angle: sample.heading, axis: SIMD3<Float>(0, 1, 0)) * simd_quatf(angle: -sample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
+                let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)) * simd_quatf(angle: -sample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
                 let center = routeOffsetPoint(sample, lateral: runningTrack)
                 addBox(parent: world, name: "ats-balise-\(Int(approach))", size: SIMD3<Float>(0.34, 0.07, 0.55),
-                       position: SIMD3<Float>(center.x, 0.22, center.z), material: baliseMaterial, orientation: orientation)
+                       position: SIMD3<Float>(center.x, center.y + 0.22, center.z), material: baliseMaterial, orientation: orientation)
             }
         }
     }
@@ -2718,8 +3080,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     chunkStart = spot.chainage
                 }
                 let s = spot.sample
-                let base = routeOffsetPoint(s, lateral: spot.lateral)
-                let bc = SIMD3<Float>(base.x, 0, base.z)
+                // Poles stand on the ground: under a viaduct the whole
+                // pole, crossarms, insulators and wires drop to the
+                // valley floor with it (the wire sag interpolates
+                // between the two pole bases, so it follows the
+                // ground too).
+                let base = groundOffsetPoint(s, lateral: spot.lateral)
+                let bc = SIMD3<Float>(base.x, base.y, base.z)
                 // Tapered pole: two stacked prisms.
                 concreteBatch.addPrism(baseCenter: bc, radius: 0.17, height: 5.0, yaw: s.heading)
                 concreteBatch.addPrism(baseCenter: bc + SIMD3<Float>(0, 5.0, 0), radius: 0.125, height: 4.0, yaw: s.heading)
@@ -2730,30 +3097,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 }
                 // Insulators on the arm ends.
                 for run in wireRuns {
-                    let p = routeOffsetPoint(s, lateral: spot.lateral + run.offset)
-                    porcelainBatch.addPrism(baseCenter: SIMD3<Float>(p.x, run.height - 0.14, p.z), radius: 0.045, height: 0.14, yaw: s.heading)
+                    let p = groundOffsetPoint(s, lateral: spot.lateral + run.offset)
+                    porcelainBatch.addPrism(baseCenter: SIMD3<Float>(p.x, p.y + run.height - 0.14, p.z), radius: 0.045, height: 0.14, yaw: s.heading)
                 }
                 // Transformer can on every sixth pole, track side.
                 if index % 6 == 3 {
-                    let t = routeOffsetPoint(s, lateral: spot.lateral - sideSign * 0.52)
-                    steelBatch.addPrism(baseCenter: SIMD3<Float>(t.x, 5.6, t.z), radius: 0.34, height: 0.95, yaw: s.heading)
+                    let t = groundOffsetPoint(s, lateral: spot.lateral - sideSign * 0.52)
+                    steelBatch.addPrism(baseCenter: SIMD3<Float>(t.x, t.y + 5.6, t.z), radius: 0.34, height: 0.95, yaw: s.heading)
                 }
                 // Sagging wires to the previous pole on this side.
+                // The wire sags between the two pole heights and
+                // follows the ground elevation between the poles.
                 if index > 0 {
                     let prev = spots[index - 1]
                     let span = spot.chainage - prev.chainage
                     if span <= 60 {
                         for run in wireRuns {
-                            let a = routeOffsetPoint(prev.sample, lateral: prev.lateral + run.offset)
-                            let b = routeOffsetPoint(s, lateral: spot.lateral + run.offset)
-                            var lastPoint = SIMD3<Float>(a.x, run.height, a.z)
+                            let a = groundOffsetPoint(prev.sample, lateral: prev.lateral + run.offset)
+                            let b = groundOffsetPoint(s, lateral: spot.lateral + run.offset)
+                            var lastPoint = SIMD3<Float>(a.x, a.y + run.height, a.z)
                             let steps = 7
                             for k in 1...steps {
                                 let t = Float(k) / Float(steps)
                                 let sag = 0.85 * 4 * t * (1 - t)
                                 let point = SIMD3<Float>(
                                     a.x + (b.x - a.x) * t,
-                                    run.height - sag,
+                                    a.y + (b.y - a.y) * t + run.height - sag,
                                     a.z + (b.z - a.z) * t)
                                 steelBatch.addSegment(from: lastPoint, to: point, thickness: 0.035)
                                 lastPoint = point
@@ -2766,8 +3135,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
-    private func ribbonEntity(name: String, width: Float, y: Float, tileLength: Float, offsets: [Float], material: PhysicallyBasedMaterial, range: Range<Int>? = nil, uTileLength: Float? = nil) -> ModelEntity? {
-        guard offsets.count == samples.count, samples.count > 1 else { return nil }
+    /// A horizontal strip that follows the route samples. `y` is the
+    /// height above the rail head at each sample: the strip rides on
+    /// the track elevation, so ground, ballast and apron follow the
+    /// gradients instead of lying on one flat plane. `yOffsets`
+    /// adds a per-sample extra height (used for the far ground's
+    /// gentle undulation); `absoluteY` pins the whole strip to one
+    /// level instead — the sea and beach are flat water and sand,
+    /// they must not climb with the track. `widths` overrides the
+    /// uniform `width` per sample (see `clampedRibbonSpan`): wide
+    /// ground ribbons narrow on the inner side of tight curves so
+    /// they never fold through the track.
+    private func ribbonEntity(name: String, width: Float, y: Float, tileLength: Float, offsets: [Float], material: PhysicallyBasedMaterial, range: Range<Int>? = nil, uTileLength: Float? = nil, yOffsets: [Float]? = nil, absoluteY: Float? = nil, widths: [Float]? = nil) -> ModelEntity? {
+        guard offsets.count == samples.count, samples.count > 1, widths == nil || widths?.count == samples.count else { return nil }
         let sampleRange = range ?? samples.indices
         guard sampleRange.count > 1 else { return nil }
         var positions: [SIMD3<Float>] = []
@@ -2780,12 +3160,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let sample = samples[i]
             let lateral = offsets[i]
             let cx = sample.x + lateral * cos(sample.heading)
-            let cz = sample.z - lateral * sin(sample.heading)
+            let cz = sample.z + lateral * sin(sample.heading)
             let rx = cos(sample.heading)
-            let rz = -sin(sample.heading)
-            let half = width / 2
-            positions.append(SIMD3<Float>(cx - rx * half, y, cz - rz * half))
-            positions.append(SIMD3<Float>(cx + rx * half, y, cz + rz * half))
+            let rz = sin(sample.heading)
+            let half = (widths?[i] ?? width) / 2
+            let vertexY = absoluteY ?? (y + sample.elevationM + (yOffsets?[i] ?? 0))
+            positions.append(SIMD3<Float>(cx - rx * half, vertexY, cz - rz * half))
+            positions.append(SIMD3<Float>(cx + rx * half, vertexY, cz + rz * half))
             normals.append(SIMD3<Float>(0, 1, 0))
             normals.append(SIMD3<Float>(0, 1, 0))
             let v = Float(sample.distanceM) / tileLength
@@ -2820,6 +3201,128 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         material.faceCulling = .none
         return ModelEntity(mesh: mesh, materials: [material])
     }
+
+    /// A vertical strip that follows the route samples: backdrops,
+    /// forest lines and the coastal bluff. The old backdrop was a
+    /// straight 4 km box on the global -z axis, but the route wanders
+    /// up to 31 km off that axis (plan view), so beyond the first
+    /// kilometres the horizon was empty and the straight walls sliced
+    /// through the line wherever the route crossed x = +/-680 m.
+    /// A curve-following strip stays beside the track everywhere.
+    /// `lateralOffsets`, `bottomYs` and `topYs` are per-sample
+    /// absolute values; the UV runs along the chainage (one texture
+    /// repeat per `tileLength` metres) and once over the height.
+    /// The caller clamps the lateral offset inside tight curves
+    /// (see `backdropLateral`), because a strip offset further than
+    /// the curve radius would fold back through the track.
+    private func verticalRibbonEntity(name: String, lateralOffsets: [Float], bottomYs: [Float], topYs: [Float], tileLength: Float, material: PhysicallyBasedMaterial, range: Range<Int>? = nil) -> ModelEntity? {
+        guard lateralOffsets.count == samples.count, bottomYs.count == samples.count, topYs.count == samples.count, samples.count > 1 else { return nil }
+        let sampleRange = range ?? samples.indices
+        guard sampleRange.count > 1 else { return nil }
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+        positions.reserveCapacity(sampleRange.count * 2)
+        var vertexIndex = 0
+        for i in sampleRange {
+            let sample = samples[i]
+            let lateral = lateralOffsets[i]
+            let cx = sample.x + lateral * cos(sample.heading)
+            let cz = sample.z + lateral * sin(sample.heading)
+            // Face the track: the normal points from the wall back
+            // toward the centreline. Face culling is off, so the far
+            // side still renders; the normal only sets the lighting.
+            let inward = SIMD3<Float>(-Float(lateral.signum()) * cos(sample.heading), 0, -Float(lateral.signum()) * sin(sample.heading))
+            positions.append(SIMD3<Float>(cx, bottomYs[i], cz))
+            positions.append(SIMD3<Float>(cx, topYs[i], cz))
+            normals.append(inward)
+            normals.append(inward)
+            let u = Float(sample.distanceM) / tileLength
+            uvs.append(SIMD2<Float>(u, 0))
+            uvs.append(SIMD2<Float>(u, 1))
+            if vertexIndex > 0 {
+                let base = UInt32((vertexIndex - 1) * 2)
+                indices.append(contentsOf: [base, base + 1, base + 2, base + 1, base + 3, base + 2])
+            }
+            vertexIndex += 1
+        }
+        var descriptor = MeshDescriptor(name: name)
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+        descriptor.primitives = .triangles(indices)
+        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
+        var material = material
+        material.faceCulling = .none
+        return ModelEntity(mesh: mesh, materials: [material])
+    }
+
+    /// Lateral offset of a route-following wall at one sample: the
+    /// requested standoff, pulled in where the curve is tighter than
+    /// the standoff so the wall never folds through the track.
+    /// `route.condition(at:)` returns the effective radius with the
+    /// transition fraction already applied, so this is continuous
+    /// through the transitions.
+    private func clampedWallLateral(side: Float, standoff: Float, route: RailwayRouteProfile, sample: RouteSample) -> Float {
+        guard let radius = route.condition(at: sample.distanceM).curveRadiusM, radius.isFinite, radius > 0 else { return side * standoff }
+        return side * min(standoff, Float(radius) * 0.9)
+    }
+
+    /// Per-sample (centre, width) for a wide horizontal ribbon, so
+    /// the strip never folds through the track on a tight curve.
+    /// The ribbon nominally spans [centre-half, centre+half]
+    /// laterally, with + on the vehicle's right (the true
+    /// perpendicular, see `ribbonEntity`). On the inner side of a
+    /// curve the far edge is pulled in to 0.9R while the near edge
+    /// stays put, so the strip still meets the apron and the track
+    /// instead of leaving a gap. On the outer side, and on
+    /// tangents, the nominal span is kept. A ribbon whose centre is
+    /// already past 0.9R (far ground at R300: centre 375 m) is
+    /// re-centred rather than just narrowed, so it still covers
+    /// the ground out to the backdrop wall. The effective radius
+    /// already carries the transition fraction (see
+    /// `RailwayRouteProfile.condition(at:)`), so the clamp eases
+    /// in and out continuously through the transitions.
+    private func clampedRibbonSpan(route: RailwayRouteProfile, centerOffset: Float, width: Float) -> (centers: [Float], widths: [Float]) {
+        let half = width / 2
+        var centers: [Float] = []
+        var widths: [Float] = []
+        centers.reserveCapacity(samples.count)
+        widths.reserveCapacity(samples.count)
+        for sample in samples {
+            var center = centerOffset
+            var halfWidth = half
+            let condition = route.condition(at: sample.distanceM)
+            if let radius = condition.curveRadiusM, radius.isFinite, radius > 0,
+               let direction = condition.curveDirection {
+                let s = Float(direction)
+                let limit = Float(radius) * 0.9
+                let lo = center - halfWidth
+                let hi = center + halfWidth
+                if s > 0 && hi > limit {
+                    if limit <= lo {
+                        center = lo + 0.5
+                        halfWidth = 0.5
+                    } else {
+                        center = (lo + limit) / 2
+                        halfWidth = (limit - lo) / 2
+                    }
+                } else if s < 0 && lo < -limit {
+                    if -limit >= hi {
+                        center = hi - 0.5
+                        halfWidth = 0.5
+                    } else {
+                        center = (-limit + hi) / 2
+                        halfWidth = (hi + limit) / 2
+                    }
+                }
+            }
+            centers.append(center)
+            widths.append(halfWidth * 2)
+        }
+        return (centers, widths)
+    }
 }
 
 @MainActor
@@ -2845,6 +3348,11 @@ private struct RouteSample {
     let z: Float
     let heading: Float
     let bankRadians: Float
+    /// Track height above the route origin datum (see
+    /// RegionalRouteGeometrySampler). Every route-following surface
+    /// and object adds this to its base height; the sea is the one
+    /// exception and stays flat at a per-run datum instead.
+    let elevationM: Float
 }
-    private var currentSample = RouteSample(distanceM: 0, x: 0, z: 0, heading: 0, bankRadians: 0)
+    private var currentSample = RouteSample(distanceM: 0, x: 0, z: 0, heading: 0, bankRadians: 0, elevationM: 0)
     private var generatedLeadVehicleRoot: Entity?
