@@ -254,6 +254,17 @@ final class SimulatorModel: ObservableObject {
     @Published private(set) var audioVolume = 0.65
 
     init() {
+        // Screenshot verification of the rebuilt cab (CI only): the
+        // -RMCabView launch argument starts the app in the cab view
+        // instead of the default forward view.
+        if ProcessInfo.processInfo.arguments.contains("-RMCabView") {
+            environmentSelection = EnvironmentQualitySelection(
+                environment: .clearDay,
+                cameraPreset: .cab,
+                renderQuality: .medium,
+                timeOfDayHours: 12
+            )
+        }
         let supportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         saveStore = try? FileSaveStore(

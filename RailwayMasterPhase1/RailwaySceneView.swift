@@ -15,6 +15,8 @@ struct RealityTrackView: View {
     let positionM: Double
     let speedKmh: Double
     let brakePipePressureKPa: Double
+    var mainReservoirPressureKPa: Double = 690
+    var brakeCylinderPressureKPa: Double = 0
     let accelerationMps2: Double
     let simulationTime: Double
     let weather: WeatherCondition
@@ -48,6 +50,8 @@ struct RealityTrackView: View {
                 positionM: positionM,
                 speedKmh: speedKmh,
                 brakePipePressureKPa: brakePipePressureKPa,
+                mainReservoirPressureKPa: mainReservoirPressureKPa,
+                brakeCylinderPressureKPa: brakeCylinderPressureKPa,
                 accelerationMps2: accelerationMps2,
                 simulationTime: simulationTime,
                 trafficScenario: trafficScenario,
@@ -120,6 +124,8 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
     let positionM: Double
     let speedKmh: Double
     let brakePipePressureKPa: Double
+    var mainReservoirPressureKPa: Double = 690
+    var brakeCylinderPressureKPa: Double = 0
     let accelerationMps2: Double
     let simulationTime: Double
     let trafficScenario: TrafficScenario?
@@ -158,6 +164,8 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
         context.coordinator.scene.update(
             route: route, positionM: positionM, speedKmh: speedKmh,
             brakePipePressureKPa: brakePipePressureKPa,
+            mainReservoirPressureKPa: mainReservoirPressureKPa,
+            brakeCylinderPressureKPa: brakeCylinderPressureKPa,
             accelerationMps2: accelerationMps2, simulationTime: simulationTime,
             trafficScenario: trafficScenario, trafficSnapshot: trafficSnapshot,
             routeVariant: routeVariant, travelDirection: travelDirection,
@@ -180,6 +188,8 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
         context.coordinator.scene.update(
             route: route, positionM: positionM, speedKmh: speedKmh,
             brakePipePressureKPa: brakePipePressureKPa,
+            mainReservoirPressureKPa: mainReservoirPressureKPa,
+            brakeCylinderPressureKPa: brakeCylinderPressureKPa,
             accelerationMps2: accelerationMps2, simulationTime: simulationTime,
             trafficScenario: trafficScenario, trafficSnapshot: trafficSnapshot,
             routeVariant: routeVariant, travelDirection: travelDirection,
@@ -346,8 +356,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var highFidelityLeadVehicle: RailwayVehicleHighFidelityModel?
     private var lastHighFidelityUpdateTime: Double?
     private var wheelBaseOrientations: [(entity: Entity, orientation: simd_quatf)] = []
-    private var speedNeedle: ModelEntity?
-    private var limitNeedle: ModelEntity?
+    private var cabNeedlePivots: [String: Entity] = [:]
+    private var cabLampOverlays: [String: Entity] = [:]
     private var renderQualitySettings = RenderQualityResolver.resolve(profile: .balanced, thermalCondition: .nominal)
     private var precipitationEntities: [ModelEntity] = []
     private var precipitationKind: RenderingWeather?
@@ -467,8 +477,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         cabModel = nil
         precipitationEntities.removeAll()
         precipitationKind = nil
-        speedNeedle = nil
-        limitNeedle = nil
+        cabNeedlePivots = [:]
+        cabLampOverlays = [:]
         renderQualitySettings = RenderQualityResolver.resolve(profile: quality.profile, thermalCondition: .nominal)
         let safeCarCount = min(max(vehicleCarCount, 1), 12)
         currentCabDesk = cabDesk
@@ -532,6 +542,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         positionM: Double,
         speedKmh: Double,
         brakePipePressureKPa: Double,
+        mainReservoirPressureKPa: Double = 690,
+        brakeCylinderPressureKPa: Double = 0,
         accelerationMps2: Double,
         simulationTime: Double,
         trafficScenario: TrafficScenario?,
@@ -634,7 +646,21 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             lastHighFidelityUpdateTime = simulationTime.isFinite ? simulationTime : nil
         }
         if let cabModel {
-            cabModel.cabControls.setValue(Float(controls.throttleNotch), for: .masterController)
+            if currentCabDesk.fictionalCarNumber == "E231" {
+                // One-handle desk: a single lever value spans brake
+                // (-7) through neutral to power (+5).
+                let combined: Float
+                if controls.emergencyBrake {
+                    combined = -7
+                } else if controls.throttleNotch > 0 {
+                    combined = Float(controls.throttleNotch)
+                } else {
+                    combined = -Float(controls.brakeNotch)
+                }
+                cabModel.cabControls.setValue(combined, for: .masterController)
+            } else {
+                cabModel.cabControls.setValue(Float(controls.throttleNotch), for: .masterController)
+            }
             cabModel.cabControls.setValue(Float(controls.brakeNotch) / 7, for: .brakeLever)
             cabModel.cabControls.setValue(1, for: .reverser)
             cabModel.cabControls.setValue(Float(environmentSelection.environment.headlightIntensity), for: .headlightSwitch)
@@ -647,7 +673,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             cabModel.cabControls.setValue(wiperValue, for: .wiperSwitch)
         }
-        updateCabGauges(speedKmh: speedKmh, maximumSpeedKmh: vehicleMaximumSpeedKmh)
+        updateCabGauges(speedKmh: speedKmh, brakePipePressureKPa: brakePipePressureKPa, mainReservoirPressureKPa: mainReservoirPressureKPa, brakeCylinderPressureKPa: brakeCylinderPressureKPa, indicator: vehicleCabIndicatorState, controls: controls)
         updateWheels(speedKmh: speedKmh, simulationTime: simulationTime)
         renderingCoordinator.cameraController.viewMode = environmentSelection.cameraViewMode
         renderingCoordinator.qualityController = RenderQualityController(
@@ -1537,19 +1563,24 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             collectWheelEntities(in: model.root)
             if index == 0 && !useHighFidelityLead { cabModel = model }
         }
-        guard let model = cabModel else { return }
-        speedNeedle = addBox(
-            parent: model.root, name: "live-speed-gauge-needle",
-            size: SIMD3<Float>(0.035, 0.035, 0.25),
-            position: SIMD3<Float>(-0.64, 1.98, -8.02),
-            material: Self.pbr(UIColor(red: 0.16, green: 0.82, blue: 0.94, alpha: 1), metallic: 0.15, roughness: 0.34)
-        )
-        limitNeedle = addBox(
-            parent: model.root, name: "live-speed-limit-gauge-needle",
-            size: SIMD3<Float>(0.035, 0.035, 0.20),
-            position: SIMD3<Float>(0.63, 1.98, -8.02),
-            material: Self.pbr(UIColor(red: 0.97, green: 0.48, blue: 0.24, alpha: 1), roughness: 0.35)
-        )
+        // The cab builder places real gauge needles and lamp overlays
+        // inside the interior group; collect them so the per-frame
+        // update can drive them from live physics and indicators.
+        guard let model = cabModel, let interior = model.groups[.cabInterior] else { return }
+        cabNeedlePivots = [:]
+        cabLampOverlays = [:]
+        collectCabInstruments(in: interior)
+    }
+
+    private func collectCabInstruments(in entity: Entity) {
+        if entity.name.hasPrefix("GaugeNeedle_") {
+            cabNeedlePivots[entity.name] = entity
+        } else if entity.name.hasPrefix("CabLampLit_") {
+            cabLampOverlays[entity.name] = entity
+        }
+        for child in entity.children {
+            collectCabInstruments(in: child)
+        }
     }
 
     private func buildGenerated3DAssets(route: RailwayRouteProfile) {
@@ -1631,10 +1662,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
-    private func updateCabGauges(speedKmh: Double, maximumSpeedKmh: Double) {
-        let speedFraction = min(max(speedKmh / max(maximumSpeedKmh, 1), 0), 1)
-        speedNeedle?.orientation = simd_quatf(angle: Float(-1.25 + speedFraction * 2.5), axis: SIMD3<Float>(0, 1, 0))
-        limitNeedle?.orientation = simd_quatf(angle: 0.72, axis: SIMD3<Float>(0, 1, 0))
+    /// Drives the cab builder's gauge needles and lamp overlays.
+    /// Gauge faces sweep 270 degrees: zero at 225 degrees (lower
+    /// left), full scale at -45 degrees. The E231 dual pressure
+    /// gauge reads BC on the shared 0-1000 kPa scale; the fictional
+    /// desks use a separate 0-600 kPa BC gauge.
+    private func updateCabGauges(speedKmh: Double, brakePipePressureKPa: Double, mainReservoirPressureKPa: Double, brakeCylinderPressureKPa: Double, indicator: VehicleCabIndicatorState, controls: TrainControls) {
+        func setNeedle(_ name: String, fraction: Double) {
+            guard let pivot = cabNeedlePivots[name] else { return }
+            let clamped = min(max(fraction, 0), 1)
+            let degrees = Float(270 * clamped - 135)
+            pivot.orientation = simd_quatf(angle: degrees * .pi / 180, axis: SIMD3<Float>(0, 0, 1))
+        }
+        setNeedle("GaugeNeedle_speed", fraction: speedKmh / 120)
+        setNeedle("GaugeNeedle_mr", fraction: mainReservoirPressureKPa / 1000)
+        setNeedle("GaugeNeedle_bp", fraction: brakePipePressureKPa / 1000)
+        let bcScale = currentCabDesk.fictionalCarNumber == "E231" ? 1000.0 : 600.0
+        setNeedle("GaugeNeedle_bc", fraction: brakeCylinderPressureKPa / bcScale)
+        cabLampOverlays["CabLampLit_door"]?.isEnabled = !indicator.doorsOpen
+        cabLampOverlays["CabLampLit_ats"]?.isEnabled = indicator.atspActive || indicator.atcActive
+        cabLampOverlays["CabLampLit_emergency"]?.isEnabled = indicator.emergencyBrakeActive || controls.emergencyBrake
     }
 
     private func updateTrafficActors(

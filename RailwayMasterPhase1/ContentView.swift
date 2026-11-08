@@ -68,6 +68,8 @@ struct ContentView: View {
                     positionM: model.telemetry.positionM,
                     speedKmh: speedKmh,
                     brakePipePressureKPa: model.telemetry.brakePipePressureKPa,
+                    mainReservoirPressureKPa: model.trainPhysicsTelemetry.mainReservoirPressureKPa,
+                    brakeCylinderPressureKPa: model.trainPhysicsTelemetry.brakeCylinderPressureKPa,
                     accelerationMps2: model.telemetry.accelerationMps2,
                     simulationTime: model.simulationTime,
                     weather: model.weather,
@@ -89,7 +91,10 @@ struct ContentView: View {
                     vehicleMaximumSpeedKmh: model.train.maximumSpeedKmh,
                     environmentSelection: model.environmentSelection,
                     vehicleCarCount: model.selectedVehicleProfile.carCount,
-                    cabDesk: model.selectedVehicleProfile.cabDesk,
+                    // The player's cab is the E231 early analog desk
+                    // (user decision 2026-11-08); vehicle physics and
+                    // sound still follow the selected profile.
+                    cabDesk: FictionalCabAndSoundCatalog.e231Early,
                     stationModelPlacements: generatedStationModelPlacements,
                     nextStopName: nextStopName,
                     distanceToNextStopM: distanceToNextStopM,
