@@ -169,6 +169,7 @@ public enum RailwaySceneFidelityBuilder {
 
         appendTrack(to: &composer)
         appendCatenary(to: &composer)
+        appendTracksideSigns(to: &composer)
         appendPlatforms(to: &composer)
         appendLandmarks(to: &composer)
         if corridor.generateUrbanScenery {
@@ -410,6 +411,57 @@ public enum RailwaySceneFidelityBuilder {
         }
     }
 
+    /// Lineside kilometre posts (every 1 km) and marker boards (every
+    /// 250 m, alternating sides): the small track furniture BVE routes
+    /// repeat along the whole line, so no stretch reads as empty.
+    /// Track furniture like the catenary masts, not urban scenery.
+    private static func appendTracksideSigns(to composer: inout ScenePlanComposer) {
+        var km = Int((composer.buildStartM / 1000).rounded(.down))
+        var kmChainage = Double(km) * 1000
+        while kmChainage <= composer.buildEndM {
+            if kmChainage >= composer.buildStartM,
+               var post = composer.localAccumulator(
+                id: "trackside-kmpost-\(km)", role: .tracksideSign,
+                chainage: kmChainage, lateral: 3.2, radius: 1.5,
+                label: syntheticAssetLabel) {
+                post.addLocal("km-post", position: SceneVector3(0, 0.85, 0),
+                    size: SceneVector3(0.12, 1.7, 0.12), material: .darkSteel)
+                post.addLocal("km-plate", position: SceneVector3(0, 1.55, 0),
+                    size: SceneVector3(0.42, 0.30, 0.06), material: .buildingCool,
+                    minimumLOD: .medium)
+                post.addLocal("km-plate-band", position: SceneVector3(0, 1.55, 0.035),
+                    size: SceneVector3(0.30, 0.06, 0.012), material: .tactileAmber,
+                    minimumLOD: .medium)
+                composer.append(post)
+            }
+            km += 1
+            kmChainage = Double(km) * 1000
+        }
+        var marker = Int((composer.buildStartM / 250).rounded(.down))
+        var markerChainage = Double(marker) * 250
+        while markerChainage <= composer.buildEndM {
+            if markerChainage >= composer.buildStartM {
+                let side: Double = marker.isMultiple(of: 2) ? -1 : 1
+                if var board = composer.localAccumulator(
+                    id: "trackside-marker-\(marker)", role: .tracksideSign,
+                    chainage: markerChainage, lateral: side * 3.1, radius: 1.5,
+                    label: syntheticAssetLabel) {
+                    board.addLocal("marker-post", position: SceneVector3(0, 0.75, 0),
+                        size: SceneVector3(0.10, 1.5, 0.10), material: .galvanizedSteel)
+                    board.addLocal("marker-board", position: SceneVector3(0, 1.35, 0),
+                        size: SceneVector3(0.55, 0.42, 0.05), material: .buildingCool,
+                        minimumLOD: .medium)
+                    board.addLocal("marker-stripe", position: SceneVector3(0, 1.35, 0.03),
+                        size: SceneVector3(0.55, 0.09, 0.012), material: .tactileAmber,
+                        minimumLOD: .medium)
+                    composer.append(board)
+                }
+            }
+            marker += 1
+            markerChainage = Double(marker) * 250
+        }
+    }
+
     private static func appendPlatforms(to composer: inout ScenePlanComposer) {
         let route = composer.route
         let controls = composer.density
@@ -588,6 +640,10 @@ public enum RailwaySceneFidelityBuilder {
         }
     }
 
+    /// Buildings line both sides of the track at every step, with a
+    /// second row behind the first every third step: the BVE benchmark
+    /// routes never leave one side empty, and a single alternating line
+    /// reads as a fence rather than a settled area.
     private static func appendBuildings(to composer: inout ScenePlanComposer) {
         let route = composer.route
         var index = Int((composer.buildStartM / composer.density.scenerySpacingM).rounded(.down))
@@ -599,100 +655,21 @@ public enum RailwaySceneFidelityBuilder {
                 index += 1
                 continue
             }
-            let jitter = randomUnit(seed: UInt64(index &* 7919 &+ 23))
-            let side: Double = index.isMultiple(of: 2) ? -1 : 1
-            let offset = side * (14 + jitter * 12)
-            let width = 7.5 + randomUnit(seed: UInt64(index &* 3571 &+ 109)) * 8.0
-            let height = 7.5 + randomUnit(seed: UInt64(index &* 1237 &+ 31)) * 12.5
-            let depth = 7 + randomUnit(seed: UInt64(index &* 1879 &+ 17)) * 8
-            if composer.reserveScenery(), var building = composer.localAccumulator(
-                id: "synthetic-building-\(index)", role: .building,
-                chainage: chainage, lateral: offset, radius: sqrt(width * width + depth * depth + height * height) * 0.52,
-                label: "SYNTHETIC BUILDING — FICTIONAL FACADE, SCALE AND USE") {
-                let kind = index % 4
-                var bodyWidth = width
-                var bodyHeight = height
-                var bodyDepth = depth
-                var bodyName = "facade-volume"
-                var bodyMaterial: SceneMaterialStyle = index.isMultiple(of: 3) ? .buildingCool : .buildingWarm
-                var roofMaterial: SceneMaterialStyle = .darkSteel
-                var roofThickness = 0.24
-                switch kind {
-                case 1:
-                    bodyHeight = min(height, 6.4)
-                    bodyName = "house-body"
-                    roofThickness = 0.85
-                    roofMaterial = .buildingWarm
-                case 2:
-                    bodyWidth = width * 1.35
-                    bodyHeight = min(5.4, height * 0.42)
-                    bodyDepth = depth * 1.15
-                    bodyName = "warehouse-volume"
-                    bodyMaterial = .buildingCool
-                    roofMaterial = .galvanizedSteel
-                case 3:
-                    bodyHeight = min(7.5, height * 0.55)
-                    bodyName = "shop-volume"
-                    bodyMaterial = .buildingWarm
-                default:
-                    break
+            for sideIndex in 0..<2 {
+                let side: Double = sideIndex == 0 ? -1 : 1
+                appendOneBuilding(to: &composer, slot: index * 2 + sideIndex,
+                                  chainage: chainage, side: side,
+                                  lateralBase: 14, lateralSpread: 12,
+                                  id: "synthetic-building-\(index * 2 + sideIndex)")
+            }
+            if index % 3 == 0 {
+                for sideIndex in 0..<2 {
+                    let side: Double = sideIndex == 0 ? -1 : 1
+                    appendOneBuilding(to: &composer, slot: 100_000 + index * 2 + sideIndex,
+                                      chainage: chainage, side: side,
+                                      lateralBase: 30, lateralSpread: 6,
+                                      id: "synthetic-building-back-\(index * 2 + sideIndex)")
                 }
-                building.addLocal(bodyName, position: SceneVector3(0, bodyHeight * 0.5, 0),
-                    size: SceneVector3(bodyWidth, bodyHeight, bodyDepth), material: bodyMaterial)
-                building.addLocal(kind == 1 ? "house-roof" : "roof-cap", position: SceneVector3(0, bodyHeight + roofThickness * 0.45, 0),
-                    size: SceneVector3(bodyWidth + 0.4, roofThickness, bodyDepth + 0.4), material: roofMaterial)
-                if kind == 3 {
-                    building.addLocal("shop-awning", position: SceneVector3(0, 2.4, bodyDepth * 0.5 + 0.45),
-                        size: SceneVector3(bodyWidth * 0.92, 0.08, 1.1), material: .canopyMetal)
-                }
-                building.addLocal("ground-floor-plinth", position: SceneVector3(0, 0.35, 0),
-                    size: SceneVector3(bodyWidth + 0.12, 0.70, bodyDepth + 0.12), material: .concrete)
-                let height = bodyHeight
-                let width = bodyWidth
-                let depth = bodyDepth
-                let floors = max(kind == 2 ? 1 : 2, Int(height / 3.0))
-                for floor in 0..<floors {
-                    let y = 1.45 + Double(floor) * 2.55
-                    for bay in 0..<max(2, Int(width / 2.2)) {
-                        let x = -width * 0.5 + 1.1 + Double(bay) * 2.2
-                        if composer.density.detailLevel >= 1 {
-                            for sideFace in [-1.0, 1.0] {
-                                building.addLocal("window-side-\(floor)-\(bay)-\(Int(sideFace))",
-                                    position: SceneVector3(sideFace * (width * 0.5 + 0.014), y, x * 0.12),
-                                    size: SceneVector3(0.035, 1.18, 1.10), material: .windowGlass,
-                                    minimumLOD: .medium)
-                            }
-                            building.addLocal("front-window-\(floor)-\(bay)",
-                                position: SceneVector3(x, y, depth * 0.5 + 0.015),
-                                size: SceneVector3(1.15, 1.16, 0.035), material: .windowGlass,
-                                minimumLOD: .medium)
-                            building.addLocal("rear-window-\(floor)-\(bay)",
-                                position: SceneVector3(x, y, -depth * 0.5 - 0.015),
-                                size: SceneVector3(1.15, 1.16, 0.035), material: .windowGlass,
-                                minimumLOD: .medium)
-                        }
-                    }
-                    if composer.density.detailLevel >= 2, floor.isMultiple(of: 2) {
-                        for balcony in 0..<max(1, Int(width / 5.0)) {
-                            let x = -width * 0.35 + Double(balcony) * 4.8
-                            building.addLocal("balcony-slab-\(floor)-\(balcony)",
-                                position: SceneVector3(x, y - 0.66, depth * 0.5 + 0.28),
-                                size: SceneVector3(2.6, 0.10, 0.72), material: .concrete,
-                                minimumLOD: .high)
-                            building.addLocal("balcony-rail-\(floor)-\(balcony)",
-                                position: SceneVector3(x, y - 0.30, depth * 0.5 + 0.55),
-                                size: SceneVector3(2.55, 0.08, 0.07), material: .darkSteel,
-                                minimumLOD: .high)
-                        }
-                    }
-                }
-                for sideFace in [-1.0, 1.0] {
-                    building.addLocal("rainwater-pipe-\(Int(sideFace))", shape: .cylinder,
-                        position: SceneVector3(sideFace * (width * 0.5 - 0.18), height * 0.5, -depth * 0.5 + 0.20),
-                        size: SceneVector3(0.09, height, 0.09), material: .darkSteel,
-                        minimumLOD: .medium)
-                }
-                composer.append(building)
             }
             chainage += composer.density.scenerySpacingM * (1.35 + randomUnit(seed: UInt64(index &* 2141 &+ 5)) * 0.75)
             index += 1
@@ -700,8 +677,124 @@ public enum RailwaySceneFidelityBuilder {
         }
     }
 
+    private static func appendOneBuilding(
+        to composer: inout ScenePlanComposer,
+        slot: Int,
+        chainage: Double,
+        side: Double,
+        lateralBase: Double,
+        lateralSpread: Double,
+        id: String
+    ) {
+        let jitter = randomUnit(seed: UInt64(slot &* 7919 &+ 23))
+        let offset = side * (lateralBase + jitter * lateralSpread)
+        let width = 7.5 + randomUnit(seed: UInt64(slot &* 3571 &+ 109)) * 8.0
+        let height = 7.5 + randomUnit(seed: UInt64(slot &* 1237 &+ 31)) * 12.5
+        let depth = 7 + randomUnit(seed: UInt64(slot &* 1879 &+ 17)) * 8
+        guard composer.reserveScenery(), var building = composer.localAccumulator(
+            id: id, role: .building,
+            chainage: chainage, lateral: offset, radius: sqrt(width * width + depth * depth + height * height) * 0.52,
+            label: "SYNTHETIC BUILDING — FICTIONAL FACADE, SCALE AND USE") else { return }
+        appendBuildingPieces(to: &building, slot: slot, width: width, height: height, depth: depth,
+                             detailLevel: composer.density.detailLevel)
+        composer.append(building)
+    }
+
+    private static func appendBuildingPieces(
+        to building: inout AssemblyAccumulator,
+        slot: Int,
+        width: Double,
+        height: Double,
+        depth: Double,
+        detailLevel: Int
+    ) {
+        let kind = slot % 4
+        var bodyWidth = width
+        var bodyHeight = height
+        var bodyDepth = depth
+        var bodyName = "facade-volume"
+        var bodyMaterial: SceneMaterialStyle = slot.isMultiple(of: 3) ? .buildingCool : .buildingWarm
+        var roofMaterial: SceneMaterialStyle = .darkSteel
+        var roofThickness = 0.24
+        switch kind {
+        case 1:
+            bodyHeight = min(height, 6.4)
+            bodyName = "house-body"
+            roofThickness = 0.85
+            roofMaterial = .buildingWarm
+        case 2:
+            bodyWidth = width * 1.35
+            bodyHeight = min(5.4, height * 0.42)
+            bodyDepth = depth * 1.15
+            bodyName = "warehouse-volume"
+            bodyMaterial = .buildingCool
+            roofMaterial = .galvanizedSteel
+        case 3:
+            bodyHeight = min(7.5, height * 0.55)
+            bodyName = "shop-volume"
+            bodyMaterial = .buildingWarm
+        default:
+            break
+        }
+        building.addLocal(bodyName, position: SceneVector3(0, bodyHeight * 0.5, 0),
+            size: SceneVector3(bodyWidth, bodyHeight, bodyDepth), material: bodyMaterial)
+        building.addLocal(kind == 1 ? "house-roof" : "roof-cap", position: SceneVector3(0, bodyHeight + roofThickness * 0.45, 0),
+            size: SceneVector3(bodyWidth + 0.4, roofThickness, bodyDepth + 0.4), material: roofMaterial)
+        if kind == 3 {
+            building.addLocal("shop-awning", position: SceneVector3(0, 2.4, bodyDepth * 0.5 + 0.45),
+                size: SceneVector3(bodyWidth * 0.92, 0.08, 1.1), material: .canopyMetal)
+        }
+        building.addLocal("ground-floor-plinth", position: SceneVector3(0, 0.35, 0),
+            size: SceneVector3(bodyWidth + 0.12, 0.70, bodyDepth + 0.12), material: .concrete)
+        let height = bodyHeight
+        let width = bodyWidth
+        let depth = bodyDepth
+        let floors = max(kind == 2 ? 1 : 2, Int(height / 3.0))
+        for floor in 0..<floors {
+            let y = 1.45 + Double(floor) * 2.55
+            for bay in 0..<max(2, Int(width / 2.2)) {
+                let x = -width * 0.5 + 1.1 + Double(bay) * 2.2
+                if detailLevel >= 1 {
+                    for sideFace in [-1.0, 1.0] {
+                        building.addLocal("window-side-\(floor)-\(bay)-\(Int(sideFace))",
+                            position: SceneVector3(sideFace * (width * 0.5 + 0.014), y, x * 0.12),
+                            size: SceneVector3(0.035, 1.18, 1.10), material: .windowGlass,
+                            minimumLOD: .medium)
+                    }
+                    building.addLocal("front-window-\(floor)-\(bay)",
+                        position: SceneVector3(x, y, depth * 0.5 + 0.015),
+                        size: SceneVector3(1.15, 1.16, 0.035), material: .windowGlass,
+                        minimumLOD: .medium)
+                    building.addLocal("rear-window-\(floor)-\(bay)",
+                        position: SceneVector3(x, y, -depth * 0.5 - 0.015),
+                        size: SceneVector3(1.15, 1.16, 0.035), material: .windowGlass,
+                        minimumLOD: .medium)
+                }
+            }
+            if detailLevel >= 2, floor.isMultiple(of: 2) {
+                for balcony in 0..<max(1, Int(width / 5.0)) {
+                    let x = -width * 0.35 + Double(balcony) * 4.8
+                    building.addLocal("balcony-slab-\(floor)-\(balcony)",
+                        position: SceneVector3(x, y - 0.66, depth * 0.5 + 0.28),
+                        size: SceneVector3(2.6, 0.10, 0.72), material: .concrete,
+                        minimumLOD: .high)
+                    building.addLocal("balcony-rail-\(floor)-\(balcony)",
+                        position: SceneVector3(x, y - 0.30, depth * 0.5 + 0.55),
+                        size: SceneVector3(2.55, 0.08, 0.07), material: .darkSteel,
+                        minimumLOD: .high)
+                }
+            }
+        }
+        for sideFace in [-1.0, 1.0] {
+            building.addLocal("rainwater-pipe-\(Int(sideFace))", shape: .cylinder,
+                position: SceneVector3(sideFace * (width * 0.5 - 0.18), height * 0.5, -depth * 0.5 + 0.20),
+                size: SceneVector3(0.09, height, 0.09), material: .darkSteel,
+                minimumLOD: .medium)
+        }
+    }
+
     private static func appendRoadVehicles(to composer: inout ScenePlanComposer) {
-        let step = max(22, composer.density.scenerySpacingM * 1.7)
+        let step = max(16, composer.density.scenerySpacingM * 1.3)
         for chainage in composer.chainages(step: step) {
             let slot = Int((chainage / step).rounded())
             guard let frame = composer.route.frame(at: chainage) else { continue }
@@ -791,7 +884,7 @@ public enum RailwaySceneFidelityBuilder {
     }
 
     private static func appendVegetation(to composer: inout ScenePlanComposer) {
-        let spacing = max(composer.density.scenerySpacingM * 1.3, 12)
+        let spacing = max(composer.density.scenerySpacingM * 1.0, 12)
         for chainage in composer.chainages(step: spacing) {
             let index = Int((chainage / spacing).rounded())
             guard let frame = composer.route.frame(at: chainage) else { continue }
