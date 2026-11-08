@@ -1247,6 +1247,14 @@ final class SimulatorModel: ObservableObject {
         ProcessInfo.processInfo.arguments.contains("-RMDemoDrive")
     }
 
+    /// Screenshot-tour mode (`-RMTour` together with
+    /// `-RMDemoDrive`): instead of driving, the train is teleported
+    /// between scenic chainages and held still, so one CI launch
+    /// photographs many different places along the line.
+    var tourEnabled: Bool {
+        ProcessInfo.processInfo.arguments.contains("-RMTour")
+    }
+
     private var lastDemoAckSeconds: Double = -10
     private var demoServedStopIndex: Int = -1
     private var demoDoorsOpenedAt: Double = -1
@@ -1299,8 +1307,71 @@ final class SimulatorModel: ObservableObject {
         if let data = line.data(using: .utf8) { handle.write(data) }
     }
 
+    private static let tourSpotsM: [Double] = [500, 5_500, 7_500, 9_700, 13_500, 17_650, 24_100, 33_000, 45_500, 56_500]
+    private var tourSpotIndex = -1
+    private var firstTourFrameTime: TimeInterval = -1
+
+    private func driveTourIfEnabled(now: TimeInterval) {
+        if firstTourFrameTime < 0 { firstTourFrameTime = now }
+        let elapsed = now - firstTourFrameTime
+        if elapsed >= 40 {
+            let due = Int((elapsed - 40) / 35)
+            let targetIndex = min(due, Self.tourSpotsM.count - 1)
+            if targetIndex > tourSpotIndex {
+                tourSpotIndex = targetIndex
+                teleportForTour(to: Self.tourSpotsM[targetIndex])
+            }
+        }
+        // Hold the train still for the photograph.
+        controls = TrainControls(throttleNotch: 0, brakeNotch: 3, emergencyBrake: false)
+    }
+
+    private func teleportForTour(to position: Double) {
+        engine.placeAt(positionM: position)
+        if activeStops.isEmpty {
+            nextStopIndex = 0
+        } else if let idx = activeStops.firstIndex(where: { $0.positionM > position + 1 }) {
+            nextStopIndex = idx
+        } else {
+            nextStopIndex = activeStops.count - 1
+        }
+        arrivalDwellSeconds = 0
+        gameModeCurrentStationID = nil
+        scoringStationID = nil
+        pendingScoringDepartureStationID = nil
+        rebuildProtectionSession()
+    }
+
+    /// Speed cap from the fictional protection layer's own devices
+    /// (see driveDemoIfEnabled). Mirrors the layout constants in
+    /// FictionalLiveProtectionLayout and the ATS-P pattern maths
+    /// (0.8 m/s², 8 m margin), staying 3 km/h under the envelope.
+    private func fictionalProtectionCapKmh(at position: Double) -> Double {
+        var cap = Double.greatestFiniteMagnitude
+        let period = 4_000.0
+        var targetPosition = 1_400.0
+        while targetPosition <= position { targetPosition += period }
+        let distance = targetPosition - position
+        if distance > 0 {
+            let targetMps = 45.0 / 3.6
+            let envelope = sqrt(targetMps * targetMps + 2 * 0.8 * max(0, distance - 8)) * 3.6
+            cap = min(cap, envelope - 3)
+        }
+        // ATC command zones sit at 1,800-1,950 m of each period and
+        // command 55 km/h; start slowing 300 m before the zone.
+        let inPeriod = position.truncatingRemainder(dividingBy: period)
+        if inPeriod >= 1_500 && inPeriod <= 2_000 {
+            cap = min(cap, 52)
+        }
+        return cap
+    }
+
     private func driveDemoIfEnabled() {
         guard demoDriveEnabled, runPhase == .running else { return }
+        if tourEnabled {
+            driveTourIfEnabled(now: lastFrameTime ?? 0)
+            return
+        }
         let t = simulationTime
         if t >= 30, gameModeDoorState.isOpen, demoServedStopIndex < 0 {
             handleGameModeHostEffects([.setGameDoorState(.closed)])
@@ -1359,6 +1430,13 @@ final class SimulatorModel: ObservableObject {
         // Cruise under the protection's permitted speed, with a
         // gentle final approach to the next scheduled stop.
         var target = min(65, (latestOperationsSnapshot?.permittedSpeedKmh ?? 65) - 2)
+        // The fictional protection layer also supervises its own
+        // repeating devices, which the snapshot does not show: an
+        // ATS-P profile target (45 km/h) at 1,400 m + every 4 km,
+        // and an ATC 55 km/h zone in each period. Exceeding one
+        // latches a brake that only a full stop and reset clears,
+        // so a driver who knows the route slows for them in time.
+        target = min(target, fictionalProtectionCapKmh(at: engine.positionM))
         if engine.positionM < demoCreepUntilM {
             if engine.positionM < demoCreepStage2FromM {
                 target = min(target, 10)

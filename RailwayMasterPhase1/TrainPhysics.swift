@@ -459,6 +459,14 @@ public struct TrainPhysicsEngine: Sendable {
         passengerLoadFactor = min(max(value, 0), 2)
     }
 
+    /// Screenshot-tour support: place the train, stopped with the
+    /// brakes released, at a given chainage. Not part of normal
+    /// driving; used by the -RMTour capture mode.
+    public mutating func placeAt(positionM newPositionM: Double) {
+        reset()
+        positionM = max(0, newPositionM)
+    }
+
     public mutating func reset() {
         positionM = 0
         speedMps = 0

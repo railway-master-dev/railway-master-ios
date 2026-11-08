@@ -517,6 +517,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             buildSignals(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildCatenary(route: route)
             buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
             buildFictionalCorridorLandmarks(route: route, quality: quality)
             buildDestinationPlatform(route: route)
@@ -1010,7 +1011,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
         buildRailsAndShoulders(trackOffsetsSeen: trackOffsetsSeen, availableOffsets: offsetsFor)
         buildTracksideMarkers(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-        buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        // Utility poles are built from prepare() after buildSuburb,
+        // so urban poles can avoid the tower footprints.
 
         let wallLandmarks = fictionalCorridorLandmarks(for: route)
         for index in samples.indices {
@@ -2610,6 +2612,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let porcelain = Self.pbr(UIColor(red: 0.88, green: 0.87, blue: 0.84, alpha: 1), metallic: 0.05, roughness: 0.35)
         let landmarks = fictionalCorridorLandmarks(for: route)
         let seaSign = seaSideSign(travelDirection: travelDirection)
+        // Urban towers already stand in the world (buildSuburb ran
+        // first). City poles run along the street edge and must not
+        // intersect a tower footprint, so collect tower positions
+        // and skip any pole that would land inside one.
+        let towerPositions: [SIMD3<Float>] = world.children.compactMap { child in
+            child.name.hasPrefix("office-base-") ? child.position : nil
+        }
         struct PoleSpot { var chainage: Double; var sample: RouteSample; var lateral: Float }
         for sideSign: Float in [-1, 1] {
             // Collect this side's pole spots first so wires can be
@@ -2619,8 +2628,22 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             while d < route.distanceM - 60 {
                 let band = urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 let onSeaSide = isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) && sideSign == seaSign
-                if band == 0 && !onSeaSide && !corridorReserved(at: d, landmarks: landmarks) {
-                    spots.append(PoleSpot(chainage: d, sample: sample(at: d), lateral: sideSign * 18.6))
+                if !onSeaSide && !corridorReserved(at: d, landmarks: landmarks) {
+                    if band == 0 {
+                        spots.append(PoleSpot(chainage: d, sample: sample(at: d), lateral: sideSign * 18.6))
+                    } else {
+                        let s = sample(at: d)
+                        let p = routeOffsetPoint(s, lateral: sideSign * 11.0)
+                        var blocked = false
+                        for tower in towerPositions {
+                            let dx = tower.x - p.x
+                            let dz = tower.z - p.z
+                            if dx * dx + dz * dz < 90.25 { blocked = true; break }
+                        }
+                        if !blocked {
+                            spots.append(PoleSpot(chainage: d, sample: s, lateral: sideSign * 11.0))
+                        }
+                    }
                 }
                 d += 45
             }
