@@ -1296,9 +1296,18 @@ final class SimulatorModel: ObservableObject {
         if !demoLogStarted {
             demoLogStarted = true
             if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-                let url = dir.appendingPathComponent("demo-drive-log.txt")
+                // CI #199: the cab relaunch overwrote the tour launch's
+                // log (same file), hiding the tour teleports. Keep the
+                // two launches apart so both stay readable.
+                let fileName = tourEnabled ? "demo-drive-log.txt" : "demo-drive-log-cab.txt"
+                let url = dir.appendingPathComponent(fileName)
                 FileManager.default.createFile(atPath: url.path, contents: nil)
                 demoLogHandle = try? FileHandle(forWritingTo: url)
+                // Startup diagnostic (CI #199: the cab launch's scene
+                // stayed black/void and its log stopped at t=55, so the
+                // next check needs the launch configuration on record).
+                let header = "LAUNCH tour=\(tourEnabled) cabView=\(ProcessInfo.processInfo.arguments.contains("-RMCabView")) camera=\(environmentSelection.cameraPreset.rawValue) quality=\(environmentSelection.renderQuality.rawValue) timeOfDay=\(environmentSelection.timeOfDayHours) runPhase=\(runPhase.rawValue)\n"
+                if let data = header.data(using: .utf8) { demoLogHandle?.write(data) }
             }
         }
         guard let handle = demoLogHandle else { return }
@@ -1320,21 +1329,37 @@ final class SimulatorModel: ObservableObject {
 
     private static let tourSpotsM: [Double] = [500, 5_500, 7_500, 9_700, 13_500, 17_650, 24_100, 33_000, 45_500, 56_500]
     private var tourSpotIndex = -1
-    private var firstTourFrameTime: TimeInterval = -1
+    private var firstTourWallTime: TimeInterval = -1
 
-    private func driveTourIfEnabled(now: TimeInterval) {
-        if firstTourFrameTime < 0 { firstTourFrameTime = now }
-        let elapsed = now - firstTourFrameTime
-        if elapsed >= 40 {
-            let due = Int((elapsed - 40) / 35)
+    private func driveTourIfEnabled() {
+        // CI #199: the tour ran on the frame timer's dates, but that
+        // timer starves under the loaded simulator (the sim itself ran
+        // at ~0.5-0.7x wall speed), so teleports fell ever further
+        // behind the wall-clock screenshot schedule and stops 6-10
+        // never fired. Drive the schedule from the true wall clock
+        // instead; a late frame-timer tick then catches up at once.
+        // First teleport at 25 s (screenshots start ~57 s after
+        // launch, ~30 s after each teleport, so the view has settled).
+        let now = Date().timeIntervalSinceReferenceDate
+        if firstTourWallTime < 0 { firstTourWallTime = now }
+        let elapsed = now - firstTourWallTime
+        if elapsed >= 25 {
+            let due = Int((elapsed - 25) / 35)
             let targetIndex = min(due, Self.tourSpotsM.count - 1)
             if targetIndex > tourSpotIndex {
                 tourSpotIndex = targetIndex
                 teleportForTour(to: Self.tourSpotsM[targetIndex])
+                logTourTeleport(to: Self.tourSpotsM[targetIndex], spotIndex: targetIndex)
             }
         }
         // Hold the train still for the photograph.
         controls = TrainControls(throttleNotch: 0, brakeNotch: 3, emergencyBrake: false)
+    }
+
+    private func logTourTeleport(to position: Double, spotIndex: Int) {
+        guard let handle = demoLogHandle else { return }
+        let line = "TOUR spot=\(spotIndex) pos=\(Int(position)) wall=\(Int(Date().timeIntervalSinceReferenceDate))\n"
+        if let data = line.data(using: .utf8) { handle.write(data) }
     }
 
     private func teleportForTour(to position: Double) {
@@ -1380,7 +1405,7 @@ final class SimulatorModel: ObservableObject {
     private func driveDemoIfEnabled() {
         guard demoDriveEnabled, runPhase == .running else { return }
         if tourEnabled {
-            driveTourIfEnabled(now: lastFrameTime ?? 0)
+            driveTourIfEnabled()
             return
         }
         let t = simulationTime
