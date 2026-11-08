@@ -104,7 +104,7 @@ public struct EnvironmentQualitySelection: Codable, Equatable, Sendable {
 
     public static let `default` = EnvironmentQualitySelection(
         environment: .clearDay,
-        cameraPreset: .cab,
+        cameraPreset: .forward,
         renderQuality: .medium,
         timeOfDayHours: 12
     )
