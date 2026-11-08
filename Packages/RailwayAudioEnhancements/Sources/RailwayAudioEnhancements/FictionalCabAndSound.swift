@@ -160,6 +160,32 @@ public enum FictionalCabAndSoundCatalog {
         masterMarkings: []
     )
 
+    /// The player's cab: layout modelled on the E231 series early
+    /// analog-instrument cab (left-hand one-handle master controller,
+    /// white-face speedometer and dual MR/BC pressure gauge, one TIMS
+    /// monitor). Geometry and textures are original to this project;
+    /// only the arrangement follows the reference.
+    public static let e231Early = FictionalCabDesk(
+        family: .vvvf,
+        inspirationNote: "E231系初期型（アナログ計器）運転台の配置を手本にしたプレイヤー運転台。左手ワンハンドル、白文字盤の速度計と双針MR/BC圧力計、TIMSモニタ1画面。形状とテクスチャは本プロジェクトのオリジナル。",
+        deskRed: 0.17, deskGreen: 0.18, deskBlue: 0.19,
+        oneHandleMasterBrake: true,
+        masterGrip: .darkCombined,
+        brakeGrip: .sphere,
+        analogGaugeCount: 2,
+        hasCenterMonitor: true,
+        hasRightStatusScreen: false,
+        hasRightKeypad: true,
+        hasRightHandset: true,
+        verticalAmberIndicators: false,
+        blueSwitchLabels: false,
+        centerSwitchBank: false,
+        fictionalCarNumber: "E231",
+        dashboardCaption: "E231",
+        doorLampCaption: "戸閉",
+        masterMarkings: []
+    )
+
     public static let fieldChopper = FictionalCabDesk(
         family: .fieldChopper,
         inspirationNote: "PLACEHOLDER fictional desk. 灯の名前だけ https://sigf.sakura.ne.jp/bve_sb2000.html の記述（直列/並列/最終/界磁弱メ/回生制動）。パネル画像やプラグインは不使用。車号2007の複製ではない。",
