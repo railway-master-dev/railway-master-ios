@@ -233,7 +233,7 @@ final class SampledMotorSound {
                         continue
                     }
                 } else if engineRunning, !player.isPlaying, buffer(named: target.name) != nil {
-                    playLoop(player, sample: target.name)
+                    _ = playLoop(player, sample: target.name)
                 }
                 let targetVolume = min(1, target.volume) * master * 0.85
                 player.volume = approach(player.volume, targetVolume)
@@ -270,7 +270,7 @@ final class SampledMotorSound {
                         player.volume = 0
                     }
                 } else if engineRunning, !player.isPlaying {
-                    playLoop(player, sample: desiredRun)
+                    _ = playLoop(player, sample: desiredRun)
                 }
                 player.volume = approach(player.volume, targetVolume)
             } else {
