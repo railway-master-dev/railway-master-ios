@@ -158,6 +158,11 @@ PYEOF
     sleep 60
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/07-running.png 2>/dev/null || true
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+    # Demo-drive state log (the app writes it in -RMDemoDrive mode).
+    APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
+    if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
+      cp "$APP_DATA/Documents/demo-drive-log.txt" screenshots/ || true
+    fi
     sleep 3
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/08-home.png 2>/dev/null || true
     ls -la screenshots/
