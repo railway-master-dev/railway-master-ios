@@ -529,7 +529,7 @@ public enum RailwayGeneratedAssetLoader {
             case "fictional_gravel": return "scenery_trackbed"
             case "fictional_sleeper": return "scenery_timber"
             case "fictional_building": return "scenery_brick_warm"
-            case "fictional_canopy", "fictional_roof": return "scenery_steel"
+            case "fictional_canopy", "fictional_roof": return "scenery_canopy"
             case "fictional_rail": return "scenery_steel"
             default: return nil
             }
@@ -543,7 +543,8 @@ public enum RailwayGeneratedAssetLoader {
         if name.hasPrefix("sleeper") { return "scenery_timber" }
         if name.hasPrefix("trackbed") { return "scenery_trackbed" }
         if name.hasPrefix("platform") { return "scenery_concrete" }
-        if name.hasPrefix("canopy_column") || name.hasPrefix("canopy_roof") { return "scenery_steel" }
+        if name.hasPrefix("canopy_roof") { return "scenery_canopy" }
+        if name.hasPrefix("canopy_column") { return "scenery_concrete" }
         if name.hasPrefix("footbridge_deck") { return "scenery_steel" }
         if name.hasPrefix("footbridge_stair") { return "scenery_concrete" }
         if name.hasPrefix("bench_") && (name.contains("_seat") || name.contains("_back")) { return "scenery_timber" }
