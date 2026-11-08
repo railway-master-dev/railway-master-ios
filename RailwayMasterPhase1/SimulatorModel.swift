@@ -317,6 +317,7 @@ final class SimulatorModel: ObservableObject {
         guard !isPaused, runPhase == .running else { return }
         let realDelta = min(max(time - previous, 0), 0.5)
         guard realDelta > 0 else { return }
+        driveDemoIfEnabled()
         fixedStepAccumulator += realDelta
         let fixedStep = TrainPhysics.PhysicsConstants.fixedTimeStepSeconds
         while fixedStepAccumulator + 1e-12 >= fixedStep, runPhase == .running {
@@ -1238,6 +1239,39 @@ final class SimulatorModel: ObservableObject {
         )
     }
 
+    /// True only when the app was launched with `-RMDemoDrive`
+    /// (the CI screenshots job). Normal launches and tests never pass
+    /// the argument, so the scripted drive below stays inert.
+    var demoDriveEnabled: Bool {
+        ProcessInfo.processInfo.arguments.contains("-RMDemoDrive")
+    }
+
+    /// Scripted drive for screenshot runs: close the doors, depart
+    /// after the (shortened) origin wait, and hold an urban-core
+    /// cruising speed so the later screenshots show running scenery.
+    private func driveDemoIfEnabled() {
+        guard demoDriveEnabled, runPhase == .running else { return }
+        let t = simulationTime
+        if t >= 30, gameModeDoorState.isOpen {
+            handleGameModeHostEffects([.setGameDoorState(.closed)])
+        }
+        guard t >= 50 else { return }
+        if t >= 260 {
+            setThrottle(0)
+            setBrake(3)
+            return
+        }
+        let speedKmh = max(0, engine.speedMps * 3.6)
+        if speedKmh < 55 {
+            setBrake(0)
+            setThrottle(3)
+        } else if speedKmh > 70 {
+            setThrottle(0)
+        } else {
+            setThrottle(1)
+        }
+    }
+
     func setThrottle(_ notch: Int) {
         guard runPhase == .running else { return }
         let value = min(max(notch, 0), max(train.tractionNotchFractions.count - 1, 0))
@@ -1376,6 +1410,10 @@ final class SimulatorModel: ObservableObject {
         }
         timetableSelection = makeTimetableSelection(originStationID: trip.stops.first?.stationID)
         appliedTimetableDepartureDelaySeconds = timetableSelection?.routeOriginDelaySeconds ?? 0
+        if demoDriveEnabled {
+            // Screenshot runs cannot wait out the full origin delay.
+            appliedTimetableDepartureDelaySeconds = min(appliedTimetableDepartureDelaySeconds, 45)
+        }
         timetableSettingsPendingRestart = false
         let scheduleByStationID = timetableSelection.map {
             RegionalTimetableAdapter.stopSchedules(from: $0, activeStops: trip.stops)
