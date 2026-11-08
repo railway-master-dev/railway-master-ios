@@ -156,7 +156,11 @@ public final class CameraController {
             // height, staring into the dashboard and the front bulkhead.
             return CameraPose(position: RenderVector3(x: 0, y: 2.32, z: -2.45), target: RenderVector3(x: 0, y: 2.30, z: 60), fieldOfViewDegrees: 66)
         case .forward:
-            return CameraPose(position: RenderVector3(x: 0, y: 2.15, z: 2.0), target: RenderVector3(x: 0, y: 1.65, z: 100), fieldOfViewDegrees: 70)
+            // Scenery-only front view (user decision 2026-11-08: the cab
+            // interior is no longer shown). The eye floats just ahead of
+            // the nose at driver eye height, so the frame is all track
+            // and lineside, BVE front-view style.
+            return CameraPose(position: RenderVector3(x: 0, y: 2.5, z: 1.6), target: RenderVector3(x: 0, y: 0.9, z: 100), fieldOfViewDegrees: 72)
         case .chase:
             return CameraPose(position: RenderVector3(x: 0, y: 4.0, z: -8.0), target: RenderVector3(x: 0, y: 1.4, z: 24), fieldOfViewDegrees: 68)
         }
