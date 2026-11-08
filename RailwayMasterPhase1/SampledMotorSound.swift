@@ -117,28 +117,40 @@ final class SampledMotorSound {
         return loaded
     }
 
-    private func ensurePlayers() {
-        // Nodes are created unattached; playLoop attaches each one with
-        // the format of the first buffer it plays.
-        if motorPlayers.isEmpty {
-            for _ in 0..<3 {
-                motorPlayers.append(AVAudioPlayerNode())
-            }
+    /// Creates and attaches all players up front. The engine calls
+    /// this during its own init, before the graph is prepared: runtime
+    /// attach/connect forces an AVAudioEngine graph reconfiguration
+    /// that can throw (CI #138/#163), so it never happens afterwards.
+    /// Buffer formats are uniform per role (motor 44.1 kHz mono, run
+    /// 44.1 kHz stereo), verified against the bundled files.
+    func preattachIfNeeded() {
+        guard motorPlayers.isEmpty, let attachHandler else { return }
+        var foundMotorFormat: AVAudioFormat?
+        for name in ["motor_vvvf_00", "motor_chopper_00", "motor_res_00"] {
+            if let format = buffer(named: name)?.format { foundMotorFormat = format; break }
         }
-        if runPlayer == nil {
-            runPlayer = AVAudioPlayerNode()
+        guard let motorFormat = foundMotorFormat else { return }
+        for _ in 0..<3 {
+            let player = AVAudioPlayerNode()
+            attachHandler(player, motorFormat)
+            attachedFormats[ObjectIdentifier(player)] = motorFormat
+            motorPlayers.append(player)
+        }
+        if let runFormat = buffer(named: "run_ballast")?.format {
+            let player = AVAudioPlayerNode()
+            attachHandler(player, runFormat)
+            attachedFormats[ObjectIdentifier(player)] = runFormat
+            runPlayer = player
         }
     }
 
     private func playLoop(_ player: AVAudioPlayerNode, sample: String) -> Bool {
         guard let buffer = buffer(named: sample) else { return false }
-        let key = ObjectIdentifier(player)
-        if let connected = attachedFormats[key] {
-            guard connected == buffer.format else { return false }
-        } else {
-            attachHandler?(player, buffer.format)
-            attachedFormats[key] = buffer.format
-        }
+        // Players are pre-attached with a fixed format; a buffer whose
+        // format differs is skipped, never scheduled (CI #147), and no
+        // attach is attempted at runtime (CI #163).
+        guard let connected = attachedFormats[ObjectIdentifier(player)],
+              connected == buffer.format else { return false }
         player.stop()
         player.scheduleBuffer(buffer, at: nil, options: .loops)
         player.play()
@@ -160,24 +172,12 @@ final class SampledMotorSound {
             }
             return
         }
-        // Decide what should sound before touching the audio graph.
-        // Player nodes are attached only while the engine is actually
-        // running: attaching one earlier leaves it without a valid
-        // output format and the connect aborts the process (the launch
-        // crash bisected in CI #138/#141/#144). Braking at a standstill
-        // (holding brakes at a station) must not count as wanting motor
-        // sound, or the attach would still happen during startup.
-        let speedKmhNow = max(0, snapshot.speedMetersPerSecond) * 3.6
-        let wantsMotor = snapshot.powerNotch > 0
-            || ((snapshot.brakeCommand > 0.03 || snapshot.regenerativeBrakeRatio > 0.03) && speedKmhNow > 0.5)
-        let wantsRun = speedKmhNow >= 2 && !snapshot.doorsOpen
-        if motorPlayers.isEmpty {
-            guard wantsMotor || wantsRun else { return }
-            if !engineRunning {
-                startHandler?()
-                return
-            }
-            ensurePlayers()
+        // Players were pre-attached during engine init; if that did
+        // not happen (missing buffers), the subsystem stays inert
+        // rather than touching the graph at runtime.
+        guard !motorPlayers.isEmpty else {
+            if snapshot.powerNotch > 0, !engineRunning { startHandler?() }
+            return
         }
         if family != currentFamily {
             currentFamily = family

@@ -67,6 +67,17 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
         engine.connect(licensedSampleMixer, to: reverb, format: nil)
         engine.connect(reverb, to: engine.mainMixerNode, format: format)
         engine.mainMixerNode.outputVolume = 1
+        // Attach every sample player NOW, while the graph is still in
+        // its configuration phase. Attaching or connecting a node after
+        // the engine has been prepared/started forces a graph
+        // reconfiguration that can fail inside AVAudioEngine (the
+        // -10868 exception behind the CI #138/#163 crashes). After this
+        // point the graph never changes shape; playback only schedules
+        // buffers on the pre-attached players.
+        sampledMotor.attachHandler = { [weak self] node, format in self?.attachLicensedSamplePlayer(node, format: format) }
+        sampledMotor.startHandler = { [weak self] in self?.start() }
+        sampledMotor.preattachIfNeeded()
+        preattachBundledPlayers()
         engine.prepare()
         applyCurrentSnapshot()
 
@@ -159,68 +170,65 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     /// Optional authorized vehicle audio can be attached here.
-    /// Callers must attach only while the engine is running, and must
-    /// connect with the exact format of the buffers the player will
-    /// play: scheduling a buffer whose format differs from the node's
-    /// connection format raises a CoreAudio error (CI #147), and
-    /// connecting before the engine runs aborts the process
-    /// (CI #138/#141).
+    /// Call ONLY during engine configuration (init, before prepare):
+    /// attaching or connecting after the graph is prepared forces a
+    /// reconfiguration that can throw inside AVAudioEngine (CI #138,
+    /// #163). The connection format must equal the format of the
+    /// buffers the player will play (CI #147).
     public func attachLicensedSamplePlayer(_ playerNode: AVAudioPlayerNode, format: AVAudioFormat) {
         engine.attach(playerNode)
         engine.connect(playerNode, to: licensedSampleMixer, format: format)
     }
 
-    private var bundledSamplePlayer: AVAudioPlayerNode?
-    private var bundledSampleFormat: AVAudioFormat?
+    /// Door/chime players, one per bundled format (mono chopper and
+    /// stereo VVVF), attached during init — see the note there.
+    private var bundledPlayers: [(format: AVAudioFormat, player: AVAudioPlayerNode)] = []
     private var bundledSampleBuffers: [String: AVAudioPCMBuffer] = [:]
 
+    private func loadBundledBuffer(named name: String) -> AVAudioPCMBuffer? {
+        if let cached = bundledSampleBuffers[name] { return cached }
+        guard let url = Bundle.main.url(forResource: name, withExtension: "wav"),
+              let file = try? AVAudioFile(forReading: url),
+              let loaded = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                            frameCapacity: AVAudioFrameCount(file.length)) else {
+            return nil
+        }
+        do {
+            try file.read(into: loaded)
+        } catch {
+            return nil
+        }
+        bundledSampleBuffers[name] = loaded
+        return loaded
+    }
+
+    private func preattachBundledPlayers() {
+        for name in ["door_open_chopper", "door_open_vvvf"] {
+            guard let buffer = loadBundledBuffer(named: name),
+                  !bundledPlayers.contains(where: { $0.format == buffer.format }) else { continue }
+            let player = AVAudioPlayerNode()
+            attachLicensedSamplePlayer(player, format: buffer.format)
+            bundledPlayers.append((format: buffer.format, player: player))
+        }
+    }
     /// Plays a bundled WAV sample through the licensed-sample mixer and
     /// returns its duration in seconds so callers can sequence actions
     /// (for example closing the doors only after a door chime ends).
     /// Returns nil when the sample is missing or audio is disabled.
+    /// Playback uses the players pre-attached during init; if no player
+    /// matches the sample's format, the duration is still returned so
+    /// callers can keep their sequencing, just without sound.
     @discardableResult
     public func playBundledSample(named name: String) -> TimeInterval? {
         guard isEnabled else { return nil }
-        let buffer: AVAudioPCMBuffer
-        if let cached = bundledSampleBuffers[name] {
-            buffer = cached
-        } else {
-            guard let url = Bundle.main.url(forResource: name, withExtension: "wav"),
-                  let file = try? AVAudioFile(forReading: url),
-                  let loaded = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
-                                                frameCapacity: AVAudioFrameCount(file.length)) else {
-                return nil
-            }
-            do {
-                try file.read(into: loaded)
-            } catch {
-                return nil
-            }
-            bundledSampleBuffers[name] = loaded
-            buffer = loaded
-        }
-        let player: AVAudioPlayerNode
-        if let existing = bundledSamplePlayer, bundledSampleFormat == buffer.format {
-            player = existing
-        } else {
-            // Door samples come in both mono and stereo; the shared
-            // player must be re-attached when the format changes, or
-            // scheduling the buffer raises a CoreAudio error.
-            if let old = bundledSamplePlayer {
-                old.stop()
-                engine.detach(old)
-            }
-            let created = AVAudioPlayerNode()
-            attachLicensedSamplePlayer(created, format: buffer.format)
-            bundledSamplePlayer = created
-            bundledSampleFormat = buffer.format
-            player = created
-        }
+        guard let buffer = loadBundledBuffer(named: name) else { return nil }
+        let duration = Double(buffer.frameLength) / buffer.format.sampleRate
+        guard let player = bundledPlayers.first(where: { $0.format == buffer.format })?.player else { return duration }
         if !engine.isRunning { try? engine.start() }
         player.volume = outputVolume
         player.scheduleBuffer(buffer, at: nil, options: [])
         player.play()
-        return Double(buffer.frameLength) / buffer.format.sampleRate
+        return duration
     }
 
     public func playHorn(long: Bool = false) {
