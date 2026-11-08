@@ -13,7 +13,8 @@ let package = Package(
     targets: [
         .target(
             name: "RailwayVehicleCab",
-            dependencies: [.product(name: "RailwayAudioEnhancements", package: "RailwayAudioEnhancements")]
+            dependencies: [.product(name: "RailwayAudioEnhancements", package: "RailwayAudioEnhancements")],
+            resources: [.process("Resources")]
         ),
         .testTarget(name: "RailwayVehicleCabTests", dependencies: ["RailwayVehicleCab"])
     ]
