@@ -296,7 +296,7 @@ enum VehicleCabInteriorBuilder {
             var material = SimpleMaterial()
             material.color = .init(tint: tint, texture: .init(texture))
             material.roughness = .init(floatLiteral: 0.55)
-            material.isMetallic = false
+            material.metallic = .init(floatLiteral: 0)
             return material
         }
         return VehicleMaterialPalette.interior
