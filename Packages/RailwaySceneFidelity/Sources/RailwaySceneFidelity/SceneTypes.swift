@@ -20,6 +20,8 @@ public enum SceneAssemblyRole: String, Codable, CaseIterable, Sendable {
     case embankment
     /// Static scenic crossing. It does not interlock, close barriers, or stop the train.
     case levelCrossing
+    /// Lineside kilometre post or marker board. Static furniture only.
+    case tracksideSign
 }
 
 public enum ScenePieceShape: String, Codable, Sendable {
@@ -228,8 +230,8 @@ public struct SceneDensityControls: Codable, Hashable, Sendable {
     public init(
         visibleDistanceM: Double = 900,
         railChunkLengthM: Double = 3.0,
-        scenerySpacingM: Double = 17,
-        maxSceneryAssemblies: Int = 1_600,
+        scenerySpacingM: Double = 12,
+        maxSceneryAssemblies: Int = 3_200,
         detailLevel: Int = 2,
         includeRoadVehicles: Bool = true,
         includePeople: Bool = true,
@@ -258,7 +260,7 @@ public struct SceneDensityControls: Codable, Hashable, Sendable {
         case .highDetail:
             return SceneDensityControls(
                 visibleDistanceM: 1_200, railChunkLengthM: 2.0,
-                scenerySpacingM: 11, maxSceneryAssemblies: 2_500,
+                scenerySpacingM: 9, maxSceneryAssemblies: 4_500,
                 detailLevel: 2
             )
         }
