@@ -159,13 +159,12 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     /// Optional authorized vehicle audio can be attached here.
-    /// The connection must use the engine's concrete format: connecting a
-    /// fresh player node with a nil format raises an exception from
-    /// AVAudioEngine's graph code and aborts the process (launch crash
-    /// found in CI #138).
+    /// Callers must attach only while the engine is running: a player
+    /// node attached before the engine starts has no valid output
+    /// format yet, and connecting it aborts the process (CI #138/#141).
     public func attachLicensedSamplePlayer(_ playerNode: AVAudioPlayerNode) {
         engine.attach(playerNode)
-        engine.connect(playerNode, to: licensedSampleMixer, format: format)
+        engine.connect(playerNode, to: licensedSampleMixer, format: nil)
     }
 
     private var bundledSamplePlayer: AVAudioPlayerNode?

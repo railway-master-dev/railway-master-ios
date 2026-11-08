@@ -140,11 +140,6 @@ final class SampledMotorSound {
     }
 
     func update(snapshot: RailwaySimulationSnapshot, settings: RailwayAudioSettings, isEnabled: Bool, engineRunning: Bool) {
-        // BISECTION (CI #138/#141): the test host aborts before running any
-        // test since the sampled motor sound landed. Disable the whole
-        // subsystem for one CI round to confirm or clear it as the cause.
-        isActive = false
-        return
         loadCurvesIfNeeded()
         let family = familyKey(for: settings.tractionSoundProfile)
         isActive = curves[family] != nil
@@ -155,15 +150,23 @@ final class SampledMotorSound {
             }
             return
         }
-        // Decide what should sound before touching the audio graph:
-        // attaching player nodes is deferred until a sample is actually
-        // wanted, and the engine is started first (CI #138 launch crash).
+        // Decide what should sound before touching the audio graph.
+        // Player nodes are attached only while the engine is actually
+        // running: attaching one earlier leaves it without a valid
+        // output format and the connect aborts the process (the launch
+        // crash bisected in CI #138/#141/#144). Braking at a standstill
+        // (holding brakes at a station) must not count as wanting motor
+        // sound, or the attach would still happen during startup.
         let speedKmhNow = max(0, snapshot.speedMetersPerSecond) * 3.6
-        let wantsMotor = snapshot.powerNotch > 0 || snapshot.brakeCommand > 0.03 || snapshot.regenerativeBrakeRatio > 0.03
+        let wantsMotor = snapshot.powerNotch > 0
+            || ((snapshot.brakeCommand > 0.03 || snapshot.regenerativeBrakeRatio > 0.03) && speedKmhNow > 0.5)
         let wantsRun = speedKmhNow >= 2 && !snapshot.doorsOpen
         if motorPlayers.isEmpty {
             guard wantsMotor || wantsRun else { return }
-            startHandler?()
+            if !engineRunning {
+                startHandler?()
+                return
+            }
             ensurePlayers()
         }
         if family != currentFamily {
