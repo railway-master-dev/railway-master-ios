@@ -141,6 +141,9 @@ enum VehicleMaterialPalette {
     static let darkMetal = paint(UIColor(red: 0.16, green: 0.18, blue: 0.19, alpha: 1), roughness: 0.72, metallic: true)
     static let rubber = paint(UIColor(red: 0.075, green: 0.08, blue: 0.085, alpha: 1), roughness: 0.92)
     static let glass = paint(UIColor(red: 0.08, green: 0.16, blue: 0.20, alpha: 1), roughness: 0.16, metallic: true)
+    /// Front windshield only: a real transparency so the driver can
+    /// actually see the line through it.
+    static let cabGlass = paint(UIColor(red: 0.35, green: 0.50, blue: 0.55, alpha: 0.30), roughness: 0.08, metallic: false)
     static let trim = paint(UIColor(red: 0.75, green: 0.76, blue: 0.72, alpha: 1), roughness: 0.3, metallic: true)
     static let interior = paint(UIColor(red: 0.22, green: 0.24, blue: 0.23, alpha: 1), roughness: 0.78)
     static let seat = paint(UIColor(red: 0.20, green: 0.37, blue: 0.34, alpha: 1), roughness: 0.82)

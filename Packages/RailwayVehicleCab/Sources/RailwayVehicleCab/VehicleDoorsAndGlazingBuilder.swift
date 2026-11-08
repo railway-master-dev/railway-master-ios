@@ -30,7 +30,7 @@ enum VehicleDoorsAndGlazingBuilder {
 
         for index in 0..<2 {
             let x: Float = index == 0 ? -0.60 : 0.60
-            VehicleGeometryFactory.box("FrontWindshield_\(index)", size: SIMD3(1.10, 0.72, 0.035), at: SIMD3(x, 2.98, -9.715), material: glass, in: group)
+            VehicleGeometryFactory.box("FrontWindshield_\(index)", size: SIMD3(1.10, 0.72, 0.035), at: SIMD3(x, 2.98, -9.715), material: VehicleMaterialPalette.cabGlass, in: group)
             VehicleGeometryFactory.box("RearWindow_\(index)", size: SIMD3(1.10, 0.72, 0.035), at: SIMD3(x, 2.98, 9.715), material: glass, in: group)
         }
         VehicleGeometryFactory.box("DestinationDisplay", size: SIMD3(0.90, 0.20, 0.04), at: SIMD3(0, 3.47, -9.72), material: VehicleMaterialPalette.darkMetal, in: group)
