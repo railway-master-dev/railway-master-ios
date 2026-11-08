@@ -87,6 +87,109 @@ private struct GeneratedCurveRun {
     let cantMm: Double
 }
 
+/// Alignment zone along the mainline (up-direction chainage), sharing
+/// the district bands the scenery uses (urban core 0-4.2 km, fringe
+/// 4.2-6 km and 22.6-25.8 km, coast 38.5-40.5 / 43.6-48.6 / 53-60 km).
+/// Radii follow the BVE measurements (Toyoko R200-2000, Tojo R300-10000):
+/// tight in the city and broad across the rural stretches, so the curve
+/// is readable in the forward view instead of everything looking
+/// straight. Cant stays 55-105 mm everywhere: the equilibrium cant for
+/// R300 at its 50 km/h curve limit is about 98 mm.
+private enum MainlineAlignmentZone {
+    case urbanCore
+    case fringe
+    case suburban
+    case rural
+    case coastal
+
+    var radiusRange: ClosedRange<Double> {
+        switch self {
+        case .urbanCore: return 300...800
+        case .fringe: return 400...1_000
+        case .suburban: return 600...1_600
+        case .rural: return 1_600...4_000
+        case .coastal: return 800...2_000
+        }
+    }
+
+    var tangentRange: ClosedRange<Double> {
+        switch self {
+        case .urbanCore: return 300...900
+        case .fringe: return 400...1_200
+        case .suburban: return 650...2_450
+        case .rural: return 1_200...3_000
+        case .coastal: return 800...2_000
+        }
+    }
+
+    /// Transitions stay at 260 m or longer: the integration tests cap
+    /// the cant step at 4.2 mm per 10 m sample and the curvature step
+    /// at 0.0002, and 105 mm cant over 260 m is 4.04 mm per step
+    /// (R300 over 260 m is 0.00013 per step).
+    var transitionRange: ClosedRange<Double> {
+        switch self {
+        case .urbanCore: return 260...350
+        case .fringe: return 260...400
+        case .suburban: return 300...500
+        case .rural: return 400...600
+        case .coastal: return 300...500
+        }
+    }
+
+    var circularRange: ClosedRange<Double> {
+        switch self {
+        case .urbanCore: return 250...800
+        case .fringe: return 350...1_000
+        case .suburban: return 650...2_250
+        case .rural: return 1_200...3_000
+        case .coastal: return 600...1_800
+        }
+    }
+
+    /// Maximum gradient for the zone, in permille (BVE-measured:
+    /// Toyoko +/-25-35 in the city, Tojo +/-10 in the suburbs).
+    var gradientAmplitude: Double {
+        switch self {
+        case .urbanCore: return 25
+        case .fringe: return 18
+        case .suburban: return 10
+        case .rural: return 6
+        case .coastal: return 5
+        }
+    }
+}
+
+private func mainlineZone(at localM: Double) -> MainlineAlignmentZone {
+    if localM < 4_200 { return .urbanCore }
+    if localM < 6_000 { return .fringe }
+    if localM < 22_600 { return .suburban }
+    if localM < 25_800 { return .fringe }
+    if localM < 38_500 { return .rural }
+    if localM < 40_500 { return .coastal }
+    if localM < 43_600 { return .suburban }
+    if localM < 48_600 { return .coastal }
+    if localM < 53_000 { return .rural }
+    return .coastal
+}
+
+/// Zone gradient amplitude, blended linearly over +/-250 m at each
+/// zone boundary so neighbouring 250 m sections do not step by the
+/// full amplitude difference. Boundaries are (chainage, from, to).
+private func mainlineGradientAmplitude(at localM: Double) -> Double {
+    let blendHalfWidth = 250.0
+    let boundaries: [(Double, Double, Double)] = [
+        (4_200, 25, 18), (6_000, 18, 10), (22_600, 10, 18), (25_800, 18, 6),
+        (38_500, 6, 5), (40_500, 5, 10), (43_600, 10, 5), (48_600, 5, 6), (53_000, 6, 5)
+    ]
+    for (boundary, from, to) in boundaries {
+        if abs(localM - boundary) < blendHalfWidth {
+            let t = (localM - (boundary - blendHalfWidth)) / (blendHalfWidth * 2)
+            return from + (to - from) * t
+        }
+    }
+    return mainlineZone(at: localM).gradientAmplitude
+}
+
 enum RegionalRouteFactory {
     static let defaultGeometrySeed: UInt64 = 0x6B6F_6E79_756E_2026
 
@@ -252,6 +355,11 @@ enum RegionalRouteFactory {
         func region(_ kind: GeneratedAlignmentRegion.Kind, offsetM: Double, lengthM: Double) -> GeneratedAlignmentRegion {
             switch kind {
             case .mainline:
+                // The ranges below are the suburban default. Mainline
+                // curves actually take their shape from
+                // MainlineAlignmentZone at the curve (see curveRuns),
+                // so the city gets R300-800 and the rural stretches
+                // R1600-4000 instead of one flat 900-1850 band.
                 return GeneratedAlignmentRegion(kind: kind, offsetM: offsetM, lengthM: lengthM,
                     tangentRange: 650...2_450, transitionRange: 300...500, circularRange: 650...2_250,
                     radiusRange: 900...1_850, cantRange: 55...105,
@@ -291,15 +399,20 @@ enum RegionalRouteFactory {
             let regionEnd = region.offsetM + region.lengthM - region.trailingMarginM
             var runs: [GeneratedCurveRun] = []
             while cursor < regionEnd {
-                cursor += rng.value(in: region.tangentRange)
+                // Mainline curves take their shape from the alignment
+                // zone at the curve start (BVE-measured radii per
+                // district); branch and depot keep their fixed ranges.
+                // The draw order and count are unchanged, so the same
+                // seed still gives a deterministic profile.
+                let zone = region.kind == .mainline ? mainlineZone(at: cursor - region.offsetM) : nil
+                let tangentRange = zone?.tangentRange ?? region.tangentRange
+                let transitionRange = zone?.transitionRange ?? region.transitionRange
+                let circularRange = zone?.circularRange ?? region.circularRange
+                cursor += rng.value(in: tangentRange)
                 guard cursor < regionEnd else { break }
-                let transitionInM = rng.value(in: region.transitionRange)
-                let circularM = rng.value(in: region.circularRange)
-                let transitionOutM = rng.value(in: region.transitionRange)
-                let circularStartM = cursor + transitionInM
-                let circularEndM = circularStartM + circularM
-                let endM = circularEndM + transitionOutM
-                guard endM <= regionEnd else { break }
+                let transitionInM = rng.value(in: transitionRange)
+                let circularM = rng.value(in: circularRange)
+                let transitionOutM = rng.value(in: transitionRange)
 
                 let randomDirection = rng.nextBool() ? 1 : -1
                 let direction: Int
@@ -309,6 +422,20 @@ enum RegionalRouteFactory {
                     direction = -previousDirection
                 }
                 previousDirection = direction
+                let radiusM = rng.value(in: zone?.radiusRange ?? region.radiusRange)
+                // Cap one run's total deflection near 86 degrees
+                // (1.5 rad): a short radius with a long circular
+                // section would otherwise loop back on itself — the
+                // plan view showed a hairpin crossing in the urban
+                // core. The exact deflection is
+                // (transitionIn/2 + circular + transitionOut/2)/R.
+                let maxCircularM = max(120, 1.5 * radiusM - (transitionInM + transitionOutM) * 0.5)
+                let clampedCircularM = min(circularM, maxCircularM)
+                let circularStartM = cursor + transitionInM
+                let circularEndM = circularStartM + clampedCircularM
+                let endM = circularEndM + transitionOutM
+                guard endM <= regionEnd else { break }
+
                 runs.append(GeneratedCurveRun(
                     transition: RouteCurveTransition(
                         startM: cursor,
@@ -316,7 +443,7 @@ enum RegionalRouteFactory {
                         circularEndM: circularEndM,
                         endM: endM
                     ),
-                    radiusM: rng.value(in: region.radiusRange),
+                    radiusM: radiusM,
                     direction: direction,
                     cantMm: rng.value(in: region.cantRange)
                 ))
@@ -342,7 +469,17 @@ enum RegionalRouteFactory {
             let baseLimit = [75.0, 90.0, 100.0, 85.0, 110.0, 95.0][localSection % 6]
             let curveLimit = run.map { min(baseLimit, max(40.0, 3.6 * sqrt(max(1, 0.65 * $0.radiusM)))) } ?? baseLimit
             let speedLimit = nearStation ? min(curveLimit, 55.0) : curveLimit
-            let gradient = sin(localM / 1_430 + 0.8) * 4.2 + sin(localM / 6_200 + 2.1) * 2.1
+            // Mainline gradients follow the zone amplitude (city
+            // +/-25 permille down to coast/rural +/-5-6), blended at
+            // zone boundaries; branch and depot keep the old profile
+            // so the through-branch/branch-shuttle equality holds.
+            let gradient: Double
+            if activeRegion?.kind == .mainline {
+                let amplitude = mainlineGradientAmplitude(at: localM)
+                gradient = amplitude * (sin(localM / 1_430 + 0.8) * 0.667 + sin(localM / 6_200 + 2.1) * 0.333)
+            } else {
+                gradient = sin(localM / 1_430 + 0.8) * 4.2 + sin(localM / 6_200 + 2.1) * 2.1
+            }
             let tunnel = (activeRegion?.kind == .mainline &&
                 ((localM > 17_800 && localM < 19_250) || (localM > 42_100 && localM < 43_600)))
                 || (activeRegion?.kind == .branch && localM > 3_500 && localM < 4_050)
@@ -399,6 +536,13 @@ struct RegionalRouteGeometrySample: Sendable {
     let z: Float
     let heading: Float
     let bankRadians: Float
+    /// Track height above the route origin datum, integrated from the
+    /// section gradients (trapezoidal, same rule as the heading
+    /// integral). The scenery used to be flat while the physics ran
+    /// over +/-25 permille: with an 81 m elevation range over the
+    /// mainline the flat ground read as "not a railway". Every
+    /// route-following surface and object now rides on this value.
+    let elevationM: Float
 }
 
 /// The same seeded-profile integration used by the RealityKit host, exposed internally for geometry tests.
@@ -411,6 +555,7 @@ enum RegionalRouteGeometrySampler {
         var x = 0.0
         var z = 0.0
         var heading = 0.0
+        var elevation = 0.0
         var previousDistance = 0.0
 
         for index in 0...count {
@@ -422,6 +567,15 @@ enum RegionalRouteGeometrySampler {
                 heading += (startCurvature + endCurvature) * delta * 0.5
                 x += sin(heading) * delta
                 z -= cos(heading) * delta
+                // Gradient is piecewise constant per 250 m section, so
+                // the trapezoidal rule is exact inside a section and
+                // off by at most |dg|*delta/2 at a section boundary
+                // (a few cm). The Python mirror
+                // (verify_elevation_quality20.py) uses the same rule,
+                // so the two agree exactly.
+                let startGradient = route.condition(at: previousDistance).gradientPermille
+                let endGradient = route.condition(at: distance).gradientPermille
+                elevation += (startGradient + endGradient) * 0.5 * delta / 1_000.0
             }
             let cantCondition = route.condition(at: distance)
             let cantRatio = (cantCondition.cantMm ?? 0) / route.trackGaugeMm
@@ -431,11 +585,21 @@ enum RegionalRouteGeometrySampler {
                 x: Float(x),
                 z: Float(z),
                 heading: Float(heading),
-                bankRadians: Float(atan(cantRatio) * bankDirection)
+                bankRadians: Float(atan(cantRatio) * bankDirection),
+                elevationM: Float(elevation)
             ))
             previousDistance = distance
         }
         return output
+    }
+
+    /// Body pitch of one car from its two bogie heights. The bogies sit
+    /// ±6.35 m from the car centre (12.7 m apart); the front bogie is
+    /// toward increasing chainage. Positive = nose up on an upgrade.
+    /// Without it a car stays level while the rail climbs, so on a 25‰
+    /// grade the car ends float/sink by up to ±0.24 m off the rail head.
+    static func carBodyPitchRadians(frontBogieElevationM: Float, rearBogieElevationM: Float) -> Float {
+        atan2(frontBogieElevationM - rearBogieElevationM, 12.7)
     }
 
     private static func signedCurvature(at chainageM: Double, route: RailwayRouteProfile) -> Double {
