@@ -128,6 +128,14 @@ public struct TrainPhysicsEngine: Sendable {
         passengerLoadFactor = min(max(value, 0), 2)
     }
 
+    /// Teleports the train to a chainage with a fully reset dynamic
+    /// state. Used by the screenshot tour mode; normal driving never
+    /// calls this.
+    public mutating func placeAt(positionM newPositionM: Double) {
+        reset()
+        positionM = newPositionM.isFinite ? max(0, newPositionM) : 0
+    }
+
     public mutating func reset() {
         positionM = 0
         speedMps = 0
