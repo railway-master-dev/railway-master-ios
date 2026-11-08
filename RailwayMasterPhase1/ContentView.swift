@@ -402,6 +402,8 @@ struct ContentView: View {
                 Text("区間 \(Int(model.route.distanceM)) m  ·  次停車 \(nextStopName)  ·  \(Int(distanceToNextStopM.rounded())) m")
                     .font(.system(size: 9, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
