@@ -123,7 +123,9 @@ PYEOF
     xcrun simctl boot "$SIMULATOR_UDID" || true
     xcrun simctl bootstatus "$SIMULATOR_UDID" -b
     xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
-    xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID"
+    # -RMDemoDrive enables the app's scripted drive (doors close, the
+    # train departs and cruises) so the late shots show running scenery.
+    xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive
     xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 screenshots/launch-video.mov &
     VIDEO_PID=$!
     sleep 4
@@ -148,9 +150,16 @@ PYEOF
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/04-app-late.png 2>/dev/null || true
     sleep 70
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/05-app-later.png 2>/dev/null || true
+    # With -RMDemoDrive the train departs at about +1 min of sim time
+    # and cruises the urban core, so these two shots catch open-line
+    # running scenery instead of the origin platform.
+    sleep 150
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/06-running.png 2>/dev/null || true
+    sleep 60
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/07-running.png 2>/dev/null || true
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     sleep 3
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/06-home.png 2>/dev/null || true
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/08-home.png 2>/dev/null || true
     ls -la screenshots/
     ;;
   packages)
