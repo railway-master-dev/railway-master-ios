@@ -26,7 +26,11 @@ final class RegionalIntegrationTests: XCTestCase {
 
         let baseRadii = route.profile.sections.compactMap(\.curveRadiusM)
         XCTAssertFalse(baseRadii.isEmpty)
-        XCTAssertTrue(baseRadii.allSatisfy { (900...1_850).contains($0) })
+        // Zone-based radii from the BVE measurements (Toyoko R200-2000,
+        // Tojo R300-10000): urban core 300-800 up to rural 1600-4000.
+        XCTAssertTrue(baseRadii.allSatisfy { (300...4_000).contains($0) })
+        XCTAssertLessThan(baseRadii.min() ?? 0, 600, "No tight urban curve was generated")
+        XCTAssertGreaterThan(baseRadii.max() ?? 0, 2_000, "No broad rural curve was generated")
         let baseCants = route.profile.sections.compactMap(\.cantMm)
         XCTAssertTrue(baseCants.allSatisfy { (55...105).contains($0) })
         XCTAssertEqual(Set(route.profile.sections.compactMap(\.curveDirection)), Set([-1, 1]))
@@ -121,7 +125,68 @@ final class RegionalIntegrationTests: XCTestCase {
             XCTAssertTrue(next.x.isFinite && next.z.isFinite && next.heading.isFinite && next.bankRadians.isFinite)
             XCTAssertLessThan(abs(Double(next.heading - first.heading)), 0.05)
             XCTAssertLessThan(abs(Double(next.bankRadians - first.bankRadians)), 0.01)
+            // Elevation is the gradient integral: finite, continuous
+            // (no jumps between samples), and bounded by the steepest
+            // zone gradient (25 permille over a 10 m step is 0.25 m).
+            XCTAssertTrue(next.elevationM.isFinite)
+            XCTAssertLessThan(abs(Double(next.elevationM - first.elevationM)), 0.3)
         }
+        // The mainline climbs and falls by tens of metres (the Python
+        // mirror measures -21..+60 m); a flat profile would mean the
+        // gradient integral was lost.
+        let elevations = samples.map { Double($0.elevationM) }
+        XCTAssertLessThan(elevations.min() ?? 0, -5)
+        XCTAssertGreaterThan(elevations.max() ?? 0, 20)
+        XCTAssertLessThan(elevations.max() ?? 0, 100)
+        XCTAssertGreaterThan(elevations.min() ?? 0, -100)
+    }
+
+    func testCarBodyPitchFollowsBogieElevationsAndLocalGradient() throws {
+        // Pure formula: a 1.27 m bogie-height difference over the 12.7 m
+        // bogie spacing is a 100 permille grade.
+        XCTAssertEqual(
+            Double(RegionalRouteGeometrySampler.carBodyPitchRadians(frontBogieElevationM: 1.27, rearBogieElevationM: 0)),
+            atan(0.1), accuracy: 1e-6)
+        XCTAssertEqual(
+            Double(RegionalRouteGeometrySampler.carBodyPitchRadians(frontBogieElevationM: 0, rearBogieElevationM: 0)),
+            0, accuracy: 1e-9)
+        XCTAssertLessThan(
+            Double(RegionalRouteGeometrySampler.carBodyPitchRadians(frontBogieElevationM: 0, rearBogieElevationM: 1.27)), 0)
+
+        // Over the real profile the bogie-difference pitch must track the
+        // analytic local gradient and stay inside the steepest zone
+        // gradient (25 permille -> atan(0.025) = 0.025 rad).
+        let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
+        let route = try RegionalRouteFactory.make(
+            plan: plan, variant: .mainline, direction: .up, geometrySeed: RegionalRouteFactory.defaultGeometrySeed
+        )
+        let samples = RegionalRouteGeometrySampler.makeSamples(route: route.profile, interval: 10)
+        XCTAssertEqual(samples.count, 6_001)
+        func elevation(at chainage: Double) -> Double {
+            // Linear interpolation between the 10 m samples, mirroring
+            // RailwaySceneView.sample(at:) without the scene host.
+            let clamped = min(max(chainage, 0), route.profile.distanceM)
+            let position = clamped / 10
+            let lower = samples[Int(position)]
+            guard position < Double(samples.count - 1) else { return Double(lower.elevationM) }
+            let upper = samples[Int(position) + 1]
+            let fraction = position - floor(position)
+            return Double(lower.elevationM) + (Double(upper.elevationM) - Double(lower.elevationM)) * fraction
+        }
+        var maxPitch = 0.0
+        var maxMismatch = 0.0
+        for chainage in stride(from: 10.0, through: 59_990.0, by: 10.0) {
+            let pitch = Double(RegionalRouteGeometrySampler.carBodyPitchRadians(
+                frontBogieElevationM: Float(elevation(at: chainage + 6.35)),
+                rearBogieElevationM: Float(elevation(at: chainage - 6.35))
+            ))
+            maxPitch = max(maxPitch, abs(pitch))
+            let gradient = route.profile.condition(at: chainage).gradientPermille / 1_000
+            maxMismatch = max(maxMismatch, abs(pitch - atan(gradient)))
+        }
+        XCTAssertLessThan(maxPitch, atan(0.026), "Pitch beyond the steepest zone gradient")
+        XCTAssertGreaterThan(maxPitch, atan(0.015), "No steep grade exercised: pitch never engages")
+        XCTAssertLessThan(maxMismatch, 0.002, "Bogie-difference pitch does not track the local gradient")
     }
 
     func testCanonicalOperationsPlanUsesOneCoherentPlaceholderNetwork() throws {
