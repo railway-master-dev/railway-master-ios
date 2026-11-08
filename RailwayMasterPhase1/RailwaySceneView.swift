@@ -873,18 +873,64 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let cityApron = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
             var runStart = 0
             var runBand = urbanBand(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            var runCoastal = isCoastal(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             for i in 1...samples.count {
                 let band = i < samples.count ? urbanBand(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) : -1
-                if band != runBand {
+                let coastal = i < samples.count ? isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) : false
+                if band != runBand || (i < samples.count && coastal != runCoastal) {
                     let runEnd = min(i + 1, samples.count)
-                    if let apron = ribbonEntity(name: "ground-apron-\(runStart)", width: 46, y: -0.04, tileLength: 12,
+                    // Wide apron inland; on the coastal stretch keep the
+                    // original width so the apron edge meets the beach
+                    // instead of covering the sand and the near sea.
+                    if let apron = ribbonEntity(name: "ground-apron-\(runStart)", width: runCoastal ? 46 : 150, y: -0.04, tileLength: 12,
                                                 offsets: apronOffsets,
                                                 material: runBand > 0 ? cityApron : grassApron,
-                                                range: runStart..<runEnd) {
+                                                range: runStart..<runEnd, uTileLength: 12) {
                         world.addChild(apron)
                     }
                     runStart = i
                     runBand = band
+                    runCoastal = coastal
+                }
+            }
+        }
+
+        // Far ground: textured fields out to the backdrop wall, in
+        // ~3 km runs whose height steps gently (±1 m) so the land is
+        // not one flat slab. The sea side of the coastal stretch is
+        // skipped — that ground is beach and water.
+        if samples.count > 1 {
+            let farGrassMaterial = Self.texturedPBR(UIColor(red: 0.80, green: 0.84, blue: 0.76, alpha: 1), roughness: 1, textureName: "scenery_grass")
+            let farCityMaterial = Self.texturedPBR(UIColor(red: 0.82, green: 0.82, blue: 0.84, alpha: 1), roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
+            let farSeaSign = seaSideSign(travelDirection: travelDirection)
+            for sideSign: Float in [-1, 1] {
+                let farOffsets = samples.map { _ in sideSign * 375 }
+                func farKey(_ i: Int) -> Int {
+                    let band = urbanBand(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0 ? 1 : 0
+                    let chunk = Int(samples[i].distanceM / 3_000)
+                    let blocked = (sideSign == farSeaSign && isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)) ? 1 : 0
+                    return band * 1_000_000 + chunk * 10 + blocked
+                }
+                var farRunStart = 0
+                var farRunKey = farKey(0)
+                for i in 1...samples.count {
+                    let key = i < samples.count ? farKey(i) : -1
+                    if key != farRunKey {
+                        let farRunEnd = min(i + 1, samples.count)
+                        let wasBlocked = farRunKey % 10 == 1
+                        if !wasBlocked {
+                            let chunk = (farRunKey / 10) % 100_000
+                            let lift = Float(((chunk * 37 + (sideSign > 0 ? 11 : 5)) % 10)) / 10 * 0.95
+                            if let far = ribbonEntity(name: "far-ground-\(sideSign > 0 ? "r" : "l")-\(farRunStart)", width: 600, y: 0.02 + lift, tileLength: 90,
+                                                      offsets: farOffsets,
+                                                      material: farRunKey >= 1_000_000 ? farCityMaterial : farGrassMaterial,
+                                                      range: farRunStart..<farRunEnd, uTileLength: 90) {
+                                world.addChild(far)
+                            }
+                        }
+                        farRunStart = i
+                        farRunKey = key
+                    }
                 }
             }
         }
@@ -1166,9 +1212,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// One city tower built from stacked facade segments (each segment
     /// shows the office-facade texture once, so windows keep a realistic
     /// ~3 m floor height instead of stretching over the whole tower).
-    private func addTower(at distance: Double, side: Float, seed: Int, band: Int, route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+    private func addTower(at distance: Double, side: Float, seed: Int, band: Int, route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, lateralOverride: Float? = nil, heightScale: Float = 1) {
         let sample = sample(at: distance)
-        let lateral: Float = (band == 2 ? 12.5 : 13.5) + Float(seed % 3) * 1.4
+        let lateral: Float = lateralOverride ?? ((band == 2 ? 12.5 : 13.5) + Float(seed % 3) * 1.4)
         let width: Float = 11 + Float((seed / 3) % 4) * 1.4
         let depth: Float = 10 + Float((seed / 7) % 3) * 1.6
         var height: Float = 15 + Float((seed * 29) % 100) / 100 * (band == 2 ? 30 : 15)
@@ -1177,6 +1223,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             height *= Float(1.05 - (c / 4_200) * 0.45)
             height = max(15, height)
         }
+        height *= heightScale
         let segments = max(1, Int((height / 15).rounded()))
         let segmentHeight = height / Float(segments)
         let offset = side * lateral
@@ -1223,8 +1270,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var index = 0
         var urbanIndex = 0
         var foliageCount = 0
-        let buildingLimit = max(1, renderQualitySettings.sceneryInstanceLimit / 2)
-        let buildingStep = max(75, (route.distanceM - 114) / Double(buildingLimit))
+        let buildingLimit = max(1, renderQualitySettings.sceneryInstanceLimit * 3 / 4)
+        let buildingStep = max(45, (route.distanceM - 114) / Double(buildingLimit))
         var distance = 34.0
         while distance < route.distanceM - 80 {
             let band = urbanBand(distanceM: distance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
@@ -1232,6 +1279,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 if urbanIndex < 720 && !corridorReserved(at: distance, landmarks: landmarks) {
                     addTower(at: distance, side: 1, seed: urbanIndex * 2, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                     addTower(at: distance + 9, side: -1, seed: urbanIndex * 2 + 1, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                    // Second row of towers behind the first, so the
+                    // skyline has depth instead of a single line of
+                    // facades with gaps of empty sky between them.
+                    if urbanIndex.isMultiple(of: 2) {
+                        addTower(at: distance + 4.5, side: urbanIndex % 4 == 0 ? 1 : -1, seed: urbanIndex * 7 + 3, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection, lateralOverride: 30 + Float(urbanIndex % 3) * 2.5, heightScale: 1.2)
+                    }
                 }
                 urbanIndex += 1
                 distance += band == 2 ? 27 : 36
@@ -1304,6 +1357,29 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let poleSample = self.sample(at: distance + 7)
                 let polePoint = routeOffsetPoint(poleSample, lateral: offset + sign * 4.2)
                 addBox(parent: world, name: "utility-pole-\(index)", size: SIMD3<Float>(0.13, 5.2, 0.13), position: SIMD3<Float>(polePoint.x, 2.55, polePoint.z), material: poleMaterial)
+            }
+            // A second, simpler house row further back on the opposite
+            // side, so the suburb reads as a settled area with depth
+            // rather than a single line of houses along the fence.
+            if index.isMultiple(of: 2) {
+                let farDistance = distance + 22
+                let farSign = -sign
+                let farOnSeaSide = isCoastal(distanceM: farDistance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                    && farSign == seaSideSign(travelDirection: travelDirection)
+                if !farOnSeaSide && !corridorReserved(at: farDistance, landmarks: landmarks) {
+                    let farSample = sample(at: farDistance)
+                    let farLateral = farSign * (23 + Float((index * 7) % 6))
+                    let fx = farSample.x + farLateral * cos(farSample.heading)
+                    let fz = farSample.z - farLateral * sin(farSample.heading)
+                    let fw = 5.2 + Float((index * 5) % 4) * 0.8
+                    let fh = 3.4 + Float((index * 11) % 5) * 0.6
+                    let fd = 5.6 + Float((index * 3) % 4) * 0.7
+                    let farOrientation = simd_quatf(angle: farSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let farHouse = addBox(parent: world, name: "fictional-home-far-\(index)", size: SIMD3<Float>(fw, fh, fd), position: SIMD3<Float>(fx, fh / 2, fz), material: sceneryMaterials[(index + 2) % sceneryMaterials.count])
+                    farHouse.orientation = farOrientation
+                    let farRoof = addBox(parent: world, name: "roof-far-\(index)", size: SIMD3<Float>(fw + 0.45, 0.24, fd + 0.35), position: SIMD3<Float>(fx, fh + 0.14, fz), material: roofMaterials[(index + 1) % roofMaterials.count])
+                    farRoof.orientation = farOrientation
+                }
             }
             index += 1
             distance += buildingStep

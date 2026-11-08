@@ -1247,17 +1247,21 @@ final class SimulatorModel: ObservableObject {
     }
 
     private var lastDemoAckSeconds: Double = -10
+    private var demoServedStopIndex: Int = -1
+    private var demoDoorsOpenedAt: Double = -1
 
     /// Scripted drive for screenshot runs: close the doors, depart
-    /// after the (shortened) origin wait, and hold an urban-core
-    /// cruising speed so the later screenshots show running scenery.
-    /// The fictional ATS is acknowledged once a second, as a driver
-    /// would; without that it stops the train for a missed
-    /// confirmation (CI #166 running shots).
+    /// after the (shortened) origin wait, then run the service like a
+    /// driver — obey the protection's permitted speed (which falls
+    /// to zero at each scheduled stop), stop at stations, work the
+    /// doors, and depart again. The fictional ATS is acknowledged
+    /// once a second. Ignoring the stop pattern stopped the train
+    /// mid-section in CI #169; ignoring the confirmation deadline
+    /// stopped it in CI #166.
     private func driveDemoIfEnabled() {
         guard demoDriveEnabled, runPhase == .running else { return }
         let t = simulationTime
-        if t >= 30, gameModeDoorState.isOpen {
+        if t >= 30, gameModeDoorState.isOpen, demoServedStopIndex < 0 {
             handleGameModeHostEffects([.setGameDoorState(.closed)])
         }
         guard t >= 50 else { return }
@@ -1265,19 +1269,60 @@ final class SimulatorModel: ObservableObject {
             lastDemoAckSeconds = t
             acknowledgeATS()
         }
-        if t >= 430 {
+        let speedKmh = max(0, engine.speedMps * 3.6)
+
+        // Station stop: hold, open the doors once, close them after
+        // 12 s, and depart once they are shut.
+        if activeStops.indices.contains(nextStopIndex) {
+            let stopPosition = activeStops[nextStopIndex].positionM
+            let distanceToStop = stopPosition - engine.positionM
+            if speedKmh <= 0.5 && abs(distanceToStop) <= Self.arrivalToleranceM {
+                if demoServedStopIndex != nextStopIndex {
+                    demoServedStopIndex = nextStopIndex
+                    demoDoorsOpenedAt = t
+                    if !gameModeDoorState.isOpen {
+                        handleGameModeHostEffects([.setGameDoorState(.open)])
+                    }
+                } else if t - demoDoorsOpenedAt >= 12 && gameModeDoorState.isOpen {
+                    handleGameModeHostEffects([.setGameDoorState(.closed)])
+                }
+                if gameModeDoorState.isOpen || t - demoDoorsOpenedAt < 14 {
+                    setThrottle(0)
+                    setBrake(3)
+                    return
+                }
+            }
+        }
+
+        // Cruise under the protection's permitted speed, with a
+        // gentle final approach to the next scheduled stop.
+        var target = min(65, (latestOperationsSnapshot?.permittedSpeedKmh ?? 65) - 2)
+        if activeStops.indices.contains(nextStopIndex) {
+            let distanceToStop = activeStops[nextStopIndex].positionM - engine.positionM
+            if distanceToStop < 60 { target = min(target, 12) }
+            if distanceToStop < 25 { target = min(target, 6) }
+            if distanceToStop < 1.5 && speedKmh > 1 {
+                setThrottle(0)
+                setBrake(5)
+                return
+            }
+        }
+        target = max(0, target)
+        if speedKmh > target + 3 {
             setThrottle(0)
             setBrake(3)
-            return
-        }
-        let speedKmh = max(0, engine.speedMps * 3.6)
-        if speedKmh < 55 {
+        } else if speedKmh > target + 0.5 {
+            setThrottle(0)
+            setBrake(1)
+        } else if speedKmh < target - 3 {
             setBrake(0)
             setThrottle(3)
-        } else if speedKmh > 70 {
-            setThrottle(0)
-        } else {
+        } else if speedKmh < target {
+            setBrake(0)
             setThrottle(1)
+        } else {
+            setThrottle(0)
+            setBrake(0)
         }
     }
 
