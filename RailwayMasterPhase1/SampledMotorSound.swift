@@ -19,7 +19,7 @@ import Foundation
 @MainActor
 final class SampledMotorSound {
     /// Set by the host engine: attaches a player to the licensed mixer.
-    var attachHandler: ((AVAudioPlayerNode) -> Void)?
+    var attachHandler: ((AVAudioPlayerNode, AVAudioFormat) -> Void)?
     /// Set by the host engine: best-effort engine start.
     var startHandler: (() -> Void)?
 
@@ -37,6 +37,11 @@ final class SampledMotorSound {
     private var runPlayer: AVAudioPlayerNode?
     private var runSample: String?
     private var currentFamily: String?
+    /// Format each player was connected with. Buffers are library-wide
+    /// uniform per player role (motor: 44.1 kHz mono, run: 44.1 kHz
+    /// stereo); a mismatched buffer is skipped rather than scheduled,
+    /// because scheduling one raises a CoreAudio error (CI #147).
+    private var attachedFormats: [ObjectIdentifier: AVAudioFormat] = [:]
 
     /// True when sampled curves exist for the current profile family.
     private(set) var isActive = false
@@ -113,22 +118,27 @@ final class SampledMotorSound {
     }
 
     private func ensurePlayers() {
+        // Nodes are created unattached; playLoop attaches each one with
+        // the format of the first buffer it plays.
         if motorPlayers.isEmpty {
             for _ in 0..<3 {
-                let player = AVAudioPlayerNode()
-                attachHandler?(player)
-                motorPlayers.append(player)
+                motorPlayers.append(AVAudioPlayerNode())
             }
         }
         if runPlayer == nil {
-            let player = AVAudioPlayerNode()
-            attachHandler?(player)
-            runPlayer = player
+            runPlayer = AVAudioPlayerNode()
         }
     }
 
     private func playLoop(_ player: AVAudioPlayerNode, sample: String) -> Bool {
         guard let buffer = buffer(named: sample) else { return false }
+        let key = ObjectIdentifier(player)
+        if let connected = attachedFormats[key] {
+            guard connected == buffer.format else { return false }
+        } else {
+            attachHandler?(player, buffer.format)
+            attachedFormats[key] = buffer.format
+        }
         player.stop()
         player.scheduleBuffer(buffer, at: nil, options: .loops)
         player.play()
@@ -215,7 +225,7 @@ final class SampledMotorSound {
             let player = motorPlayers[slot]
             if let target = assignment[slot] {
                 if motorSlotSample[slot] != target.name {
-                    if playLoop(player, sample: target.name) {
+                    if engineRunning, playLoop(player, sample: target.name) {
                         motorSlotSample[slot] = target.name
                         player.volume = 0
                     } else {
@@ -255,7 +265,7 @@ final class SampledMotorSound {
             if targetVolume > 0.01 {
                 wantsSound = true
                 if runSample != desiredRun {
-                    if playLoop(player, sample: desiredRun) {
+                    if engineRunning, playLoop(player, sample: desiredRun) {
                         runSample = desiredRun
                         player.volume = 0
                     }

@@ -159,15 +159,19 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     /// Optional authorized vehicle audio can be attached here.
-    /// Callers must attach only while the engine is running: a player
-    /// node attached before the engine starts has no valid output
-    /// format yet, and connecting it aborts the process (CI #138/#141).
-    public func attachLicensedSamplePlayer(_ playerNode: AVAudioPlayerNode) {
+    /// Callers must attach only while the engine is running, and must
+    /// connect with the exact format of the buffers the player will
+    /// play: scheduling a buffer whose format differs from the node's
+    /// connection format raises a CoreAudio error (CI #147), and
+    /// connecting before the engine runs aborts the process
+    /// (CI #138/#141).
+    public func attachLicensedSamplePlayer(_ playerNode: AVAudioPlayerNode, format: AVAudioFormat) {
         engine.attach(playerNode)
-        engine.connect(playerNode, to: licensedSampleMixer, format: nil)
+        engine.connect(playerNode, to: licensedSampleMixer, format: format)
     }
 
     private var bundledSamplePlayer: AVAudioPlayerNode?
+    private var bundledSampleFormat: AVAudioFormat?
     private var bundledSampleBuffers: [String: AVAudioPCMBuffer] = [:]
 
     /// Plays a bundled WAV sample through the licensed-sample mixer and
@@ -196,12 +200,20 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
             buffer = loaded
         }
         let player: AVAudioPlayerNode
-        if let existing = bundledSamplePlayer {
+        if let existing = bundledSamplePlayer, bundledSampleFormat == buffer.format {
             player = existing
         } else {
+            // Door samples come in both mono and stereo; the shared
+            // player must be re-attached when the format changes, or
+            // scheduling the buffer raises a CoreAudio error.
+            if let old = bundledSamplePlayer {
+                old.stop()
+                engine.detach(old)
+            }
             let created = AVAudioPlayerNode()
-            attachLicensedSamplePlayer(created)
+            attachLicensedSamplePlayer(created, format: buffer.format)
             bundledSamplePlayer = created
+            bundledSampleFormat = buffer.format
             player = created
         }
         if !engine.isRunning { try? engine.start() }
@@ -393,7 +405,7 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
         var effective = settings
         effective.masterVolume = isEnabled ? outputVolume : 0
         if sampledMotor.attachHandler == nil {
-            sampledMotor.attachHandler = { [weak self] node in self?.attachLicensedSamplePlayer(node) }
+            sampledMotor.attachHandler = { [weak self] node, format in self?.attachLicensedSamplePlayer(node, format: format) }
             sampledMotor.startHandler = { [weak self] in self?.start() }
         }
         sampledMotor.update(snapshot: latestSnapshot, settings: effective, isEnabled: isEnabled, engineRunning: engine.isRunning)
