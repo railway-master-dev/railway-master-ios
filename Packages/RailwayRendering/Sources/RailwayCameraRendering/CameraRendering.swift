@@ -168,7 +168,13 @@ public final class CameraController {
             // be resolved against the route 100 m ahead, which on a
             // curve put the vanishing point on the chord instead of on
             // the rails under the train.
-            return CameraPose(position: RenderVector3(x: 0, y: 2.5, z: 1.6), target: RenderVector3(x: 0, y: 0.9, z: 40), fieldOfViewDegrees: 72)
+            // quality25 (F): the eye used to sit at 2.5 m with the gaze
+            // dropped to 0.9 m at 40 m — about 1.1 m below a real
+            // driver's eye (~3.6 m above the rail head) and tilted
+            // down, which read as riding in a very low car with the
+            // sleepers looming. Eye at 3.6 m and the target at nearly
+            // the same height, so the gaze runs level.
+            return CameraPose(position: RenderVector3(x: 0, y: 3.6, z: 1.6), target: RenderVector3(x: 0, y: 3.55, z: 40), fieldOfViewDegrees: 72)
         case .chase:
             return CameraPose(position: RenderVector3(x: 0, y: 4.0, z: -8.0), target: RenderVector3(x: 0, y: 1.4, z: 24), fieldOfViewDegrees: 68)
         }
