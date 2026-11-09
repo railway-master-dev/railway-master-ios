@@ -12,6 +12,17 @@ import UIKit
 public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     public static let shared = RailwayAudioEngine()
 
+    /// CI 実行時だけ音響を丸ごと無効化するスイッチ。Codemagic の仮想 Mac
+    /// では CoreAudio の初期化がデッドロックし、カーネル側の watchdog が
+    /// プロセスごと abort する（実測ログ: "Initialize: RPC timeout.
+    /// Apparently deadlocked. Aborting now."）。同じ iOS 26.2 でも発生し、
+    /// quality25 でも再現したため、アプリの変更ではなく CI 環境側の問題。
+    /// 実機・通常利用では環境変数も引数も無いので常に false。
+    public nonisolated static let ciAudioDisabled: Bool = {
+        let info = ProcessInfo.processInfo
+        return info.environment["RM_DISABLE_AUDIO"] == "1" || info.arguments.contains("-RMNoAudio")
+    }()
+
     public private(set) var settings = RailwayAudioSettings(masterVolume: 0.65)
     public var usesVoiceOverAnnouncements = true
     public var enabled: Bool { isEnabled }
@@ -56,6 +67,15 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
             return noErr
         }
         super.init()
+
+        if Self.ciAudioDisabled {
+            // CI ではグラフを一切構築しない。prepare() が CoreAudio の
+            // 初期化を引き起こし、上記のデッドロックで abort するため。
+            // この先の公開メソッドはすべて isEnabled == false で
+            // 無音の no-op になる（applyCurrentSnapshot も入口で弾く）。
+            isEnabled = false
+            return
+        }
 
         synthesizer.delegate = self
         engine.attach(sourceNode)
@@ -120,8 +140,8 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     public func setEnabled(_ enabled: Bool) {
-        isEnabled = enabled
-        if enabled {
+        isEnabled = enabled && !Self.ciAudioDisabled
+        if isEnabled {
             applyCurrentSnapshot()
             start()
         } else {
@@ -410,6 +430,7 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     }
 
     private func applyCurrentSnapshot() {
+        guard !Self.ciAudioDisabled else { return }
         var effective = settings
         effective.masterVolume = isEnabled ? outputVolume : 0
         if sampledMotor.attachHandler == nil {
