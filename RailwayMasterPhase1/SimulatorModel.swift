@@ -821,10 +821,16 @@ final class SimulatorModel: ObservableObject {
         var targets: [SafetyStopTarget] = []
         if activeStops.indices.contains(nextStopIndex) {
             let nextStop = activeStops[nextStopIndex]
-            if let stationTarget = try? SafetyStopTarget(identifier: "station-\(nextStop.stationID)", positionM: nextStop.positionM, targetSpeedKmh: 0) {
+            // Station stops carry no safety margin: the pattern margin
+            // (18 m + brake-lag distance) is protection against signals
+            // and limits, but applied to a station stop it drives the
+            // permitted speed to zero a margin-length before the stop
+            // position, so the train could never arrive (CI #213: the
+            // demo stalled 18.3 m short of Matsubaramachi).
+            if let stationTarget = try? SafetyStopTarget(identifier: "station-\(nextStop.stationID)", positionM: nextStop.positionM, targetSpeedKmh: 0, safetyMarginM: 0) {
                 targets.append(stationTarget)
             }
-        } else if let stationTarget = try? SafetyStopTarget(identifier: "destination-stop", positionM: route.stopMarkerM, targetSpeedKmh: 0) {
+        } else if let stationTarget = try? SafetyStopTarget(identifier: "destination-stop", positionM: route.stopMarkerM, targetSpeedKmh: 0, safetyMarginM: 0) {
             targets.append(stationTarget)
         }
 
@@ -1327,7 +1333,13 @@ final class SimulatorModel: ObservableObject {
         if let data = line.data(using: .utf8) { handle.write(data) }
     }
 
-    private static let tourSpotsM: [Double] = [500, 5_500, 7_500, 9_700, 13_500, 17_650, 24_100, 33_000, 45_500, 56_500]
+    // quality23: spots sit at curve apexes (exit visible in frame)
+    // instead of on long tangents, so the route's curvature is
+    // actually visible in the tour photos: 1,654 R450 / 3,006 R467 /
+    // 4,466 R324 (sharpest) / 6,522 R902 / 9,081 R1076 just before
+    // the river bridge / 12,986 R693 / 17,650 tunnel portal (kept) /
+    // 23,475 R789 / 45,327 R1326 sea / 58,557 R845 sea.
+    private static let tourSpotsM: [Double] = [1_654, 3_006, 4_466, 6_522, 9_081, 12_986, 17_650, 23_475, 45_327, 58_557]
     private var tourSpotIndex = -1
     private var firstTourWallTime: TimeInterval = -1
 
