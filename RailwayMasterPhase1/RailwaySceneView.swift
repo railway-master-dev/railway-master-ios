@@ -376,6 +376,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var windVelocity = SIMD3<Float>(0, 0, 0)
     private var surfaceMaterialTargets: [SurfaceMaterialTarget] = []
     private var lastSurfaceMaterialKey: String?
+    /// Shared mesh caches (quality26). Every addBox and every tree
+    /// used to generate a unique MeshResource, and RealityKit
+    /// streams meshes in per area as the camera moves, so unique
+    /// meshes meant constant AssetLoad churn (the CI #238 device
+    /// log was full of "Blocking engine queue waiting for
+    /// AssetLoadRequest … PrimitiveBox …") and steady memory
+    /// growth until the tour wedged after spot 8. Sizes are
+    /// quantized before keying, so the whole line shares a bounded
+    /// set of box, trunk and crown meshes.
+    private var sharedBoxMeshes: [String: MeshResource] = [:]
+    private var sharedTrunkMeshes: [String: MeshResource] = [:]
+    private var sharedCrownMeshes: [String: MeshResource] = [:]
     private var sceneFidelityRoute: SceneChainageRoute?
     private var sceneFidelityAdapter = RailwayRealityKitSceneAdapter()
     private var sceneFidelityDensity = SceneDensityControls.preset(.balanced)
@@ -533,7 +545,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         camera.camera.fieldOfViewInDegrees = 66
 
         sunlight = DirectionalLight()
-        sunlight.light.intensity = 18_000
+        // quality26: base intensity cut 18,000 → 10,000 — with the
+        // sun direction fixed in quality25 the old value blew sunlit
+        // ground and white surfaces out to white (CI #238); the
+        // balance had been tuned when the sun pointed up and only
+        // fill + environment lit the scene. apply() scales this per
+        // environment; the fill base rises 1,200 → 1,800 to compensate.
+        sunlight.light.intensity = 10_000
         sunlight.light.color = UIColor(red: 1.0, green: 0.91, blue: 0.77, alpha: 1)
         // Cast shadows: without a shadow configuration RealityKit
         // renders no shadows at all, which left every building, pole
@@ -567,7 +585,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         root.addChild(sunlight)
 
         fillLight = PointLight()
-        fillLight.light.intensity = 1_200
+        fillLight.light.intensity = 1_800
         fillLight.light.attenuationRadius = 150
         fillLight.light.color = UIColor(red: 0.70, green: 0.79, blue: 0.88, alpha: 1)
         fillLight.position = SIMD3<Float>(0, 16, -30)
@@ -870,12 +888,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         fillLight.position = position + SIMD3<Float>(0, 16, 0)
 
         let tint = environment.warmCoolTint
-        sunlight.light.intensity = 18_000 * Float(environment.sunLightScale)
+        sunlight.light.intensity = 10_000 * Float(environment.sunLightScale)
         sunlight.light.color = UIColor(
             red: CGFloat(min(max(tint.x, 0), 1.2)), green: CGFloat(min(max(tint.y, 0), 1.2)),
             blue: CGFloat(min(max(tint.z, 0), 1.2)), alpha: 1
         )
-        fillLight.light.intensity = 1_200 * Float(environment.ambientLightScale * (1 - environment.fogStrength * 0.35))
+        fillLight.light.intensity = 1_800 * Float(environment.ambientLightScale * (1 - environment.fogStrength * 0.35))
         fillLight.light.color = UIColor(
             red: CGFloat(min(max(tint.x * 0.70, 0), 1)), green: CGFloat(min(max(tint.y * 0.79, 0), 1)),
             blue: CGFloat(min(max(tint.z * 0.88, 0), 1)), alpha: 1
@@ -1273,8 +1291,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // so the towers stand on city ground.
         if samples.count > 1 {
             let apronOffsets = [Float](repeating: 0, count: samples.count)
-            let grassApron = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_grass")
-            let cityApron = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
+            // quality26: both apron tints were .white (1, 1, 1), so
+            // the grass / asphalt photo textures took the full force
+            // of the corrected sun and blew out (CI #238). A 0.74
+            // neutral tint multiplies them down to a sunlit-but-not-
+            // clipped range. The far-ground materials below already
+            // sit at 0.80–0.84 tints and are left as they are.
+            let apronTint = UIColor(red: 0.74, green: 0.74, blue: 0.74, alpha: 1)
+            let grassApron = Self.texturedPBR(apronTint, roughness: 1, textureName: "scenery_grass")
+            let cityApron = Self.texturedPBR(apronTint, roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
             var runStart = 0
             var runBand = urbanBand(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             var runCoastal = isCoastal(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
@@ -2799,6 +2824,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // through the station. Building, canopy, footbridge,
                 // signs, benches and vending machines stay.
                 stripGeneratedPlatformParts(entity)
+                adjustGeneratedStationHeights(entity)
                 entity.name = "generated-station-\(placement.stationId)-\(placement.trackCount)track-\(placement.platformCount)platform"
                 world.addChild(entity)
                 importedStationEntity = entity
@@ -2831,6 +2857,48 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             } else {
                 stripGeneratedPlatformParts(child)
             }
+        }
+    }
+
+    /// Raises the generated station model's canopy and platform
+    /// furniture to the quality25 platform height (quality26).
+    /// Measured from the station GLBs (station-local metres; the
+    /// geometry is baked into the vertices and node translations
+    /// are zero): rail head = local Y +0.315, the GLB's own
+    /// platform top was +0.225, and the procedural platform top
+    /// built since quality25 is rail head + 1.10 = local 1.415.
+    /// The canopy roof slab spans Y 3.16–3.34 — an underside only
+    /// 2.85 m above the rail head — so the forward camera eye at
+    /// rail + 3.6 m sat inside the roof (CI #238 photos P5–P7
+    /// showed the roof interior). Platform signs hang from that
+    /// roof (hanger tops exactly 3.16), so they rise with it;
+    /// canopy columns span Y 0.20–3.20 and are stretched so their
+    /// tops meet the raised underside (3.16 + 1.85 = 5.01 =
+    /// 3.20 × 1.566) while their bases stay buried below the new
+    /// platform top. Benches, vending machines and bins are rooted
+    /// at the old platform top (from Y 0.22) and were sunk 1.19 m
+    /// under the new platform; they rise by that difference. The
+    /// footbridge deck (Y 5.84–6.16) and the station building are
+    /// already correct and untouched. The 5-track major station
+    /// GLB is a single merged node named "station", so nothing
+    /// matches there — the same known limitation as
+    /// stripGeneratedPlatformParts.
+    private func adjustGeneratedStationHeights(_ entity: Entity) {
+        for child in Array(entity.children) {
+            let name = child.name
+            if name.hasPrefix("canopy_roof_")
+                || name.hasPrefix("canopy_light_")
+                || name.hasPrefix("canopy_fixture_")
+                || name.hasPrefix("platform_sign_") {
+                child.position.y += 1.85
+            } else if name.hasPrefix("canopy_column_") {
+                child.scale.y *= 1.566
+            } else if name.hasPrefix("bench_")
+                || name.hasPrefix("vending_")
+                || name.hasPrefix("bin_") {
+                child.position.y += 1.19
+            }
+            adjustGeneratedStationHeights(child)
         }
     }
 
@@ -3238,6 +3306,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// use the ellipsoid gradient; UVs are spherical so the leaf
     /// texture wraps each blob.
     private func foliageBlobEntity(name: String, blobs: [(center: SIMD3<Float>, radii: SIMD3<Float>)], material: PhysicallyBasedMaterial, longitudes: Int = 8, latitudes: Int = 6) -> ModelEntity? {
+        guard let mesh = foliageBlobMesh(name: name, blobs: blobs, longitudes: longitudes, latitudes: latitudes) else { return nil }
+        var material = material
+        material.faceCulling = .none
+        return ModelEntity(mesh: mesh, materials: [material])
+    }
+
+    /// The merged ellipsoid-blob geometry behind foliageBlobEntity,
+    /// split out in quality26 so addTree's cached crowns share the
+    /// exact same construction instead of duplicating it.
+    private func foliageBlobMesh(name: String, blobs: [(center: SIMD3<Float>, radii: SIMD3<Float>)], longitudes: Int = 8, latitudes: Int = 6) -> MeshResource? {
         guard !blobs.isEmpty else { return nil }
         var positions: [SIMD3<Float>] = []
         var normals: [SIMD3<Float>] = []
@@ -3277,10 +3355,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         descriptor.normals = MeshBuffers.Normals(normals)
         descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
         descriptor.primitives = .triangles(indices)
-        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
-        var material = material
-        material.faceCulling = .none
-        return ModelEntity(mesh: mesh, materials: [material])
+        return try? MeshResource.generate(from: [descriptor])
     }
 
     private func addTree(parent: Entity, name: String, x: Float, z: Float, height: Float, material: PhysicallyBasedMaterial, groundY: Float = 0) {
@@ -3288,13 +3363,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // believable girth (Ø ≈ 0.09 × height + 0.08 m, capped) up
         // to about half the height, then a crown of four jittered
         // ellipsoids instead of one perfect sphere.
-        let trunkHeight = height * 0.52
-        let trunkRadius = min(0.20, 0.045 * height + 0.04)
+        // quality26: the requested height is quantized to a 1.5 m
+        // class (world height = classHeight, at most 0.75 m from
+        // the request) so the trunk and crown meshes come from the
+        // shared caches instead of one generated mesh per tree.
+        // Four crown variants per class — built in local space from
+        // a fixed per-variant seed — plus a per-tree yaw keep the
+        // line from looking stamped out.
+        let classIndex = min(max(Int((height / 1.5).rounded()), 1), 8)
+        let h = Float(classIndex) * 1.5
+        let trunkHeight = h * 0.52
+        let trunkRadius = min(0.20, 0.045 * h + 0.04)
+        let trunkKey = "\(Int((trunkHeight / 0.01).rounded()))/\(Int((trunkRadius / 0.01).rounded()))"
         let trunkMesh: MeshResource
-        if #available(iOS 18.0, *) {
-            trunkMesh = .generateCylinder(height: trunkHeight, radius: trunkRadius)
+        if let cached = sharedTrunkMeshes[trunkKey] {
+            trunkMesh = cached
         } else {
-            trunkMesh = FallbackCylinderMesh.make(height: trunkHeight, radius: trunkRadius)
+            // Generate at the key's quantized dimensions so the
+            // cached mesh is exactly what its key promises.
+            let meshHeight = (trunkHeight / 0.01).rounded() * 0.01
+            let meshRadius = (trunkRadius / 0.01).rounded() * 0.01
+            if #available(iOS 18.0, *) {
+                trunkMesh = .generateCylinder(height: meshHeight, radius: meshRadius)
+            } else {
+                trunkMesh = FallbackCylinderMesh.make(height: meshHeight, radius: meshRadius)
+            }
+            sharedTrunkMeshes[trunkKey] = trunkMesh
         }
         let trunk = ModelEntity(mesh: trunkMesh, materials: [sleeperMaterial])
         trunk.name = "\(name)-trunk"
@@ -3302,20 +3396,34 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         parent.addChild(trunk)
 
         let seed = x * 0.37 + z * 0.91
-        func j(_ salt: Float) -> Float { foliageJitter(seed: seed, salt: salt) }
-        let h = height
-        let blobs: [(center: SIMD3<Float>, radii: SIMD3<Float>)] = [
-            (center: SIMD3<Float>(x + (j(1) - 0.5) * 0.10 * h, groundY + 0.74 * h, z + (j(2) - 0.5) * 0.10 * h),
-             radii: SIMD3<Float>(0.36 * h * (0.85 + 0.3 * j(3)), 0.30 * h * (0.85 + 0.3 * j(4)), 0.36 * h * (0.85 + 0.3 * j(5)))),
-            (center: SIMD3<Float>(x - 0.16 * h, groundY + 0.60 * h, z + (j(6) - 0.5) * 0.14 * h),
-             radii: SIMD3<Float>(0.24 * h * (0.85 + 0.3 * j(7)), 0.20 * h, 0.24 * h * (0.85 + 0.3 * j(8)))),
-            (center: SIMD3<Float>(x + 0.15 * h, groundY + 0.64 * h, z - (j(9) - 0.5) * 0.14 * h),
-             radii: SIMD3<Float>(0.22 * h * (0.85 + 0.3 * j(10)), 0.19 * h, 0.23 * h * (0.85 + 0.3 * j(11)))),
-            (center: SIMD3<Float>(x + (j(12) - 0.5) * 0.08 * h, groundY + 0.90 * h, z),
-             radii: SIMD3<Float>(0.19 * h, 0.16 * h * (0.85 + 0.3 * j(13)), 0.19 * h))
-        ]
-        if let crown = foliageBlobEntity(name: "\(name)-crown", blobs: blobs, material: material) {
+        let variant = Int(abs(seed)) % 4
+        let crownKey = "\(classIndex)-\(variant)"
+        let crownMesh: MeshResource?
+        if let cached = sharedCrownMeshes[crownKey] {
+            crownMesh = cached
+        } else {
+            let crownSeed = Float(classIndex * 16 + variant)
+            func j(_ salt: Float) -> Float { foliageJitter(seed: crownSeed, salt: salt) }
+            let blobs: [(center: SIMD3<Float>, radii: SIMD3<Float>)] = [
+                (center: SIMD3<Float>((j(1) - 0.5) * 0.10 * h, 0.74 * h, (j(2) - 0.5) * 0.10 * h),
+                 radii: SIMD3<Float>(0.36 * h * (0.85 + 0.3 * j(3)), 0.30 * h * (0.85 + 0.3 * j(4)), 0.36 * h * (0.85 + 0.3 * j(5)))),
+                (center: SIMD3<Float>(-0.16 * h, 0.60 * h, (j(6) - 0.5) * 0.14 * h),
+                 radii: SIMD3<Float>(0.24 * h * (0.85 + 0.3 * j(7)), 0.20 * h, 0.24 * h * (0.85 + 0.3 * j(8)))),
+                (center: SIMD3<Float>(0.15 * h, 0.64 * h, -(j(9) - 0.5) * 0.14 * h),
+                 radii: SIMD3<Float>(0.22 * h * (0.85 + 0.3 * j(10)), 0.19 * h, 0.23 * h * (0.85 + 0.3 * j(11)))),
+                (center: SIMD3<Float>((j(12) - 0.5) * 0.08 * h, 0.90 * h, 0),
+                 radii: SIMD3<Float>(0.19 * h, 0.16 * h * (0.85 + 0.3 * j(13)), 0.19 * h))
+            ]
+            crownMesh = foliageBlobMesh(name: "crown-\(crownKey)", blobs: blobs)
+            if let crownMesh { sharedCrownMeshes[crownKey] = crownMesh }
+        }
+        if let crownMesh {
+            var crownMaterial = material
+            crownMaterial.faceCulling = .none
+            let crown = ModelEntity(mesh: crownMesh, materials: [crownMaterial])
             crown.name = "\(name)-crown"
+            crown.position = SIMD3<Float>(x, groundY, z)
+            crown.orientation = simd_quatf(angle: foliageJitter(seed: seed, salt: 21) * 2 * .pi, axis: SIMD3<Float>(0, 1, 0))
             parent.addChild(crown)
         }
     }
@@ -3329,7 +3437,25 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         material: PhysicallyBasedMaterial,
         orientation: simd_quatf? = nil
     ) -> ModelEntity {
-        let entity = ModelEntity(mesh: .generateBox(size: size), materials: [material])
+        // quality26: one shared MeshResource per size quantized to
+        // a 0.02 m grid (at most 1 cm of size error, and at least
+        // one grid step per axis so no axis collapses to zero)
+        // instead of a unique generated box per call — see the
+        // sharedBoxMeshes declaration for why.
+        let steps = SIMD3<Int>(
+            max(1, Int((size.x / 0.02).rounded())),
+            max(1, Int((size.y / 0.02).rounded())),
+            max(1, Int((size.z / 0.02).rounded()))
+        )
+        let boxKey = "\(steps.x)/\(steps.y)/\(steps.z)"
+        let boxMesh: MeshResource
+        if let cached = sharedBoxMeshes[boxKey] {
+            boxMesh = cached
+        } else {
+            boxMesh = .generateBox(size: SIMD3<Float>(Float(steps.x) * 0.02, Float(steps.y) * 0.02, Float(steps.z) * 0.02))
+            sharedBoxMeshes[boxKey] = boxMesh
+        }
+        let entity = ModelEntity(mesh: boxMesh, materials: [material])
         entity.name = name
         entity.position = position
         if let orientation { entity.orientation = orientation }
