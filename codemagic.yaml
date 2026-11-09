@@ -1,0 +1,43 @@
+# Codemagic CI (trial, 2026-11-09): the same Scripts/ci_run.sh entry
+# points the GitHub workflow calls, split into two workflows so each
+# build stays well inside the free plan's 120-minute cap and the
+# photo tour never queues behind the test suites (or vice versa).
+# GitHub Actions stays as-is; this file only adds Codemagic.
+workflows:
+  ios-verify:
+    name: iOS verify (static + build/test + packages)
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      xcode: latest
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+    scripts:
+      - name: Static checks
+        script: bash Scripts/ci_run.sh static
+      - name: Build and test the app
+        script: bash Scripts/ci_run.sh build
+      - name: Package tests
+        script: bash Scripts/ci_run.sh packages
+    artifacts:
+      - build.log
+      - test.log
+      - test-failures.txt
+      - package-test-*.log
+  ios-photos:
+    name: iOS screenshot tour
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      xcode: latest
+    scripts:
+      - name: Build the app and run the screenshot tour
+        script: bash Scripts/ci_run.sh screenshots
+    artifacts:
+      - screenshots/**
+      - screenshots-build.log
