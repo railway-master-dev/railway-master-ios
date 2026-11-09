@@ -162,7 +162,13 @@ public final class CameraController {
             // interior is no longer shown). The eye floats just ahead of
             // the nose at driver eye height, so the frame is all track
             // and lineside, BVE front-view style.
-            return CameraPose(position: RenderVector3(x: 0, y: 2.5, z: 1.6), target: RenderVector3(x: 0, y: 0.9, z: 100), fieldOfViewDegrees: 72)
+            // The target only sets a nominal look distance and eye drop:
+            // the scene applier resolves the actual gaze from the local
+            // tangent at the eye (quality23). A far target point used to
+            // be resolved against the route 100 m ahead, which on a
+            // curve put the vanishing point on the chord instead of on
+            // the rails under the train.
+            return CameraPose(position: RenderVector3(x: 0, y: 2.5, z: 1.6), target: RenderVector3(x: 0, y: 0.9, z: 40), fieldOfViewDegrees: 72)
         case .chase:
             return CameraPose(position: RenderVector3(x: 0, y: 4.0, z: -8.0), target: RenderVector3(x: 0, y: 1.4, z: 24), fieldOfViewDegrees: 68)
         }
