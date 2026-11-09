@@ -517,6 +517,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         sunlight = DirectionalLight()
         sunlight.light.intensity = 18_000
         sunlight.light.color = UIColor(red: 1.0, green: 0.91, blue: 0.77, alpha: 1)
+        // Cast shadows: without a shadow configuration RealityKit
+        // renders no shadows at all, which left every building, pole
+        // and train floating on flat-lit ground (the single biggest
+        // "not real" cue in the CI #213 tour photos). The range is
+        // capped at ~250 m so the shadow map stays detailed around
+        // the line instead of covering the whole visible distance.
+        if #available(iOS 26.0, *) {
+            var sunlightShadow = DirectionalLightComponent.Shadow()
+            sunlightShadow.shadowProjection = .automatic(maximumDistance: 250)
+            sunlight.components.set(sunlightShadow)
+        }
         sunlight.orientation = simd_quatf(angle: -.pi / 3.6, axis: SIMD3<Float>(-0.6, 0.8, -0.3))
         root.addChild(sunlight)
 
@@ -766,21 +777,37 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let right = SIMD3<Float>(cos(heading), 0, sin(heading))
         let forward = SIMD3<Float>(sin(heading), 0, -cos(heading))
         func worldPoint(_ point: RenderVector3) -> SIMD3<Float> {
-            // Take the elevation at the point's own chainage, not the
-            // car centre's: on a grade the look-at target 100 m ahead
-            // sits up to 2.5 m above/below the centre, and a level look
-            // direction would make the track ahead sink or climb away.
+            // The eye rides on the rail elevation at its own chainage.
+            // The camera preset's heights are above the rail head.
             let pointElevationM = sample(at: currentSample.distanceM + point.z).elevationM
             return SIMD3<Float>(
                 currentSample.x + right.x * Float(point.x) + forward.x * Float(point.z),
-                // The camera preset's heights are above the rail head,
-                // so they ride on the track elevation.
                 Float(point.y) + pointElevationM,
                 currentSample.z + right.z * Float(point.x) + forward.z * Float(point.z)
             )
         }
         let position = worldPoint(pose.position)
-        let target = worldPoint(pose.target)
+        // Aim along the local tangent at the eye instead of at a far
+        // point on the route: on a curve the +100 m point lies on the
+        // chord, so looking at it swung the vanishing point off the
+        // rails the train is actually running on (CI #213 tour photos:
+        // the track left the centre of the frame on every curve). The
+        // pitch follows the gradient under the eye, sampled over a
+        // short +/-12 m base so it matches the track the camera is
+        // standing on rather than the average grade 100 m ahead, and
+        // the preset's eye-to-target height difference is kept as a
+        // fixed look-down offset. The lateral position is untouched:
+        // currentSample already carries the running line's offset.
+        let eyeChainage = currentSample.distanceM + pose.position.z
+        let gradientRise = sample(at: eyeChainage + 12).elevationM - sample(at: eyeChainage - 12).elevationM
+        let gradient = gradientRise / 24
+        let lookDistance = max(Float(pose.target.z - pose.position.z), 10)
+        let lookDrop = Float(pose.target.y - pose.position.y)
+        let target = SIMD3<Float>(
+            position.x + forward.x * lookDistance,
+            position.y + lookDrop + gradient * lookDistance,
+            position.z + forward.z * lookDistance
+        )
         camera.position = position
         camera.camera.fieldOfViewInDegrees = Float(min(max(pose.fieldOfViewDegrees, 20), 110))
         camera.look(at: target, from: position, relativeTo: nil)
@@ -1107,7 +1134,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         skylineMaterial.faceCulling = .none
         let backdropLaterals: [Float] = samples.map { clampedWallLateral(side: 1, standoff: 680, route: route, sample: $0) }
         let backdropBottoms: [Float] = samples.map { groundLevelM(at: $0) - 15 }
-        let backdropTops: [Float] = samples.map { $0.elevationM + 95 }
+        // Top at +45 m, not +95 m: with the old height the upper,
+        // near-white part of the panorama filled the horizon and read
+        // as a hard white band across every outdoor photo (CI #213).
+        // The replacement panoramas carry their scenery in the lower
+        // 60 %, so a 60 m wall shows mountains/buildings, not blank sky.
+        let backdropTops: [Float] = samples.map { $0.elevationM + 45 }
         for sideSign: Float in [-1, 1] {
             let laterals = backdropLaterals.map { $0 * sideSign }
             var runStart = 0
@@ -1118,7 +1150,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let runEnd = min(i + 1, samples.count)
                     if let wall = verticalRibbonEntity(name: "backdrop-\(runUrban ? "skyline" : "mountains")-\(sideSign > 0 ? "r" : "l")-\(runStart)",
                                                        lateralOffsets: laterals, bottomYs: backdropBottoms, topYs: backdropTops,
-                                                       tileLength: 4_000, material: runUrban ? skylineMaterial : backdropMaterial,
+                                                       tileLength: 2_000, material: runUrban ? skylineMaterial : backdropMaterial,
                                                        range: runStart..<runEnd) {
                         world.addChild(wall)
                     }
@@ -1151,9 +1183,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 if key != runKey {
                     let runEnd = min(i + 1, samples.count)
                     if runKey == 0 {
+                        // 600 m repeats, not 4 km: at 4 km the painted
+                        // trees smeared into the horizontal green streaks
+                        // that crossed the CI #213 photos at the horizon.
                         if let forest = verticalRibbonEntity(name: "forest-mid-\(sideSign > 0 ? "r" : "l")-\(runStart)",
                                                              lateralOffsets: laterals, bottomYs: forestBottoms, topYs: forestTops,
-                                                             tileLength: 4_000, material: forestMaterial,
+                                                             tileLength: 600, material: forestMaterial,
                                                              range: runStart..<runEnd) {
                             world.addChild(forest)
                         }
@@ -1205,6 +1240,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // stretch is skipped — that ground is beach and water.
         if samples.count > 1 {
             let farGrassMaterial = Self.texturedPBR(UIColor(red: 0.80, green: 0.84, blue: 0.76, alpha: 1), roughness: 1, textureName: "scenery_grass")
+            // Patchwork fields: the same grass texture under a deeper
+            // green tint, alternated in ~3 km chunks, so the far ground
+            // reads as separate fields instead of one endless sheet.
+            let farFieldMaterial = Self.texturedPBR(UIColor(red: 0.52, green: 0.63, blue: 0.44, alpha: 1), roughness: 1, textureName: "scenery_grass")
             let farCityMaterial = Self.texturedPBR(UIColor(red: 0.82, green: 0.82, blue: 0.84, alpha: 1), roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
             let farSeaSign = seaSideSign(travelDirection: travelDirection)
             // Gentle undulation: +/-0.45 m over ~10.9 km, continuous
@@ -1220,7 +1259,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 func farKey(_ i: Int) -> Int {
                     let band = urbanBand(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0 ? 1 : 0
                     let blocked = (sideSign == farSeaSign && isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)) ? 1 : 0
-                    return band * 10 + blocked
+                    let chunk = Int(samples[i].distanceM / 3_000) % 2
+                    return band * 100 + chunk * 10 + blocked
                 }
                 var farRunStart = 0
                 var farRunKey = farKey(0)
@@ -1230,10 +1270,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         let farRunEnd = min(i + 1, samples.count)
                         let wasBlocked = farRunKey % 10 == 1
                         if !wasBlocked {
-                            if let far = ribbonEntity(name: "far-ground-\(sideSign > 0 ? "r" : "l")-\(farRunStart)", width: 600, y: 0.02, tileLength: 90,
+                            // 30 m texture tiles in both directions, not
+                            // 90 m: the 90 m features smeared into bands
+                            // at grazing angles (CI #213 photos).
+                            if let far = ribbonEntity(name: "far-ground-\(sideSign > 0 ? "r" : "l")-\(farRunStart)", width: 600, y: 0.02, tileLength: 30,
                                                       offsets: farSpan.centers,
-                                                      material: farRunKey >= 10 ? farCityMaterial : farGrassMaterial,
-                                                      range: farRunStart..<farRunEnd, uTileLength: 90, yOffsets: farGroundOffsets, widths: farSpan.widths) {
+                                                      material: farRunKey >= 100 ? farCityMaterial : ((farRunKey / 10) % 2 == 0 ? farGrassMaterial : farFieldMaterial),
+                                                      range: farRunStart..<farRunEnd, uTileLength: 30, yOffsets: farGroundOffsets, widths: farSpan.widths) {
                                 world.addChild(far)
                             }
                         }
@@ -1667,6 +1710,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var index = 0
         var urbanIndex = 0
         var foliageCount = 0
+        var lastWoodlandBlock = -1
         let buildingLimit = max(1, renderQualitySettings.sceneryInstanceLimit * 3 / 4)
         let buildingStep = max(45, (route.distanceM - 114) / Double(buildingLimit))
         var distance = 34.0
@@ -1750,8 +1794,72 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             if index.isMultiple(of: 2), foliageCount < renderQualitySettings.foliageInstanceLimit {
                 let treeSample = self.sample(at: distance + 5)
                 let treePoint = groundOffsetPoint(treeSample, lateral: offset + sign * width * 0.65)
-                addTree(parent: world, name: "tree-\(index)", x: treePoint.x, z: treePoint.z, height: 3.1 + Float(index % 4) * 0.35, material: foliageMaterials[index % foliageMaterials.count], groundY: treePoint.y)
+                addTree(parent: world, name: "tree-\(index)", x: treePoint.x, z: treePoint.z, height: 2.9 + Float((index * 7) % 9) * 0.45, material: foliageMaterials[index % foliageMaterials.count], groundY: treePoint.y)
                 foliageCount += 1
+            }
+            // Lineside planting, BVE-style: on the measured Tobu Tojo
+            // route trees are the lead actor of the suburban scenery
+            // (~1,000 placements in 32 km), standing in near-continuous
+            // rows and clumps in the 8-25 m band, not as isolated
+            // specimens. Three deterministic layers approximate that
+            // here, all inside the foliage instance budget: a row on
+            // the side opposite the houses, small groves of close-
+            // spaced trees, and a denser woodland belt every few
+            // hundred metres. Placement is a pure function of the
+            // house index / chainage, so every build is identical.
+            if index.isMultiple(of: 2), (index * 7) % 10 < 7, foliageCount < renderQualitySettings.foliageInstanceLimit {
+                let rowDistance = distance + 8
+                let rowSign = -sign
+                let rowOnSeaSide = isCoastal(distanceM: rowDistance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                    && rowSign == seaSideSign(travelDirection: travelDirection)
+                if !rowOnSeaSide, !corridorReserved(at: rowDistance, landmarks: landmarks) {
+                    let rowSample = self.sample(at: rowDistance)
+                    let rowPoint = groundOffsetPoint(rowSample, lateral: rowSign * (18 + Float((index * 5) % 6)))
+                    addTree(parent: world, name: "rowtree-\(index)", x: rowPoint.x, z: rowPoint.z, height: 3.4 + Float((index * 11) % 8) * 0.5, material: foliageMaterials[(index + 1) % foliageMaterials.count], groundY: rowPoint.y)
+                    foliageCount += 1
+                }
+            }
+            if index.isMultiple(of: 2) {
+                for cluster in 0..<2 where foliageCount < renderQualitySettings.foliageInstanceLimit {
+                    let groveIndex = index * 2 + cluster
+                    if groveIndex % 3 == 0 { continue }
+                    let groveDistance = distance + 13 + Double(cluster * 19) + Double(groveIndex % 5)
+                    if groveDistance >= route.distanceM - 60 || corridorReserved(at: groveDistance, landmarks: landmarks) { continue }
+                    let groveSign: Float = groveIndex % 2 == 0 ? sign : -sign
+                    if isCoastal(distanceM: groveDistance, route: route, routeVariant: routeVariant, travelDirection: travelDirection),
+                       groveSign == seaSideSign(travelDirection: travelDirection) { continue }
+                    let groveSample = self.sample(at: groveDistance)
+                    let groveLateral = groveSign * (15 + Float((groveIndex * 11) % 16))
+                    let grovePoint = groundOffsetPoint(groveSample, lateral: groveLateral)
+                    // A clump, not a point: two crowns a few metres apart.
+                    addTree(parent: world, name: "grove-\(groveIndex)", x: grovePoint.x, z: grovePoint.z, height: 3.0 + Float((groveIndex * 7) % 10) * 0.42, material: foliageMaterials[groveIndex % foliageMaterials.count], groundY: grovePoint.y)
+                    foliageCount += 1
+                    if foliageCount < renderQualitySettings.foliageInstanceLimit {
+                        let clumpSample = self.sample(at: groveDistance + 4)
+                        let clumpPoint = groundOffsetPoint(clumpSample, lateral: groveLateral + groveSign * 2.5)
+                        addTree(parent: world, name: "grove-\(groveIndex)-b", x: clumpPoint.x, z: clumpPoint.z, height: 2.6 + Float((groveIndex * 5) % 8) * 0.4, material: foliageMaterials[(groveIndex + 1) % foliageMaterials.count], groundY: clumpPoint.y)
+                        foliageCount += 1
+                    }
+                }
+                // Woodland belt: taller trees ~60 m long, alternating
+                // sides on a ~750 m grid (skipping every third block).
+                let block = Int(distance / 750)
+                if block != lastWoodlandBlock, block % 3 != 2 {
+                    lastWoodlandBlock = block
+                    let beltSign: Float = block % 2 == 0 ? 1 : -1
+                    let beltOnSeaSide = isCoastal(distanceM: distance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                        && beltSign == seaSideSign(travelDirection: travelDirection)
+                    if !beltOnSeaSide {
+                        for k in 0..<7 where foliageCount < renderQualitySettings.foliageInstanceLimit {
+                            let beltDistance = distance + Double(k * 8) + Double((k * 37 + block * 13) % 5)
+                            if beltDistance >= route.distanceM - 60 || corridorReserved(at: beltDistance, landmarks: landmarks) { continue }
+                            let beltSample = self.sample(at: beltDistance)
+                            let beltPoint = groundOffsetPoint(beltSample, lateral: beltSign * (19 + Float((k * 3 + block) % 8)))
+                            addTree(parent: world, name: "belt-\(block)-\(k)", x: beltPoint.x, z: beltPoint.z, height: 4.2 + Float((k * 7 + block) % 9) * 0.45, material: foliageMaterials[(k + block) % foliageMaterials.count], groundY: beltPoint.y)
+                            foliageCount += 1
+                        }
+                    }
+                }
             }
             // (Utility poles used to be a single thin box here every
             // fifth house. They are now a full distribution-pole
