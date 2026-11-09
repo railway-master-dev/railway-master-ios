@@ -3233,7 +3233,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // Face the track: the normal points from the wall back
             // toward the centreline. Face culling is off, so the far
             // side still renders; the normal only sets the lighting.
-            let inward = SIMD3<Float>(-Float(lateral.signum()) * cos(sample.heading), 0, -Float(lateral.signum()) * sin(sample.heading))
+            let sideSign: Float = lateral < 0 ? -1 : 1
+            let inward = SIMD3<Float>(-sideSign * cos(sample.heading), 0, -sideSign * sin(sample.heading))
             positions.append(SIMD3<Float>(cx, bottomYs[i], cz))
             positions.append(SIMD3<Float>(cx, topYs[i], cz))
             normals.append(inward)
