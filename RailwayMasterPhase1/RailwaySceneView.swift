@@ -500,7 +500,25 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         case .high: profileInterval = 30
         }
         let sampleBudget = max(300, min(1_600, renderQualitySettings.sceneryInstanceLimit))
-        let sampleInterval = max(profileInterval, route.distanceM / Double(sampleBudget))
+        var sampleInterval = max(profileInterval, route.distanceM / Double(sampleBudget))
+        // quality24 (C3): the scenery budget used to double as the
+        // alignment sampling density, which left the integrated
+        // polyline at ~42.5 m chords on the balanced preset. Every
+        // builder follows that one polyline (trackbed ribbons, rails
+        // via sample(at:), walls, the camera itself), so on the
+        // sharpest curve (R324) each chord sagged 0.68 m inside the
+        // true arc and headings stepped ~7.5 degrees at a time: the
+        // "kakkukaku" polygonal curves in the CI photos, even though
+        // the alignment model itself has proper transition curves.
+        // Decouple the two budgets: sample the alignment at 8.5 m
+        // (sagitta 2.8 cm at R324, 2.0 cm at the showcase R450),
+        // whatever the scenery instance budget says. The .low preset
+        // keeps its coarse sampling for weak devices. Per-sample
+        // entity placements in buildTrack are gated by chainage, so
+        // the finer polyline does not multiply entity counts.
+        if quality != .low {
+            sampleInterval = min(sampleInterval, 8.5)
+        }
         samples = makeSamples(route: route, interval: sampleInterval)
         viaductGround = computeViaductGround(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
         trafficSceneRoute = makeSceneFidelityRoute()
@@ -545,11 +563,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             buildTrack(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildTunnels(route: route)
             buildSignals(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildCatenary(route: route)
+            buildCatenary(route: route, routeVariant: routeVariant, travelDirection: travelDirection, showcaseSection: travelDirection == .up && (routeVariant == .mainline || routeVariant == .throughBranch))
             buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
             buildFictionalCorridorLandmarks(route: route, quality: quality)
+            buildShowcaseSection(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildDestinationPlatform(route: route)
         }
         buildLevelCrossings(route: route)
@@ -816,6 +835,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         cameraWorldPosition = position
 
+        // quality24: the sunlight used to sit at the route origin
+        // forever, so its 250 m shadow frustum only ever covered the
+        // first metres of a 68 km line and no tour photo showed a
+        // shadow at all (CI #221). Keep the light's orientation (and
+        // the 250 m range, so the shadow map stays detailed) but
+        // carry the light with the camera: 120 m back along the
+        // light's travel direction and level with it, which keeps
+        // the frustum centred on the train wherever it runs. The
+        // fill light was origin-bound the same way (150 m radius);
+        // it follows at cab height.
+        sunlight.position = position + SIMD3<Float>(64.6, 63.8, -80.9)
+        fillLight.position = position + SIMD3<Float>(0, 16, 0)
+
         let tint = environment.warmCoolTint
         sunlight.light.intensity = 18_000 * Float(environment.sunLightScale)
         sunlight.light.color = UIColor(
@@ -1051,7 +1083,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             return sample(at: distanceM).elevationM
         }
         if distanceM <= samples[0].distanceM { return viaductGround[0] }
-        guard let upperIndex = samples.firstIndex(where: { $0.distanceM >= distanceM }) else {
+        // First sample at or past the target chainage. The samples
+        // are sorted by construction (the sampler walks the chainage
+        // upward); a binary search keeps this lookup O(log n) now
+        // that the alignment is sampled at 8.5 m (~8,000 samples)
+        // and this runs for every ground query.
+        var searchLow = 0
+        var searchHigh = samples.count
+        while searchLow < searchHigh {
+            let mid = (searchLow + searchHigh) / 2
+            if samples[mid].distanceM >= distanceM {
+                searchHigh = mid
+            } else {
+                searchLow = mid + 1
+            }
+        }
+        let upperIndex: Int? = searchLow < samples.count ? searchLow : nil
+        guard let upperIndex else {
             return viaductGround[viaductGround.count - 1]
         }
         guard upperIndex > 0 else { return viaductGround[upperIndex] }
@@ -1424,6 +1472,28 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // so urban poles can avoid the tower footprints.
 
         let wallLandmarks = fictionalCorridorLandmarks(for: route)
+        // quality24 (C3): placements in this loop are gated by
+        // CHAINAGE, not by sample index. The alignment polyline is
+        // now sampled at 8.5 m, but sleepers keep their ~42.5 m
+        // cadence and ballast slabs their ~127.5 m span — both sit
+        // under the trackbed ribbon, so their chord error is
+        // invisible and their entity counts must not grow. The
+        // lineside walls below are the exception: they drop to a
+        // 12.75 m pitch and merge into batched meshes.
+        var nextSleeperChainage = samples.first?.distanceM ?? 0
+        var nextBallastChainage = samples.first?.distanceM ?? 0
+        var nextWallChainage = samples.first?.distanceM ?? 0
+        var wallBatch = MeshBatchBuilder()
+        var wallBatchIndex = 0
+        var wallBatchStartChainage = samples.first?.distanceM ?? 0
+        func flushWallBatch() {
+            if let mesh = wallBatch.build(name: "lineside-wall-batch-\(wallBatchIndex)", material: concreteMaterial) {
+                world.addChild(mesh)
+                wallBatchIndex += 1
+            }
+            wallBatch = MeshBatchBuilder()
+            wallBatchStartChainage = nextWallChainage
+        }
         for index in samples.indices {
             let sample = samples[index]
             let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -1431,15 +1501,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let isMainlineSection = travelDirection == .up ? sample.distanceM < 60_000 : sample.distanceM >= 8_000
             let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
             let trackOffsets: [Float] = hasPassingTrack ? [-2.1, 2.1] : [travelDirection == .up ? -2.1 : 2.1]
-            let segmentLength: Float
-            if index + 3 < samples.count {
-                segmentLength = max(Float(samples[index + 3].distanceM - sample.distanceM), 8)
-            } else if index + 1 < samples.count {
-                segmentLength = max(Float(samples[index + 1].distanceM - sample.distanceM), 8)
-            } else {
-                segmentLength = 8
-            }
-            if index.isMultiple(of: 3) {
+            if sample.distanceM >= nextBallastChainage {
+                // Tile each slab to the next gated sample so the run
+                // stays continuous on any sampling grid.
+                var spanEnd = index
+                while spanEnd + 1 < samples.count, samples[spanEnd].distanceM - sample.distanceM < 127.5 {
+                    spanEnd += 1
+                }
+                let segmentLength = max(Float(samples[spanEnd].distanceM - sample.distanceM), 8)
+                nextBallastChainage = sample.distanceM + 127.5
                 for (trackIndex, lateral) in trackOffsets.enumerated() {
                     let centerX = sample.x + lateral * cos(sample.heading)
                     let centerZ = sample.z + lateral * sin(sample.heading)
@@ -1449,13 +1519,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // line (see below).
                 }
             }
-            for (trackIndex, lateral) in trackOffsets.enumerated() {
-                let x = sample.x + lateral * cos(sample.heading)
-                let z = sample.z + lateral * sin(sample.heading)
-                // Per-sleeper shade variation: real sleepers weather
-                // unevenly, and a perfectly uniform row reads fake.
-                let sleeperShade = 0.82 + Float((index * 37 + trackIndex * 11) % 5) * 0.09
-                addSurfaceBox(parent: world, name: "sleeper-\(index)-\(trackIndex)", size: SIMD3<Float>(2.55, 0.13, 0.26), position: SIMD3<Float>(x, sample.elevationM + 0.105, z), color: UIColor(red: 0.34 * CGFloat(sleeperShade), green: 0.27 * CGFloat(sleeperShade), blue: 0.19 * CGFloat(sleeperShade), alpha: 1), roughness: 0.88, orientation: trackOrientation)
+            if sample.distanceM >= nextSleeperChainage {
+                nextSleeperChainage = sample.distanceM + 42.5
+                for (trackIndex, lateral) in trackOffsets.enumerated() {
+                    let x = sample.x + lateral * cos(sample.heading)
+                    let z = sample.z + lateral * sin(sample.heading)
+                    // Per-sleeper shade variation: real sleepers weather
+                    // unevenly, and a perfectly uniform row reads fake.
+                    let sleeperShade = 0.82 + Float((index * 37 + trackIndex * 11) % 5) * 0.09
+                    addSurfaceBox(parent: world, name: "sleeper-\(index)-\(trackIndex)", size: SIMD3<Float>(2.55, 0.13, 0.26), position: SIMD3<Float>(x, sample.elevationM + 0.105, z), color: UIColor(red: 0.34 * CGFloat(sleeperShade), green: 0.27 * CGFloat(sleeperShade), blue: 0.19 * CGFloat(sleeperShade), alpha: 1), roughness: 0.88, orientation: trackOrientation)
+                }
             }
 
             // Continuous lineside walls (noise barriers), laid as
@@ -1470,21 +1543,40 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // nowhere near the coast). All segments are concrete now,
             // and the wall steps down outside the city so the rural
             // view opens up instead of running inside a channel.
-            if index.isMultiple(of: 3), hasPassingTrack, !corridorReserved(at: sample.distanceM, landmarks: wallLandmarks) {
+            if sample.distanceM >= nextWallChainage, hasPassingTrack, !corridorReserved(at: sample.distanceM, landmarks: wallLandmarks) {
+                var spanEnd = index
+                while spanEnd + 1 < samples.count, samples[spanEnd].distanceM - sample.distanceM < 12.75 {
+                    spanEnd += 1
+                }
+                let wallSpan = max(Float(samples[spanEnd].distanceM - sample.distanceM), 1)
+                nextWallChainage = sample.distanceM + 12.75
                 let band = urbanBand(distanceM: sample.distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 let wallHeight: Float = band == 2 ? 2.6 : band == 1 ? 2.2 : 1.4
+                // Banked frame, the same convention as the rail
+                // profile (profileStation): xAxis is the canted
+                // lateral, yAxis the canted up. Slabs are appended
+                // to a batch flushed about every 1,200 m instead of
+                // becoming individual entities.
+                let bankCos = cos(sample.bankRadians)
+                let bankSin = sin(sample.bankRadians)
+                let headCos = cos(sample.heading)
+                let headSin = sin(sample.heading)
+                let axisX = SIMD3<Float>(bankCos * headCos, -bankSin, bankCos * headSin)
+                let axisY = SIMD3<Float>(bankSin * headCos, bankCos, bankSin * headSin)
+                let axisZ = simd_cross(axisX, axisY)
+                let base = SIMD3<Float>(sample.x, sample.elevationM, sample.z)
                 for side in [-1.0, 1.0] {
-                    let wallLateral = Float(side) * 5.6
-                    let wallX = sample.x + wallLateral * cos(sample.heading)
-                    let wallZ = sample.z + wallLateral * sin(sample.heading)
-                    let wall = addBox(parent: world, name: "lineside-wall-\(index)-\(Int(side))",
-                                      size: SIMD3<Float>(0.18, wallHeight, segmentLength + 0.3),
-                                      position: SIMD3<Float>(wallX, sample.elevationM + wallHeight / 2, wallZ),
-                                      material: concreteMaterial)
-                    wall.orientation = trackOrientation
+                    let center = base + axisX * (Float(side) * 5.6) + axisY * (wallHeight / 2)
+                    wallBatch.addBoxAxes(center: center,
+                                         size: SIMD3<Float>(0.18, wallHeight, wallSpan + 0.3),
+                                         ax: axisX, ay: axisY, az: axisZ)
+                }
+                if sample.distanceM - wallBatchStartChainage >= 1_200 {
+                    flushWallBatch()
                 }
             }
         }
+        flushWallBatch()
     }
 
     /// Trackside colour-light signals at the canonical 3 km spacing on
@@ -1619,31 +1711,160 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
-    private func buildCatenary(route: RailwayRouteProfile) {
+    /// Overhead contact system in the real three-element form
+    /// (quality24, C2, from the user's reference diagram): a
+    /// messenger wire (ちょう架線) carried on portal masts, hangers
+    /// (ハンガー) dropping from it, and the contact wire
+    /// (トロリー線) at exactly 5.0 m above the rail head, zig-zagging
+    /// ±0.25 m about each track centre (stagger, so the pantograph
+    /// carbon strip wears evenly instead of grooving).
+    ///
+    /// What was wrong before, in numbers: the whole system was
+    /// built in a frame shifted +2.1 m to one side — masts at
+    /// laterals −3.2/+7.4, the crossbeam centred at +2.1, and the
+    /// two wire runs at offsets 0.0 and +4.2 — so the wires hung
+    /// over the centreline and 2.1 m OUTSIDE the far track rather
+    /// than over the running rails at −2.1/+2.1. The wire boxes
+    /// sat at elevation +4.95, only 4.64 m above the rail head
+    /// (rail head top = elevation +0.3065); there was no messenger
+    /// wire and no hangers at all; and the crossbeam at +5.15 was
+    /// BELOW the contact wire's proper height, so it would have
+    /// blocked the wire outright.
+    ///
+    /// Wire points are computed in the same banked frame as the
+    /// rail profile (profileStation): heights run along the canted
+    /// up axis from the rail head, stagger along the canted
+    /// lateral axis. A purely horizontal offset would drift up to
+    /// ~0.22 m sideways at 5 m height on the line's maximum cant,
+    /// which alone would eat the ±0.25 m stagger tolerance.
+    private func buildCatenary(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, showcaseSection: Bool = false) {
         let supportBudget = max(40, renderQualitySettings.sceneryInstanceLimit / 8)
         let interval = max(120.0, route.distanceM / Double(supportBudget))
-        var distance = 12.0
-        var index = 0
-        while distance < route.distanceM {
+        // Support chainages: the line-wide pitch derived from the
+        // support budget (340 m at the balanced limit of 200), plus —
+        // quality24 showcase section only — a 45 m pitch inside
+        // 0...1,856 m, the spacing SceneCorridorSpecification already
+        // declares (catenarySpacingM = 45) and the spacing BVE city
+        // routes actually use. The extra ~35 supports are spent only
+        // inside the section (line-wide total ~235 against the
+        // nominal 200 budget); the pitch everywhere else is
+        // unchanged. Each wire span reaches back to the previous
+        // support, so spans tile exactly at any pitch mix.
+        var chainages: [Double] = []
+        var cursor = 12.0
+        while cursor < route.distanceM {
+            chainages.append(cursor)
+            cursor += interval
+        }
+        if showcaseSection {
+            var sectionCursor = 24.0
+            while sectionCursor <= 1_848 {
+                if !chainages.contains(where: { abs($0 - sectionCursor) < 15 }) {
+                    chainages.append(sectionCursor)
+                }
+                sectionCursor += 45
+            }
+            chainages.sort()
+        }
+        // Track laterals at a chainage, the same rule as the
+        // trackbed (buildTrack): both tracks where a passing track
+        // exists, otherwise only the running track — wires are
+        // strung over tracks that exist, nowhere else.
+        func trackLaterals(at distance: Double) -> [Float] {
+            let isMainlineSection = travelDirection == .up ? distance < 60_000 : distance >= 8_000
+            let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
+            if hasPassingTrack { return [-2.1, 2.1] }
+            return [travelDirection == .up ? -2.1 : 2.1]
+        }
+        // One point of one track's wire system, in the banked frame:
+        // `heightAboveRail` runs from the rail head (profile
+        // y = 0.3065) along the canted up axis, `stagger` from the
+        // track centre along the canted lateral axis.
+        func wirePoint(at distance: Double, trackLateral: Float, stagger: Float, heightAboveRail: Float) -> SIMD3<Float> {
+            let s = sample(at: distance)
+            let bankCos = cos(s.bankRadians)
+            let bankSin = sin(s.bankRadians)
+            let headCos = cos(s.heading)
+            let headSin = sin(s.heading)
+            let center = SIMD3<Float>(s.x + trackLateral * headCos, s.elevationM, s.z + trackLateral * headSin)
+            let axisX = SIMD3<Float>(bankCos * headCos, -bankSin, bankCos * headSin)
+            let axisY = SIMD3<Float>(bankSin * headCos, bankCos, bankSin * headSin)
+            return center + axisX * stagger + axisY * (0.3065 + heightAboveRail)
+        }
+        var wireBatch = MeshBatchBuilder()
+        var wireBatchIndex = 0
+        var wireBatchStartChainage = chainages.first ?? 0
+        func flushWireBatch() {
+            if let mesh = wireBatch.build(name: "catenary-wires-\(wireBatchIndex)", material: wireMaterial) {
+                world.addChild(mesh)
+                wireBatchIndex += 1
+            }
+            wireBatch = MeshBatchBuilder()
+        }
+        var previousChainage: Double? = nil
+        for (index, distance) in chainages.enumerated() {
             let sample = sample(at: distance)
             let heading = sample.heading
             let yaw = simd_quatf(angle: -heading, axis: SIMD3<Float>(0, 1, 0))
-            let poleOffsets: [Float] = [-3.2, 7.4]
-            for (poleIndex, lateral) in poleOffsets.enumerated() {
+            // Portal masts at ±4.0 m: clear of the trackbed (2.3 m)
+            // and the deck cable trough (3.85 m), and just inside
+            // the deck edge (4.2 m) where the line is on viaduct;
+            // at ground level they stand inside the ±4.9 m trough.
+            let lift = sample.elevationM - groundLevelM(at: sample)
+            let mastBase = lift >= 2 ? sample.elevationM - 0.49 : sample.elevationM - 0.10
+            // Crossbeam at rail head +6.45 m; the messenger rides at
+            // contact +1.30 = rail head +6.30 at the supports, so
+            // the wires hang just under the beam.
+            let beamY = sample.elevationM + 0.3065 + 6.45
+            let mastHeight = beamY + 0.1 - mastBase
+            for (poleIndex, lateral) in [Float(-4), Float(4)].enumerated() {
                 let x = sample.x + lateral * cos(heading)
                 let z = sample.z + lateral * sin(heading)
-                addBox(parent: world, name: "catenary-mast-\(index)-\(poleIndex)", size: SIMD3<Float>(0.16, 5.6, 0.18), position: SIMD3<Float>(x, sample.elevationM + 2.7, z), material: poleMaterial, orientation: yaw)
+                addBox(parent: world, name: "catenary-mast-\(index)-\(poleIndex)", size: SIMD3<Float>(0.18, mastHeight, 0.2), position: SIMD3<Float>(x, mastBase + mastHeight / 2, z), material: poleMaterial, orientation: yaw)
             }
-            addBox(parent: world, name: "double-track-crossbeam-\(index)", size: SIMD3<Float>(10.6, 0.10, 0.14), position: SIMD3<Float>(sample.x + 2.1 * cos(heading), sample.elevationM + 5.15, sample.z + 2.1 * sin(heading)), material: poleMaterial, orientation: yaw)
-            for (trackIndex, trackOffset) in [0.0, 4.2].enumerated() {
-                let offset = Float(trackOffset)
-                let wireX = sample.x + offset * cos(heading)
-                let wireZ = sample.z + offset * sin(heading)
-                addBox(parent: world, name: "contact-wire-\(index)-\(trackIndex)", size: SIMD3<Float>(0.035, 0.035, Float(interval)), position: SIMD3<Float>(wireX - sin(heading) * Float(interval) / 2, sample.elevationM + 4.95, wireZ + cos(heading) * Float(interval) / 2), material: wireMaterial, orientation: yaw)
+            addBox(parent: world, name: "double-track-crossbeam-\(index)", size: SIMD3<Float>(8.6, 0.12, 0.16), position: SIMD3<Float>(sample.x, beamY, sample.z), material: poleMaterial, orientation: yaw)
+            // Wires reach back to the previous support. Stagger
+            // alternates ±0.25 m support by support, interpolated
+            // linearly between them — the classic zig-zag.
+            if let previous = previousChainage {
+                if previous - wireBatchStartChainage >= 2_400 {
+                    flushWireBatch()
+                    wireBatchStartChainage = previous
+                }
+                let staggerHere: Float = index.isMultiple(of: 2) ? 0.25 : -0.25
+                let staggerPrev: Float = (index - 1).isMultiple(of: 2) ? 0.25 : -0.25
+                let spanLength = distance - previous
+                let subdivisions = max(1, Int((spanLength / 8.5).rounded()))
+                let hangerEvery = max(1, subdivisions / 4)
+                for trackLateral in trackLaterals(at: (previous + distance) / 2) {
+                    var contactPrev: SIMD3<Float>? = nil
+                    var messengerPrev: SIMD3<Float>? = nil
+                    for stepIndex in 0...subdivisions {
+                        let u = Double(stepIndex) / Double(subdivisions)
+                        let d = previous + spanLength * u
+                        let stagger = staggerPrev + (staggerHere - staggerPrev) * Float(u)
+                        // System height (messenger above contact):
+                        // 1.30 m at the supports, sagging to 0.60 m
+                        // at mid-span.
+                        let du = 2 * u - 1
+                        let systemHeight = Float(0.6 + 0.7 * du * du)
+                        let contact = wirePoint(at: d, trackLateral: trackLateral, stagger: stagger, heightAboveRail: 5)
+                        let messenger = wirePoint(at: d, trackLateral: trackLateral, stagger: stagger, heightAboveRail: 5 + systemHeight)
+                        if let cp = contactPrev, let mp = messengerPrev {
+                            wireBatch.addSegment(from: cp, to: contact, thickness: 0.03)
+                            wireBatch.addSegment(from: mp, to: messenger, thickness: 0.03)
+                        }
+                        if stepIndex > 0, stepIndex < subdivisions, stepIndex.isMultiple(of: hangerEvery) {
+                            wireBatch.addSegment(from: contact, to: messenger, thickness: 0.015)
+                        }
+                        contactPrev = contact
+                        messengerPrev = messenger
+                    }
+                }
             }
-            distance += interval
-            index += 1
+            previousChainage = distance
         }
+        flushWireBatch()
     }
 
     /// One city tower built from stacked facade segments (each segment
@@ -1905,6 +2126,254 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 addBox(parent: world, name: "crossing-warning-post-\(index)-\(Int(side))", size: SIMD3<Float>(0.14, 1.4, 0.14), position: SIMD3<Float>(x, sample.elevationM + 0.9, z), material: roofMaterials[0])
                 let arm = addBox(parent: world, name: "crossing-arm-\(index)-\(Int(side))", size: SIMD3<Float>(0.12, 0.1, 3.0), position: SIMD3<Float>(x, sample.elevationM + 1.48, z), material: railMaterial)
                 arm.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            }
+        }
+    }
+
+    /// quality24 phase 1 — the showcase section, Kankumo-Chuo (0 m)
+    /// to Matsubaracho (1,856 m), built to the density the BVE
+    /// survey measured instead of the line-wide procedural fill:
+    /// continuous lineside elements (fence, cable trough, equipment
+    /// boxes), street trees and a shrub row along the roads, and a
+    /// low-rise front band in the 6-12 m strip the towers leave
+    /// empty. Catenary at a 45 m pitch inside the section is added
+    /// by buildCatenary. Station plaza and under-viaduct dressing
+    /// are phase 2 and deliberately not here. Nothing outside
+    /// 0...1,856 m changes.
+    private func buildShowcaseSection(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard travelDirection == .up, routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let sectionEnd = 1_856.0
+        let landmarks = fictionalCorridorLandmarks(for: route)
+
+        // Tower footprints (placed by buildSuburb) so nothing in
+        // this layer grows inside a tower.
+        var towerBases: [(x: Float, z: Float)] = []
+        for child in world.children where child.name.hasPrefix("office-base-") {
+            towerBases.append((x: child.position.x, z: child.position.z))
+        }
+        func clearOfTowers(_ x: Float, _ z: Float, _ radius: Float) -> Bool {
+            for base in towerBases {
+                let dx = x - base.x
+                let dz = z - base.z
+                if dx * dx + dz * dz < radius * radius { return false }
+            }
+            return true
+        }
+        // Urban utility poles stand at lateral +/-11.0 m on a 45 m
+        // pitch (from 60 m on the left, 82.5 m on the right); a
+        // front building centred within 5.5 m of one would swallow it.
+        func poleNear(_ d: Double, side: Float) -> Bool {
+            var p = side < 0 ? 60.0 : 82.5
+            while p < d + 6 {
+                if abs(p - d) < 5.5 { return true }
+                p += 45
+            }
+            return false
+        }
+
+        // -- A6: low-rise front band in the 6-12 m strip. Placed
+        // first; trees and shrubs keep out of its footprint. Centres
+        // sit in the gaps of the 27 m tower rhythm (tower chainages
+        // 34 + 27k, this band at 50.5 + 27k), clear of the poles.
+        var placedFronts: [(chainage: Double, side: Float)] = []
+        func frontNear(_ d: Double, side: Float, within: Double) -> Bool {
+            placedFronts.contains { $0.side == side && abs($0.chainage - d) < within }
+        }
+        var frontSerial = 0
+        let frontRanges: [(from: Double, to: Double, rightOnly: Bool)] = [(60, 490, false), (1_595, 1_745, true)]
+        for range in frontRanges {
+            let sides: [Float] = range.rightOnly ? [1] : [-1, 1]
+            var d = 50.5
+            while d < range.to {
+                if d >= range.from, !corridorReserved(at: d, landmarks: landmarks) {
+                    for side in sides where !poleNear(d, side: side) {
+                        let s = sample(at: d)
+                        let ground = groundOffsetPoint(s, lateral: side * 10.7)
+                        if clearOfTowers(ground.x, ground.z, 9.5) {
+                            let height = 4.5 + Float((frontSerial * 53) % 45) * 0.1
+                            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+                            let bodyMaterial: PhysicallyBasedMaterial
+                            switch frontSerial % 4 {
+                            case 0:
+                                bodyMaterial = buildingMaterials[frontSerial % buildingMaterials.count]
+                            case 1:
+                                bodyMaterial = officeMaterials[frontSerial % officeMaterials.count]
+                            case 2:
+                                bodyMaterial = houseFacadeMaterial
+                            default:
+                                bodyMaterial = buildingMaterials[(frontSerial + 2) % buildingMaterials.count]
+                            }
+                            _ = addBox(parent: world, name: "showcase-front-\(frontSerial)", size: SIMD3<Float>(5.5, height, 7.0), position: SIMD3<Float>(ground.x, ground.y + height / 2, ground.z), material: bodyMaterial, orientation: yaw)
+                            _ = addBox(parent: world, name: "showcase-front-roof-\(frontSerial)", size: SIMD3<Float>(5.9, 0.22, 7.4), position: SIMD3<Float>(ground.x, ground.y + height + 0.11, ground.z), material: roofMaterials[frontSerial % roofMaterials.count], orientation: yaw)
+                            let bandX = ground.x - side * 2.83 * cos(s.heading)
+                            let bandZ = ground.z - side * 2.83 * sin(s.heading)
+                            _ = addBox(parent: world, name: "showcase-front-band-\(frontSerial)", size: SIMD3<Float>(0.18, 1.9, 6.4), position: SIMD3<Float>(bandX, ground.y + 1.15, bandZ), material: glassMaterial, orientation: yaw)
+                            placedFronts.append((chainage: d, side: side))
+                            frontSerial += 1
+                        }
+                    }
+                }
+                d += 27
+            }
+        }
+
+        // -- A5: street trees along the outer road edge (+/-10.5 m).
+        // On the elevated part they stand on the valley floor beside
+        // the road below the viaduct, which is where the road is.
+        // Phases are offset per side so crowns never meet a utility
+        // pole (poles every 45 m; trees every 22.5 m land at least
+        // 11.25 m away in chainage).
+        var treeSerial = 0
+        for side: Float in [-1, 1] {
+            var d = side < 0 ? 26.25 : 48.75
+            while d < 1_845 {
+                if !frontNear(d, side: side, within: 5.5) {
+                    let s = sample(at: d)
+                    let point = groundOffsetPoint(s, lateral: side * 10.5)
+                    if clearOfTowers(point.x, point.z, 8) {
+                        let height = 5 + Float((treeSerial * 29) % 31) * 0.1
+                        addTree(parent: world, name: "showcase-tree-\(treeSerial)", x: point.x, z: point.z, height: height, material: foliageMaterials[treeSerial % foliageMaterials.count], groundY: point.y)
+                    }
+                }
+                treeSerial += 1
+                d += 22.5
+            }
+        }
+
+        // -- Spec 8.1 shrub row. The literal 6.5-9 m band is the
+        // parallel road itself (road boxes span 3.4-10.6 m), so the
+        // hedge runs along the road's outer edge at +/-11.4 m: the
+        // first band outside the wall/fence corridor that is not
+        // carriageway. One merged batch for the whole section.
+        let shrubBatch = MeshBatchBuilder()
+        var shrubSerial = 0
+        for side: Float in [-1, 1] {
+            var d = 6.0
+            while d < 1_852 {
+                if !frontNear(d, side: side, within: 6.5) {
+                    let s = sample(at: d)
+                    let lateral = side * (11.4 + Float(shrubSerial % 3) * 0.3)
+                    let point = groundOffsetPoint(s, lateral: lateral)
+                    if clearOfTowers(point.x, point.z, 7.5) {
+                        let height = 0.75 + Float((shrubSerial * 13) % 5) * 0.12
+                        shrubBatch.addBox(center: SIMD3<Float>(point.x, point.y + height / 2 - 0.05, point.z), size: SIMD3<Float>(0.85, height, 5.4), yaw: -s.heading)
+                    }
+                }
+                shrubSerial += 1
+                d += d < 140 ? 6 : 8
+            }
+        }
+        if let hedges = shrubBatch.build(name: "showcase-hedges", material: foliageMaterials[0]) {
+            world.addChild(hedges)
+        }
+
+        // -- A3: cable trough both sides, following the fine 10.5 m
+        // stations like the rails do. On the deck (lift >= 2 m) the
+        // trough moves inboard to +/-3.85 m: the deck is only 8.4 m
+        // wide, so the ground-level offset would float in the air.
+        let troughBatch = MeshBatchBuilder()
+        var spanStart = 0.0
+        while spanStart < sectionEnd {
+            let mid = spanStart + 5.25
+            let s = sample(at: mid)
+            let elevated = s.elevationM - groundLevelM(at: mid) >= 2
+            for side: Float in [-1, 1] {
+                let lateral: Float = side * Float(elevated ? 3.85 : 4.9)
+                troughBatch.addBox(center: SIMD3<Float>(s.x + lateral * cos(s.heading), s.elevationM + 0.01, s.z + lateral * sin(s.heading)), size: SIMD3<Float>(0.55, 0.22, 11.0), yaw: -s.heading)
+            }
+            spanStart += 10.5
+        }
+        if let trough = troughBatch.build(name: "showcase-cable-trough", material: concreteMaterial) {
+            world.addChild(trough)
+        }
+
+        // -- A3: lineside equipment boxes (relay / power) every
+        // ~75 m, alternating sides, inboard on the deck.
+        let relayBatch = MeshBatchBuilder()
+        let powerBatch = MeshBatchBuilder()
+        var boxChainage = 55.0
+        var boxSerial = 0
+        while boxChainage < sectionEnd {
+            let s = sample(at: boxChainage)
+            let elevated = s.elevationM - groundLevelM(at: boxChainage) >= 2
+            let side: Float = boxSerial % 2 == 0 ? -1 : 1
+            let lateral: Float = side * Float(elevated ? 4.0 : 5.15)
+            let baseY = elevated ? s.elevationM - 0.10 : s.elevationM - 0.06
+            let center = SIMD3<Float>(s.x + lateral * cos(s.heading), baseY + 0.52, s.z + lateral * sin(s.heading))
+            if boxSerial % 4 < 2 {
+                relayBatch.addBox(center: center, size: SIMD3<Float>(0.45, 1.05, 0.7), yaw: -s.heading)
+            } else {
+                powerBatch.addBox(center: center, size: SIMD3<Float>(0.45, 1.05, 0.7), yaw: -s.heading)
+            }
+            boxSerial += 1
+            boxChainage += 75
+        }
+        if let boxes = relayBatch.build(name: "showcase-relay-boxes", material: poleMaterial) {
+            world.addChild(boxes)
+        }
+        if let boxes = powerBatch.build(name: "showcase-power-boxes", material: roofMaterials[1]) {
+            world.addChild(boxes)
+        }
+
+        // -- A2: continuous chain-link fence both sides, 1.5 m high,
+        // on fine 10.5 m stations so it hugs the curve (a 60 m
+        // coarse ribbon would cut inside the wall). One UV strip
+        // per side; the diamond mesh is an alpha-cutout texture.
+        // At ground level the fence runs at +/-6.2 m, just outside
+        // the sound walls at +/-5.6 m; on the viaduct it steps
+        // inboard to +/-4.05 m and stands on the deck (top at rail
+        // elevation -0.49 m, the deck ribbon's height): the deck is
+        // only 8.4 m wide, so a fence left at 6.2 m would hang in
+        // the air beside it for the whole elevated kilometre.
+        var fenceMaterial = texturedPBR(.white, metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
+        fenceMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
+        // The texture's alpha is binary (wire or hole), so plain
+        // transparent blending already renders the cutout; no
+        // alpha-test threshold is set — the plausible-looking
+        // property for it could not be verified against the SDK
+        // from here, and an unverified property name is exactly
+        // what failed CI #196.
+        fenceMaterial.faceCulling = .none
+        for side: Float in [-1, 1] {
+            var positions: [SIMD3<Float>] = []
+            var normals: [SIMD3<Float>] = []
+            var uvs: [SIMD2<Float>] = []
+            var indices: [UInt32] = []
+            var stationIndex: UInt32 = 0
+            var d = 0.0
+            while d <= sectionEnd {
+                let s = sample(at: d)
+                let elevated = s.elevationM - groundLevelM(at: d) >= 2
+                let baseY = elevated ? s.elevationM - 0.48 : s.elevationM - 0.06
+                let lateral: Float = side * (elevated ? 4.05 : 6.2)
+                let px = s.x + lateral * cos(s.heading)
+                let pz = s.z + lateral * sin(s.heading)
+                positions.append(SIMD3<Float>(px, baseY, pz))
+                positions.append(SIMD3<Float>(px, baseY + 1.5, pz))
+                let nx = -side * cos(s.heading)
+                let nz = -side * sin(s.heading)
+                normals.append(SIMD3<Float>(nx, 0, nz))
+                normals.append(SIMD3<Float>(nx, 0, nz))
+                let u = Float(d / 0.9)
+                uvs.append(SIMD2<Float>(u, 0))
+                uvs.append(SIMD2<Float>(u, 1))
+                if stationIndex > 0 {
+                    let a = (stationIndex - 1) * 2
+                    indices.append(contentsOf: [a, a + 1, a + 2, a + 1, a + 3, a + 2])
+                }
+                stationIndex += 1
+                d += 10.5
+            }
+            let fenceName = side < 0 ? "showcase-fence-l" : "showcase-fence-r"
+            var descriptor = MeshDescriptor(name: fenceName)
+            descriptor.positions = MeshBuffers.Positions(positions)
+            descriptor.normals = MeshBuffers.Normals(normals)
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+            descriptor.primitives = .triangles(indices)
+            if let mesh = try? MeshResource.generate(from: [descriptor]) {
+                let fence = ModelEntity(mesh: mesh, materials: [fenceMaterial])
+                fence.name = fenceName
+                world.addChild(fence)
             }
         }
     }
@@ -2618,18 +3087,28 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                            position: SIMD3<Float>(center.x, center.y - 0.85, center.z), material: concreteMaterial, orientation: yaw)
                 }
             case .cutting:
+                // quality24: this scene has no raised terrain beside
+                // the line (the ground model is at or below rail
+                // level everywhere), so the old sheer concrete walls
+                // stood on flat ground with nothing behind them and
+                // read as two giant blank boards filling the frame
+                // (CI #221 photo 11, 45,310 m). A cutting the terrain
+                // cannot back is drawn as a grass bank instead: a
+                // slope rising away from the line, the mirror of the
+                // embankment case below, which is consistent with
+                // flat surrounding ground.
                 let samples = landmarkSampleChainages(landmark, limit: sampleLimit)
                 for (index, chainage) in samples.enumerated() {
                     let sample = sample(at: chainage)
                     let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                     let length = Float(landmark.lengthM / Double(samples.count))
                     for side in [-1.0, 1.0] {
-                        let edge = routeOffsetPoint(sample, lateral: Float(side) * 6.6)
-                        addSurfaceBox(parent: world, name: "\(landmark.id)-wall-\(index)-\(Int(side))",
-                                      size: SIMD3<Float>(0.7, 4.6, length),
-                                      position: SIMD3<Float>(edge.x, edge.y + 2.15, edge.z),
-                                      color: UIColor(red: 0.45, green: 0.46, blue: 0.44, alpha: 1),
-                                      roughness: 0.9, orientation: yaw)
+                        let edge = routeOffsetPoint(sample, lateral: Float(side) * 6.8)
+                        let roll = simd_quatf(angle: Float(side) * 0.48, axis: SIMD3<Float>(0, 0, 1))
+                        addSurfaceBox(parent: world, name: "\(landmark.id)-bank-\(index)-\(Int(side))",
+                                      size: SIMD3<Float>(6.5, 0.42, length),
+                                      position: SIMD3<Float>(edge.x, edge.y + 0.35, edge.z),
+                                      color: grass, roughness: 0.95, orientation: yaw * roll)
                     }
                 }
             case .embankment:
@@ -2748,7 +3227,21 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 elevationM: first.elevationM
             )
         }
-        guard let upperIndex = samples.firstIndex(where: { $0.distanceM >= distanceM }) else {
+        // First sample at or past the target chainage, by binary
+        // search (the samples are sorted by construction; this runs
+        // every frame and the alignment is now sampled at 8.5 m).
+        var searchLow = 0
+        var searchHigh = samples.count
+        while searchLow < searchHigh {
+            let mid = (searchLow + searchHigh) / 2
+            if samples[mid].distanceM >= distanceM {
+                searchHigh = mid
+            } else {
+                searchLow = mid + 1
+            }
+        }
+        let upperIndex: Int? = searchLow < samples.count ? searchLow : nil
+        guard let upperIndex else {
             if let last = samples.last {
                 let delta = Float(distanceM - last.distanceM)
                 return RouteSample(
@@ -2837,9 +3330,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let s = sample(at: distanceM)
         let h = s.heading
         let bank = s.bankRadians
-        let center = SIMD3<Float>(s.x + trackLateral * cos(h), s.elevationM, s.z - trackLateral * sin(h))
-        let xAxis = SIMD3<Float>(cos(bank) * cos(h), -sin(bank), -cos(bank) * sin(h))
-        let yAxis = SIMD3<Float>(sin(bank) * cos(h), cos(bank), -sin(bank) * sin(h))
+        // quality24: the lateral convention here must match the one
+        // every other builder uses (routeOffsetPoint, ribbonEntity,
+        // the vehicle placement in update): lateral offset =
+        // (cos h, +sin h) in (x, z), and the banked axes are the
+        // vehicle's own frame (yaw -h, then roll -bank about the
+        // local z). This function used to mirror the z terms
+        // (- sin h), which put the rails in a reflected frame: the
+        // rail pair drifted off the sleepers by -2L sin^2(h) laterally
+        // and L sin(2h) longitudinally (L = track offset), i.e. ~0.4 m
+        // sideways at h = 0.3 rad and over 1 m at h = 0.55 rad, worst
+        // exactly on the curved sections the tour photographs.
+        let center = SIMD3<Float>(s.x + trackLateral * cos(h), s.elevationM, s.z + trackLateral * sin(h))
+        let xAxis = SIMD3<Float>(cos(bank) * cos(h), -sin(bank), cos(bank) * sin(h))
+        let yAxis = SIMD3<Float>(sin(bank) * cos(h), cos(bank), sin(bank) * sin(h))
         return ProfileStation(center: center, xAxis: xAxis, yAxis: yAxis, distanceM: distanceM)
     }
 
@@ -2920,7 +3424,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let bandProfile: [(x: Float, y: Float)] = [(-0.026, 0.3065), (0.026, 0.3065)]
         let shoulderLeft: [(x: Float, y: Float)] = [(-2.65, 0.03), (-1.72, 0.165)]
         let shoulderRight: [(x: Float, y: Float)] = [(1.72, 0.165), (2.65, 0.03)]
-        let step = 10.5
+        // Station spacing for the extruded strips: it also sets how
+        // finely curves are faceted (quality24, C3). 8.5 m matches
+        // the alignment sampling, so stations sit exactly on the
+        // polyline vertices; the chord deviation at R324 is ~2.8 cm.
+        let step = 8.5
         for trackOffset in trackOffsetsSeen {
             var run: [ProfileStation] = []
             var runIndex = 0
