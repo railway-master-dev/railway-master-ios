@@ -1317,12 +1317,18 @@ final class SimulatorModel: ObservableObject {
             }
         }
         guard let handle = demoLogHandle else { return }
-        // quality24 READY handshake (see tourReadyPendingIndex).
+        // quality25 READY emission (see tourAwaitingAckIndex): the
+        // gate is simulation time at least 4 s past the teleport —
+        // the model and the view share the main runloop, so sim
+        // time advancing means frames at the new location have been
+        // presented — with the train standing at the spot.
         if tourEnabled, tourReadyPendingIndex >= 0,
-           simulationTime >= tourTeleportSimTime + 2,
+           simulationTime >= tourTeleportSimTime + 4,
            abs(engine.positionM - Self.tourSpotsM[tourReadyPendingIndex]) < 5 {
             let line = "READY spot=\(tourReadyPendingIndex) pos=\(Int(engine.positionM))\n"
             if let data = line.data(using: .utf8) { handle.write(data) }
+            tourAwaitingAckIndex = tourReadyPendingIndex
+            tourReadyWallTime = wall
             tourReadyPendingIndex = -1
         }
         let nextPos = activeStops.indices.contains(nextStopIndex) ? activeStops[nextStopIndex].positionM : -1
@@ -1359,38 +1365,78 @@ final class SimulatorModel: ObservableObject {
     // screenshot script's old fixed wait, so captures drifted a spot
     // behind (CI #221: spots 3,006 and 9,081 never photographed).
     // The model knows when it is back: once simulation time has
-    // advanced 2 s past the teleport with the train at the spot,
-    // frames at the new location have been presented (model and
-    // view share the main runloop), so it writes a READY line and
-    // the script photographs on READY instead of on a timer.
+    // advanced past the teleport with the train at the spot, frames
+    // at the new location have been presented (model and view share
+    // the main runloop), so it writes a READY line and the script
+    // photographs on READY instead of on a timer.
     private var tourReadyPendingIndex = -1
     private var tourTeleportSimTime = 0.0
+    // quality25 (E): READY alone did not fix the drift (CI #232:
+    // only 7 of 16 spots photographed at their labelled positions,
+    // three pure black, six the same stretch of coast). The app
+    // advanced on its own 35 s wall schedule while simctl took
+    // tens of seconds per screenshot, so by the time a capture
+    // executed the train had teleported on. The tour is now a
+    // two-way handshake: after READY the app HOLDS the spot until
+    // the script writes Documents/tour-ack-<i>.txt (it writes the
+    // ACK right after each screenshot), with a 150 s timeout so a
+    // dead script can never stall the tour or the job.
+    private var tourAwaitingAckIndex = -1
+    private var tourReadyWallTime: TimeInterval = -1
+    private var tourLastAckCheckWall: TimeInterval = -1
 
     private func driveTourIfEnabled() {
-        // CI #199: the tour ran on the frame timer's dates, but that
-        // timer starves under the loaded simulator (the sim itself ran
-        // at ~0.5-0.7x wall speed), so teleports fell ever further
-        // behind the wall-clock screenshot schedule and stops 6-10
-        // never fired. Drive the schedule from the true wall clock
-        // instead; a late frame-timer tick then catches up at once.
-        // First teleport at 25 s (screenshots start ~57 s after
-        // launch, ~30 s after each teleport, so the view has settled).
         let now = Date().timeIntervalSinceReferenceDate
         if firstTourWallTime < 0 { firstTourWallTime = now }
         let elapsed = now - firstTourWallTime
-        if elapsed >= 25 {
-            let due = Int((elapsed - 25) / 35)
-            let targetIndex = min(due, Self.tourSpotsM.count - 1)
-            if targetIndex > tourSpotIndex {
-                tourSpotIndex = targetIndex
-                teleportForTour(to: Self.tourSpotsM[targetIndex])
-                logTourTeleport(to: Self.tourSpotsM[targetIndex], spotIndex: targetIndex)
-                tourReadyPendingIndex = targetIndex
+        if tourSpotIndex < 0 {
+            // First teleport only once the world has had time to
+            // build: wall 25 s AND simulation time 15 s (the
+            // black frames in CI #232 were early spots photographed
+            // while the first build was still presenting nothing).
+            if elapsed >= 25, simulationTime >= 15 {
+                tourSpotIndex = 0
+                teleportForTour(to: Self.tourSpotsM[0])
+                logTourTeleport(to: Self.tourSpotsM[0], spotIndex: 0)
+                tourReadyPendingIndex = 0
                 tourTeleportSimTime = simulationTime
+            }
+        } else if tourAwaitingAckIndex == tourSpotIndex, tourReadyWallTime >= 0 {
+            // READY is out for the current spot: wait for the
+            // script's ACK (checked about twice a second), or time
+            // out after 150 s and move on regardless.
+            if now - tourLastAckCheckWall >= 0.5 {
+                tourLastAckCheckWall = now
+                let acknowledged = tourAckExists(for: tourSpotIndex)
+                if acknowledged || now - tourReadyWallTime >= 150 {
+                    if !acknowledged {
+                        logTourLine("ACKTIMEOUT spot=\(tourSpotIndex)\n")
+                    }
+                    tourAwaitingAckIndex = -1
+                    tourReadyWallTime = -1
+                    let next = tourSpotIndex + 1
+                    if next < Self.tourSpotsM.count {
+                        tourSpotIndex = next
+                        teleportForTour(to: Self.tourSpotsM[next])
+                        logTourTeleport(to: Self.tourSpotsM[next], spotIndex: next)
+                        tourReadyPendingIndex = next
+                        tourTeleportSimTime = simulationTime
+                    }
+                }
             }
         }
         // Hold the train still for the photograph.
         controls = TrainControls(throttleNotch: 0, brakeNotch: 3, emergencyBrake: false)
+    }
+
+    private func tourAckExists(for index: Int) -> Bool {
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return false }
+        return FileManager.default.fileExists(atPath: dir.appendingPathComponent("tour-ack-\(index).txt").path)
+    }
+
+    private func logTourLine(_ line: String) {
+        guard let handle = demoLogHandle else { return }
+        if let data = line.data(using: .utf8) { handle.write(data) }
     }
 
     private func logTourTeleport(to position: Double, spotIndex: Int) {
