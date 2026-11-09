@@ -188,6 +188,12 @@ PYEOF
     TOUR_START=$SECONDS
     TOUR_STALLED=0
     TOUR_INDEX=0
+    # quality26 tour-hardening state: consecutive empty captures
+    # and the one-shot relaunch guard used after the screenshot
+    # below (see the comments there).
+    EMPTY_STREAK=0
+    TOUR_RELAUNCHED=0
+    : > screenshots/tour-progress.txt
     for SHOT in $TOUR_SHOTS; do
       SPOT=$TOUR_INDEX
       TOUR_INDEX=$((TOUR_INDEX + 1))
@@ -215,6 +221,56 @@ PYEOF
         sleep 35
       fi
       xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$SHOT.png" 2>/dev/null || true
+      # quality26: a wedged capture can leave a missing or 0-byte
+      # file — CI #238 lost every shot from spot 8 onward that way
+      # and kept no usable tour log to diagnose it with. Retry an
+      # empty capture once after a short wait, record every shot's
+      # outcome in tour-progress.txt, and snapshot the demo log
+      # after each spot so the freshest partial log survives even
+      # if the run wedges later.
+      SHOT_SIZE=0
+      if [ -f "screenshots/$SHOT.png" ]; then
+        SHOT_SIZE=$(stat -f %z "screenshots/$SHOT.png" 2>/dev/null || echo 0)
+      fi
+      if [ "$SHOT_SIZE" -eq 0 ]; then
+        echo "tour-progress: spot $SPOT $SHOT empty after first attempt; retrying in 10 s" >> screenshots/tour-progress.txt
+        sleep 10
+        xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$SHOT.png" 2>/dev/null || true
+        if [ -f "screenshots/$SHOT.png" ]; then
+          SHOT_SIZE=$(stat -f %z "screenshots/$SHOT.png" 2>/dev/null || echo 0)
+        fi
+      fi
+      echo "tour-progress: spot $SPOT $SHOT elapsed=$((SECONDS - TOUR_START))s size=${SHOT_SIZE}B" >> screenshots/tour-progress.txt
+      if [ -n "$TOUR_LOG" ]; then
+        cp "$TOUR_LOG" screenshots/demo-drive-log-snapshot.txt 2>/dev/null || true
+      fi
+      # quality26 recovery: two empty shots in a row mean the app
+      # or the simulator has wedged, not a slow frame. Relaunch
+      # the tour once and pre-ACK every already-photographed spot
+      # (tour-ack-0 .. tour-ack-(SPOT-1)) so the restarted app
+      # races through them — it still spends its ~4 s of sim time
+      # at each — and holds again at the current spot. The normal
+      # ACK write below then releases it onward as usual.
+      if [ "$SHOT_SIZE" -eq 0 ]; then
+        EMPTY_STREAK=$((EMPTY_STREAK + 1))
+      else
+        EMPTY_STREAK=0
+      fi
+      if [ "$EMPTY_STREAK" -ge 2 ] && [ "$TOUR_RELAUNCHED" -eq 0 ]; then
+        TOUR_RELAUNCHED=1
+        EMPTY_STREAK=0
+        echo "tour-progress: spot $SPOT $SHOT two consecutive empty shots; relaunching the app once" >> screenshots/tour-progress.txt
+        xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+        sleep 3
+        xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
+        if [ -n "$APP_DATA" ]; then
+          ACK_SPOT=0
+          while [ "$ACK_SPOT" -lt "$SPOT" ]; do
+            printf 'ack %s\n' "$ACK_SPOT" > "$APP_DATA/Documents/tour-ack-$ACK_SPOT.txt" 2>/dev/null || true
+            ACK_SPOT=$((ACK_SPOT + 1))
+          done
+        fi
+      fi
       # Release the app to the next spot (see the tour comment
       # above). APP_DATA is the app's data container on this host,
       # so writing the ACK file here is writing into the app's
@@ -273,6 +329,11 @@ PYEOF
     fi
     sleep 3
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/22-home.png 2>/dev/null || true
+    # quality26: capture the device log once more at the very
+    # end. The device-log.txt capture near the top only covers
+    # the first minutes of the run; in CI #238 everything
+    # interesting happened half an hour later and was gone.
+    xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 10m --predicate 'process == "RailwayMasterPhase1"' 2>/dev/null | tail -c 150000 > screenshots/device-log-final.txt || true
     ls -la screenshots/
     ;;
   packages)
