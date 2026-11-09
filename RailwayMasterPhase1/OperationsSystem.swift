@@ -143,14 +143,22 @@ public struct SafetyStopTarget: Codable, Equatable, Sendable {
     public let positionM: Double
     /// 目標点で許容する速度 [km/h]。停止目標は0。
     public let targetSpeedKmh: Double
+    /// 目標ごとの余裕距離の上書き [m]。nil の場合はパターン全体の余裕を使う。
+    /// 駅停止目標は 0 を渡す：全体の余裕（18m）を駅停止にも適用すると許容速度が
+    /// 停止位置の18m手前で0になり、列車が駅に到達できない（CI #213で実証）。
+    public let safetyMarginM: Double?
 
-    public init(identifier: String, positionM: Double, targetSpeedKmh: Double = 0) throws {
+    public init(identifier: String, positionM: Double, targetSpeedKmh: Double = 0, safetyMarginM: Double? = nil) throws {
         guard !identifier.isEmpty, isFiniteNonnegative(positionM), isFiniteNonnegative(targetSpeedKmh) else {
             throw OperationsValidationError.invalidValue("safety target")
+        }
+        if let safetyMarginM, !isFiniteNonnegative(safetyMarginM) {
+            throw OperationsValidationError.invalidValue("safety target margin")
         }
         self.identifier = identifier
         self.positionM = positionM
         self.targetSpeedKmh = targetSpeedKmh
+        self.safetyMarginM = safetyMarginM
     }
 }
 
@@ -189,7 +197,7 @@ public struct RailwaySafetySpeedPattern: Codable, Equatable, Sendable {
         let position = min(max(positionM, 0), route.distanceM)
         var permitted = max(0, route.condition(at: position).speedLimitKmh)
         for target in targets where target.positionM >= position {
-            let availableDistanceM = max(0, target.positionM - position - safetyMarginM)
+            let availableDistanceM = max(0, target.positionM - position - (target.safetyMarginM ?? safetyMarginM))
             let targetMps = target.targetSpeedKmh / 3.6
             let envelopeKmh = sqrt(targetMps * targetMps + 2 * serviceDecelerationMps2 * availableDistanceM) * 3.6
             permitted = min(permitted, envelopeKmh)
@@ -206,8 +214,8 @@ public struct RailwaySafetySpeedPattern: Codable, Equatable, Sendable {
             let limiting = targets.filter { $0.positionM >= position }.min { lhs, rhs in
                 let left = lhs.targetSpeedKmh / 3.6
                 let right = rhs.targetSpeedKmh / 3.6
-                let leftCap = sqrt(left * left + 2 * serviceDecelerationMps2 * max(0, lhs.positionM - position - safetyMarginM)) * 3.6
-                let rightCap = sqrt(right * right + 2 * serviceDecelerationMps2 * max(0, rhs.positionM - position - safetyMarginM)) * 3.6
+                let leftCap = sqrt(left * left + 2 * serviceDecelerationMps2 * max(0, lhs.positionM - position - (lhs.safetyMarginM ?? safetyMarginM))) * 3.6
+                let rightCap = sqrt(right * right + 2 * serviceDecelerationMps2 * max(0, rhs.positionM - position - (rhs.safetyMarginM ?? safetyMarginM))) * 3.6
                 return leftCap < rightCap
             }
             result.append(SpeedPatternPoint(positionM: position, permittedSpeedKmh: permittedSpeedKmh(atPositionM: position), limitingTargetID: limiting?.identifier))
