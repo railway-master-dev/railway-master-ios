@@ -148,26 +148,29 @@ PYEOF
     } > screenshots/diagnostics.txt 2>&1 || true
     cp -f ~/Library/Logs/DiagnosticReports/RailwayMasterPhase1* screenshots/ 2>/dev/null || true
     xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 6m --predicate 'process == "RailwayMasterPhase1"' 2>/dev/null | tail -c 150000 > screenshots/device-log.txt || true
-    # Location tour (quality24): the app teleports to a new chainage
-    # every ~35 s of wall time (first at ~25 s) and appends a
-    # "TOUR spot=<i>" line to Documents/demo-drive-log.txt on each
-    # teleport. Teleporting is not the same as being photographable:
-    # the world rebuilds asynchronously around the train, and in
-    # CI #221 fixed post-teleport waits still produced photos of the
-    # wrong places (two spots missing entirely, two shots the same
-    # frame). So the app now appends a "READY spot=<i> pos=<m>" line
-    # once the rebuilt scene has actually settled around the train
-    # (simulation time at least 2 s past the teleport, train within
-    # 5 m of the spot), and each shot below waits for ITS spot's
-    # READY line specifically — grep on the spot index, not a line
-    # count, which is also why a skipped index cannot silently
-    # shift every later photo. After READY, 5 s of settle covers
-    # the remaining frame rendering. Waits are capped per spot
-    # (240 s) and overall (1,500 s) so a stalled app cannot hang
-    # the job; if a READY never comes, the shot is taken anyway
-    # with a warning and later waits drop to the bare settle; if
-    # the log never appears at all, the loop falls back to fixed
-    # 35 s steps.
+    # Location tour (quality25): a two-way handshake. The app
+    # teleports to a spot, appends "READY spot=<i> pos=<m>" to
+    # Documents/demo-drive-log.txt once simulation time is at
+    # least 4 s past the teleport with the train standing at the
+    # spot (model and view share the main runloop, so sim time
+    # advancing means frames at the new location have been
+    # presented), and then HOLDS that spot until the script writes
+    # Documents/tour-ack-<i>.txt — which the script does right
+    # after each screenshot — or 150 s pass. quality24's READY-only
+    # version still drifted (CI #232: 7 of 16 spots at their
+    # labelled positions, three black frames, six duplicates of
+    # one stretch of coast) because the app teleported on its own
+    # 35 s schedule while a loaded simulator took tens of seconds
+    # per simctl screenshot: by the time a capture executed, the
+    # train had moved on. Now the train cannot move on. Each shot
+    # below waits for its spot's READY (per-spot cap 300 s, tour
+    # cap 2,400 s), settles 5 s, shoots, then writes the ACK that
+    # releases the app to the next spot. If a READY never comes,
+    # the shot is taken anyway with a warning (the app times out
+    # and advances on its own; the ACK write below is still
+    # attempted, and later waits drop to the bare settle); if the
+    # log never appears at all, the loop falls back to fixed 35 s
+    # steps and still writes ACKs when the container is known.
     # Spots (tourSpotsM in SimulatorModel.swift, in order): the
     # quality24 showcase photo points P1-P7 first — 100 m departure
     # / 500 m viaduct start / 1,000 m catenary rhythm / 1,300 m
@@ -194,10 +197,10 @@ PYEOF
       if [ -n "$TOUR_LOG" ] && [ "$TOUR_STALLED" -eq 0 ]; then
         WAITED=0
         READY_SEEN=0
-        while [ "$WAITED" -lt 240 ]; do
+        while [ "$WAITED" -lt 300 ]; do
           MAXREADY="$(grep -o 'READY spot=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
           if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$SPOT" ]; then READY_SEEN=1; break; fi
-          if [ $((SECONDS - TOUR_START)) -ge 1500 ]; then break; fi
+          if [ $((SECONDS - TOUR_START)) -ge 2400 ]; then break; fi
           sleep 5
           WAITED=$((WAITED + 5))
         done
@@ -212,6 +215,13 @@ PYEOF
         sleep 35
       fi
       xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$SHOT.png" 2>/dev/null || true
+      # Release the app to the next spot (see the tour comment
+      # above). APP_DATA is the app's data container on this host,
+      # so writing the ACK file here is writing into the app's
+      # Documents, which is exactly where the app polls for it.
+      if [ -n "$APP_DATA" ]; then
+        printf 'ack %s\n' "$SPOT" > "$APP_DATA/Documents/tour-ack-$SPOT.txt" 2>/dev/null || true
+      fi
     done
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     # Cab check: relaunch in the cab view and let the demo drive the
