@@ -9,7 +9,7 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
-      xcode: latest
+      xcode: 26.2
     triggering:
       events:
         - push
@@ -34,7 +34,7 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
-      xcode: latest
+      xcode: 26.2
     scripts:
       - name: Build the app and run the screenshot tour
         script: bash Scripts/ci_run.sh screenshots
