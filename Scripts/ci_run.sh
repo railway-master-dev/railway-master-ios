@@ -127,8 +127,9 @@ PYEOF
     # photography below can poll the demo log the app writes there.
     APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
     # -RMDemoDrive -RMTour: the app teleports the standing train to a
-    # new scenic chainage every ~35 s of frame time (first at ~40 s),
-    # so one launch photographs ten different places along the line.
+    # new scenic chainage every ~35 s of wall time (first at ~25 s),
+    # so one launch photographs sixteen different places along the
+    # line (the showcase section's P1-P7 points, then line-wide).
     xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour
     xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 screenshots/launch-video.mov &
     VIDEO_PID=$!
@@ -147,50 +148,66 @@ PYEOF
     } > screenshots/diagnostics.txt 2>&1 || true
     cp -f ~/Library/Logs/DiagnosticReports/RailwayMasterPhase1* screenshots/ 2>/dev/null || true
     xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 6m --predicate 'process == "RailwayMasterPhase1"' 2>/dev/null | tail -c 150000 > screenshots/device-log.txt || true
-    # Location tour (quality23): the app teleports to a new chainage
-    # every ~35 s of frame time and appends a "TOUR spot=<i>" line to
-    # Documents/demo-drive-log.txt on each teleport. Fixed sleeps from
-    # launch drifted against the variable-length diagnostics above, so
-    # in CI #213 the last five photos were all the same place. Now each
-    # shot waits until the log shows that spot's teleport, then gives
-    # the view 20 s to finish generating before shooting. Waits are
-    # capped per spot (240 s) and overall (1,500 s) so a stalled app
-    # cannot hang the job; if a spot never appears, later waits drop
-    # to the bare 20 s settle, and if the log never appears at all the
-    # loop falls back to fixed 35 s steps.
-    # Spots (curve apexes, quality23): 1,654 m R450 / 3,006 m R467 /
-    # 4,466 m R324 sharpest / 6,522 m R902 / 9,081 m just before the
-    # river bridge / 12,986 m R693 / 17,650 m tunnel portal /
-    # 23,475 m R789 / 45,327 m sea R1326 / 58,557 m sea R845.
+    # Location tour (quality24): the app teleports to a new chainage
+    # every ~35 s of wall time (first at ~25 s) and appends a
+    # "TOUR spot=<i>" line to Documents/demo-drive-log.txt on each
+    # teleport. Teleporting is not the same as being photographable:
+    # the world rebuilds asynchronously around the train, and in
+    # CI #221 fixed post-teleport waits still produced photos of the
+    # wrong places (two spots missing entirely, two shots the same
+    # frame). So the app now appends a "READY spot=<i> pos=<m>" line
+    # once the rebuilt scene has actually settled around the train
+    # (simulation time at least 2 s past the teleport, train within
+    # 5 m of the spot), and each shot below waits for ITS spot's
+    # READY line specifically — grep on the spot index, not a line
+    # count, which is also why a skipped index cannot silently
+    # shift every later photo. After READY, 5 s of settle covers
+    # the remaining frame rendering. Waits are capped per spot
+    # (240 s) and overall (1,500 s) so a stalled app cannot hang
+    # the job; if a READY never comes, the shot is taken anyway
+    # with a warning and later waits drop to the bare settle; if
+    # the log never appears at all, the loop falls back to fixed
+    # 35 s steps.
+    # Spots (tourSpotsM in SimulatorModel.swift, in order): the
+    # quality24 showcase photo points P1-P7 first — 100 m departure
+    # / 500 m viaduct start / 1,000 m catenary rhythm / 1,300 m
+    # transition curve / 1,654 m curve apex R450 / 1,800 m station
+    # approach / 1,856 m stop position — then the line-wide tour:
+    # 3,006 m R467 / 4,466 m R324 sharpest / 6,522 m R902 /
+    # 9,081 m just before the river bridge / 12,986 m R693 /
+    # 17,650 m tunnel portal / 23,475 m R789 / 45,327 m sea R1326 /
+    # 58,557 m sea R845.
     TOUR_LOG=""
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
       TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
     fi
-    TOUR_SHOTS="04-tour-01-urban-core 05-tour-02-fringe 06-tour-03-suburb-poles 07-tour-04-river-bridge 08-tour-05-suburb 09-tour-06-tunnel-portal 10-tour-07-station 11-tour-08-fields 12-tour-09-sea 13-tour-10-sea-terminus"
+    TOUR_SHOTS="04-tour-p1-departure 05-tour-p2-viaduct-start 06-tour-p3-catenary-rhythm 07-tour-p4-transition 08-tour-p5-apex 09-tour-p6-station-approach 10-tour-p7-stop-position 11-tour-3006-curve 12-tour-4466-sharpest 13-tour-6522 14-tour-9081-river-bridge 15-tour-12986 16-tour-17650-tunnel-portal 17-tour-23475 18-tour-45327-sea 19-tour-58557-sea"
     TOUR_START=$SECONDS
     TOUR_STALLED=0
     TOUR_INDEX=0
     for SHOT in $TOUR_SHOTS; do
+      SPOT=$TOUR_INDEX
       TOUR_INDEX=$((TOUR_INDEX + 1))
+      if [ -z "$TOUR_LOG" ] && [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
+        TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
+      fi
       if [ -n "$TOUR_LOG" ] && [ "$TOUR_STALLED" -eq 0 ]; then
         WAITED=0
+        READY_SEEN=0
         while [ "$WAITED" -lt 240 ]; do
-          COUNT="$(grep -c 'TOUR spot=' "$TOUR_LOG" 2>/dev/null || true)"
-          COUNT="${COUNT:-0}"
-          if [ "$COUNT" -ge "$TOUR_INDEX" ]; then break; fi
+          MAXREADY="$(grep -o 'READY spot=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
+          if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$SPOT" ]; then READY_SEEN=1; break; fi
           if [ $((SECONDS - TOUR_START)) -ge 1500 ]; then break; fi
           sleep 5
           WAITED=$((WAITED + 5))
         done
-        COUNT="$(grep -c 'TOUR spot=' "$TOUR_LOG" 2>/dev/null || true)"
-        COUNT="${COUNT:-0}"
-        if [ "$COUNT" -lt "$TOUR_INDEX" ]; then
-          echo "Tour spot $TOUR_INDEX never appeared in the demo log; shooting anyway and shortening later waits."
+        if [ "$READY_SEEN" -eq 0 ]; then
+          echo "READY for tour spot $SPOT never appeared in the demo log; shooting anyway and shortening later waits."
           TOUR_STALLED=1
         fi
-        sleep 20
+        sleep 5
       elif [ "$TOUR_STALLED" -eq 1 ]; then
-        sleep 20
+        sleep 5
       else
         sleep 35
       fi
@@ -198,17 +215,42 @@ PYEOF
     done
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     # Cab check: relaunch in the cab view and let the demo drive the
-    # showcase section (origin to Matsubaramachi) so the rebuilt cab
-    # is photographed standing at the station and running.
+    # showcase section (origin to Matsubaracho, 1,856 m) so the
+    # rebuilt cab is photographed running and standing at the
+    # station. CI #221's fixed 195 s window left the drive at
+    # pos 335 m — it never got near the station, and the station
+    # stop-margin question stayed unverifiable. Now the arrival
+    # shot waits until the cab log (demo-drive-log-cab.txt) reports
+    # pos >= 1,850, capped at 900 s so the job keeps a total
+    # budget; if it never arrives, the shot is taken anyway with a
+    # warning and the log copied below shows how far it got.
     sleep 3
     xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMCabView
-    # CI #199: 55 s left the cab shot black (scene still loading on the
-    # simulator); wait 90 s so the cab has rendered, accepting that the
-    # train has just departed by then.
+    # CI #199: 55 s left the cab shot black (scene still loading on
+    # the simulator); wait 90 s so the cab has rendered and the
+    # train is under way.
     sleep 90
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/15-cab-station.png 2>/dev/null || true
-    sleep 105
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/16-cab-running.png 2>/dev/null || true
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/20-cab-running.png 2>/dev/null || true
+    CAB_LOG=""
+    if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log-cab.txt" ]; then
+      CAB_LOG="$APP_DATA/Documents/demo-drive-log-cab.txt"
+    fi
+    CAB_WAITED=0
+    CAB_ARRIVED=0
+    while [ "$CAB_WAITED" -lt 900 ]; do
+      if [ -n "$CAB_LOG" ]; then
+        CAB_POS="$(grep -o ' pos=[0-9.]*' "$CAB_LOG" 2>/dev/null | tail -1 | grep -o '[0-9.]*$')"
+        CAB_POS_INT="${CAB_POS%.*}"
+        if [ -n "$CAB_POS_INT" ] && [ "$CAB_POS_INT" -ge 1850 ]; then CAB_ARRIVED=1; break; fi
+      fi
+      sleep 10
+      CAB_WAITED=$((CAB_WAITED + 10))
+    done
+    if [ "$CAB_ARRIVED" -eq 0 ]; then
+      echo "Cab drive did not reach Matsubaracho (pos >= 1850) within 900 s; shooting anyway."
+    fi
+    sleep 5
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/21-cab-station.png 2>/dev/null || true
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     # Demo-drive state log (the app writes it in -RMDemoDrive mode).
     APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
@@ -220,7 +262,7 @@ PYEOF
       cp "$APP_DATA/Documents/demo-drive-log-cab.txt" screenshots/ || true
     fi
     sleep 3
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/14-home.png 2>/dev/null || true
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/22-home.png 2>/dev/null || true
     ls -la screenshots/
     ;;
   packages)
