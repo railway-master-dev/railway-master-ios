@@ -958,7 +958,7 @@ public enum RailwaySceneFidelityBuilder {
                 }
             case .cutting:
                 appendChunkedLandmark(landmark, to: &composer, role: .cuttingWall, radius: 12,
-                    label: "SYNTHETIC CUTTING — FICTIONAL RETAINING WALLS, NOT A MEASURED EARTHWORK"
+                    label: "SYNTHETIC CUTTING — FICTIONAL GRASS BANK, NOT A MEASURED EARTHWORK"
                 ) { assembly, chunk in
                     appendCuttingPieces(to: &assembly, detailLevel: detailLevel, frame: chunk.frame, length: chunk.length)
                 }
@@ -1091,15 +1091,26 @@ public enum RailwaySceneFidelityBuilder {
         frame: SceneRouteFrame,
         length: Double
     ) {
+        // quality24 (foundation A3): the sheer 5.7 m concrete
+        // retaining walls are gone. The landmark schedule places
+        // cuttings on a fixed 1,600 m cycle with no reference to
+        // the actual terrain, so on flat or coastal ground the
+        // walls stood alone as giant blank boards (CI #221 photo
+        // 11, at 45,310 m on the open coast). A cutting whose
+        // surrounding ground is not modelled as raised gets a low
+        // grass bank instead — the mirror of the embankment slope
+        // below (opposite roll, centred just above rail level) —
+        // which reads as an ordinary grassy shoulder anywhere.
+        // The drainage channel stays: it belongs at the slope toe
+        // in both forms. The assembly role stays .cuttingWall for
+        // test/plan compatibility; only the geometry changed.
         let span = max(length, 0.5)
         for side in [-1.0, 1.0] {
-            assembly.addAt("retaining-wall-\(Int(side))", routeFrame: frame,
-                           lateralM: side * 5.35, verticalM: 2.55,
-                           size: SceneVector3(0.7, 5.7, span + 0.04), material: .concrete)
-            assembly.addAt("wall-coping-\(Int(side))", routeFrame: frame,
-                           lateralM: side * 5.35, verticalM: 5.48,
-                           size: SceneVector3(0.95, 0.16, span), material: .grassSlope,
-                           minimumLOD: .medium)
+            assembly.addAt("grass-bank-\(Int(side))", routeFrame: frame,
+                           lateralM: side * 6.8, verticalM: 0.35,
+                           size: SceneVector3(6.5, 0.42, span + 0.04),
+                           rotation: SceneVector3(0, 0, side > 0 ? 0.48 : -0.48),
+                           material: .grassSlope)
             if detailLevel >= 1 {
                 assembly.addAt("drainage-\(Int(side))", routeFrame: frame,
                                lateralM: side * 3.15, verticalM: -0.36,
