@@ -123,6 +123,9 @@ PYEOF
     xcrun simctl boot "$SIMULATOR_UDID" || true
     xcrun simctl bootstatus "$SIMULATOR_UDID" -b
     xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+    # Resolve the app data container now (before launch) so the tour
+    # photography below can poll the demo log the app writes there.
+    APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
     # -RMDemoDrive -RMTour: the app teleports the standing train to a
     # new scenic chainage every ~35 s of frame time (first at ~40 s),
     # so one launch photographs ten different places along the line.
@@ -144,32 +147,55 @@ PYEOF
     } > screenshots/diagnostics.txt 2>&1 || true
     cp -f ~/Library/Logs/DiagnosticReports/RailwayMasterPhase1* screenshots/ 2>/dev/null || true
     xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 6m --predicate 'process == "RailwayMasterPhase1"' 2>/dev/null | tail -c 150000 > screenshots/device-log.txt || true
-    # Location tour (teleports at frame-time ~40 s + 35 s steps; the
-    # sleeps below land ~20 s after each teleport so the view has
-    # settled): 500 m urban core, 5.5 km fringe, 7.5 km suburb with
-    # the new poles, 9.7 km river bridge, 13.5 km suburb, 17.65 km
-    # tunnel portal, 24.1 km Kannyoshi station, 33 km fields,
-    # 45.5 km and 56.5 km along the sea.
-    sleep 31
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/04-tour-01-urban-core.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/05-tour-02-fringe.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/06-tour-03-suburb-poles.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/07-tour-04-river-bridge.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/08-tour-05-suburb.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/09-tour-06-tunnel-portal.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/10-tour-07-station.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/11-tour-08-fields.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/12-tour-09-sea.png 2>/dev/null || true
-    sleep 35
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/13-tour-10-sea-terminus.png 2>/dev/null || true
+    # Location tour (quality23): the app teleports to a new chainage
+    # every ~35 s of frame time and appends a "TOUR spot=<i>" line to
+    # Documents/demo-drive-log.txt on each teleport. Fixed sleeps from
+    # launch drifted against the variable-length diagnostics above, so
+    # in CI #213 the last five photos were all the same place. Now each
+    # shot waits until the log shows that spot's teleport, then gives
+    # the view 20 s to finish generating before shooting. Waits are
+    # capped per spot (240 s) and overall (1,500 s) so a stalled app
+    # cannot hang the job; if a spot never appears, later waits drop
+    # to the bare 20 s settle, and if the log never appears at all the
+    # loop falls back to fixed 35 s steps.
+    # Spots (curve apexes, quality23): 1,654 m R450 / 3,006 m R467 /
+    # 4,466 m R324 sharpest / 6,522 m R902 / 9,081 m just before the
+    # river bridge / 12,986 m R693 / 17,650 m tunnel portal /
+    # 23,475 m R789 / 45,327 m sea R1326 / 58,557 m sea R845.
+    TOUR_LOG=""
+    if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
+      TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
+    fi
+    TOUR_SHOTS="04-tour-01-urban-core 05-tour-02-fringe 06-tour-03-suburb-poles 07-tour-04-river-bridge 08-tour-05-suburb 09-tour-06-tunnel-portal 10-tour-07-station 11-tour-08-fields 12-tour-09-sea 13-tour-10-sea-terminus"
+    TOUR_START=$SECONDS
+    TOUR_STALLED=0
+    TOUR_INDEX=0
+    for SHOT in $TOUR_SHOTS; do
+      TOUR_INDEX=$((TOUR_INDEX + 1))
+      if [ -n "$TOUR_LOG" ] && [ "$TOUR_STALLED" -eq 0 ]; then
+        WAITED=0
+        while [ "$WAITED" -lt 240 ]; do
+          COUNT="$(grep -c 'TOUR spot=' "$TOUR_LOG" 2>/dev/null || true)"
+          COUNT="${COUNT:-0}"
+          if [ "$COUNT" -ge "$TOUR_INDEX" ]; then break; fi
+          if [ $((SECONDS - TOUR_START)) -ge 1500 ]; then break; fi
+          sleep 5
+          WAITED=$((WAITED + 5))
+        done
+        COUNT="$(grep -c 'TOUR spot=' "$TOUR_LOG" 2>/dev/null || true)"
+        COUNT="${COUNT:-0}"
+        if [ "$COUNT" -lt "$TOUR_INDEX" ]; then
+          echo "Tour spot $TOUR_INDEX never appeared in the demo log; shooting anyway and shortening later waits."
+          TOUR_STALLED=1
+        fi
+        sleep 20
+      elif [ "$TOUR_STALLED" -eq 1 ]; then
+        sleep 20
+      else
+        sleep 35
+      fi
+      xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$SHOT.png" 2>/dev/null || true
+    done
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     # Cab check: relaunch in the cab view and let the demo drive the
     # showcase section (origin to Matsubaramachi) so the rebuilt cab
