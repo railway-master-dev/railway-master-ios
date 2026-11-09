@@ -1317,6 +1317,14 @@ final class SimulatorModel: ObservableObject {
             }
         }
         guard let handle = demoLogHandle else { return }
+        // quality24 READY handshake (see tourReadyPendingIndex).
+        if tourEnabled, tourReadyPendingIndex >= 0,
+           simulationTime >= tourTeleportSimTime + 2,
+           abs(engine.positionM - Self.tourSpotsM[tourReadyPendingIndex]) < 5 {
+            let line = "READY spot=\(tourReadyPendingIndex) pos=\(Int(engine.positionM))\n"
+            if let data = line.data(using: .utf8) { handle.write(data) }
+            tourReadyPendingIndex = -1
+        }
         let nextPos = activeStops.indices.contains(nextStopIndex) ? activeStops[nextStopIndex].positionM : -1
         let line = String(format: "t=%.0f wall=%.0f pos=%.1f spd=%.2f drv=%d/%d app=%d/%d prot=%@ auto=%d reason=%@ perm=%.1f nidx=%d npos=%.0f door=%@ phase=%@ stuck=%.0f creep=%.0f bc=%.0f dwell=%.1f\n",
                           simulationTime, wall, engine.positionM, engine.speedMps * 3.6,
@@ -1339,9 +1347,24 @@ final class SimulatorModel: ObservableObject {
     // 4,466 R324 (sharpest) / 6,522 R902 / 9,081 R1076 just before
     // the river bridge / 12,986 R693 / 17,650 tunnel portal (kept) /
     // 23,475 R789 / 45,327 R1326 sea / 58,557 R845 sea.
-    private static let tourSpotsM: [Double] = [1_654, 3_006, 4_466, 6_522, 9_081, 12_986, 17_650, 23_475, 45_327, 58_557]
+    // quality24: the seven showcase verification spots (spec P1-P7:
+    // 100 / 500 / 1,000 / 1,300 / 1,654 apex / 1,800 / 1,856 stop
+    // position) lead the list, ascending, ahead of the same ten
+    // line-wide spots; the screenshot script maps indices to file
+    // names, so this order is part of that contract.
+    private static let tourSpotsM: [Double] = [100, 500, 1_000, 1_300, 1_654, 1_800, 1_856, 3_006, 4_466, 6_522, 9_081, 12_986, 17_650, 23_475, 45_327, 58_557]
     private var tourSpotIndex = -1
     private var firstTourWallTime: TimeInterval = -1
+    // quality24: after a teleport, the world rebuild can outlast the
+    // screenshot script's old fixed wait, so captures drifted a spot
+    // behind (CI #221: spots 3,006 and 9,081 never photographed).
+    // The model knows when it is back: once simulation time has
+    // advanced 2 s past the teleport with the train at the spot,
+    // frames at the new location have been presented (model and
+    // view share the main runloop), so it writes a READY line and
+    // the script photographs on READY instead of on a timer.
+    private var tourReadyPendingIndex = -1
+    private var tourTeleportSimTime = 0.0
 
     private func driveTourIfEnabled() {
         // CI #199: the tour ran on the frame timer's dates, but that
@@ -1362,6 +1385,8 @@ final class SimulatorModel: ObservableObject {
                 tourSpotIndex = targetIndex
                 teleportForTour(to: Self.tourSpotsM[targetIndex])
                 logTourTeleport(to: Self.tourSpotsM[targetIndex], spotIndex: targetIndex)
+                tourReadyPendingIndex = targetIndex
+                tourTeleportSimTime = simulationTime
             }
         }
         // Hold the train still for the photograph.
