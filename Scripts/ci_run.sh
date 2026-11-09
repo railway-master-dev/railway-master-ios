@@ -34,6 +34,13 @@ case "$mode" in
     swift --version
     xcrun simctl list runtimes
     SIMULATOR_UDID="$(pick_simulator)" || exit 1
+    # quality27: on Codemagic's virtual Macs, CoreAudio initialization
+    # deadlocks and the watchdog aborts the app (and with it the test
+    # host) seconds after launch. SIMCTL_CHILD_ propagates this into
+    # every app xcodebuild/simctl starts on the simulator, and the app
+    # then skips building its audio graph entirely (CI runs are silent
+    # anyway). Real-device and local runs are unaffected.
+    export SIMCTL_CHILD_RM_DISABLE_AUDIO=1
     echo "Using simulator UDID: $SIMULATOR_UDID"
     xcodebuild -resolvePackageDependencies \
       -project RailwayMasterPhase1.xcodeproj \
@@ -99,6 +106,9 @@ PYEOF
   screenshots)
     xcodebuild -version
     SIMULATOR_UDID="$(pick_simulator)" || exit 1
+    # quality27: see the build mode — keep the app alive on Codemagic
+    # by disabling its audio graph for this CI run.
+    export SIMCTL_CHILD_RM_DISABLE_AUDIO=1
     echo "Using simulator UDID: $SIMULATOR_UDID"
     xcodebuild -resolvePackageDependencies \
       -project RailwayMasterPhase1.xcodeproj \
@@ -340,6 +350,8 @@ PYEOF
     xcodebuild -version
     swift --version
     SIMULATOR_UDID="$(pick_simulator)" || exit 1
+    # quality27: same CoreAudio safeguard as the build mode.
+    export SIMCTL_CHILD_RM_DISABLE_AUDIO=1
     echo "Using simulator UDID: $SIMULATOR_UDID"
     FAILED=""
     for manifest in Packages/*/Package.swift; do
