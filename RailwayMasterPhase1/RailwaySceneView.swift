@@ -2245,7 +2245,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // hedge runs along the road's outer edge at +/-11.4 m: the
         // first band outside the wall/fence corridor that is not
         // carriageway. One merged batch for the whole section.
-        let shrubBatch = MeshBatchBuilder()
+        var shrubBatch = MeshBatchBuilder()
         var shrubSerial = 0
         for side: Float in [-1, 1] {
             var d = 6.0
@@ -2271,7 +2271,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // stations like the rails do. On the deck (lift >= 2 m) the
         // trough moves inboard to +/-3.85 m: the deck is only 8.4 m
         // wide, so the ground-level offset would float in the air.
-        let troughBatch = MeshBatchBuilder()
+        var troughBatch = MeshBatchBuilder()
         var spanStart = 0.0
         while spanStart < sectionEnd {
             let mid = spanStart + 5.25
@@ -2289,8 +2289,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
         // -- A3: lineside equipment boxes (relay / power) every
         // ~75 m, alternating sides, inboard on the deck.
-        let relayBatch = MeshBatchBuilder()
-        let powerBatch = MeshBatchBuilder()
+        var relayBatch = MeshBatchBuilder()
+        var powerBatch = MeshBatchBuilder()
         var boxChainage = 55.0
         var boxSerial = 0
         while boxChainage < sectionEnd {
@@ -2325,7 +2325,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // elevation -0.49 m, the deck ribbon's height): the deck is
         // only 8.4 m wide, so a fence left at 6.2 m would hang in
         // the air beside it for the whole elevated kilometre.
-        var fenceMaterial = texturedPBR(.white, metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
+        var fenceMaterial = Self.texturedPBR(.white, metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
         fenceMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
         // The texture's alpha is binary (wire or hole), so plain
         // transparent blending already renders the cutout; no
