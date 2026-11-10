@@ -182,22 +182,15 @@ PYEOF
     # log never appears at all, the loop falls back to fixed 35 s
     # steps and still writes ACKs when the container is known.
     # Spots (tourSpotsM in SimulatorModel.swift, in order): the
-    # quality24 showcase photo points P1-P7 first — 100 m departure
-    # / 500 m viaduct start / 1,000 m catenary rhythm / 1,300 m
-    # transition curve / 1,654 m curve apex R450 / 1,800 m station
-    # approach / 1,856 m stop position — then the line-wide tour:
-    # 17,560 m level-crossing candidate, suburb (quality39) /
-    # 4,466 m R324 sharpest / 7,850 m Sakuradai house wave
-    # (quality39) / 6,522 m R902 / 35,050 m Sahara throat-fan
-    # middle (quality38) / 38,900 m level-crossing candidate,
-    # rural (quality39) / 23,980 m Chihara throat fan
-    # (quality38) / 45,327 m sea R1326 / 59,955 m Kamogawa
-    # junction and buffers (quality38).
+    # quality40 station survey: all 32 stations in route order,
+    # each shot 20 m before the station centre (S01 Kaibukuro at
+    # 5 m — the line starts there). Mainline centres 0-60,000 m,
+    # then the branch in through-frame chainages 62,000-68,000 m.
     TOUR_LOG=""
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
       TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
     fi
-    TOUR_SHOTS="04-tour-p1-departure 05-tour-p2-viaduct-start 06-tour-p3-catenary-rhythm 07-tour-p4-transition 08-tour-p5-apex 09-tour-p6-station-approach 10-tour-p7-stop-position 11-tour-17560-crossing-suburb 12-tour-4466-sharpest 13-tour-7850-sakuradai-houses 14-tour-6522 15-tour-35050-sahara-fan-mid 16-tour-38900-crossing-rural 17-tour-23980-chihara-fan 18-tour-45327-sea 19-tour-59955-kamogawa-junction"
+    TOUR_SHOTS="04-st01-kaibukuro 05-st02-asanuma 06-st03-oginuma 07-st04-ohara 08-st05-ishigamiike 09-st06-hibarigaoka 10-st07-akimizu 11-st08-wakakusadai 12-st09-higashimurakawa 13-st10-nishitachikawa 14-st11-hihara 15-st12-tououchihara 16-st13-makufu 17-st14-tsudaike 18-st15-mikkaido 19-st16-misagi 20-st17-touousahara 21-st18-shigeno 22-st19-kazusaninomiya 23-st20-togane 24-st21-katsunuma 25-st22-kisaragawa 26-st23-namihana 27-st24-ohno 28-st25-mihama 29-st26-tatekawa 30-st27-chikura 31-st28-kamogawa 32-st29-kuruno 33-st30-ohbitsu 34-st31-hirayama 35-st32-kazusaryuzan 36-crossing-17965 37-crossing-3605"
     TOUR_START=$SECONDS
     TOUR_STALLED=0
     TOUR_INDEX=0
