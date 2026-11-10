@@ -5,6 +5,8 @@ enum RegionalRouteVariant: String, CaseIterable, Identifiable, Sendable {
     case throughBranch
     case branchShuttle
     case depotTransfer
+    case zooLine
+    case parkLine
 
     var id: String { rawValue }
     var title: String {
@@ -13,6 +15,8 @@ enum RegionalRouteVariant: String, CaseIterable, Identifiable, Sendable {
         case .throughBranch: return "本線・支線直通"
         case .branchShuttle: return "支線区間"
         case .depotTransfer: return "車庫引込線"
+        case .zooLine: return "動物園線"
+        case .parkLine: return "テーマパーク線"
         }
     }
 
@@ -22,6 +26,8 @@ enum RegionalRouteVariant: String, CaseIterable, Identifiable, Sendable {
         case .throughBranch: return "68 km"
         case .branchShuttle: return "8 km"
         case .depotTransfer: return "2 km"
+        case .zooLine: return "2.5 km"
+        case .parkLine: return "2 km"
         }
     }
 }
@@ -66,7 +72,7 @@ enum RegionalRouteFactoryError: Error, Equatable {
 /// Converts the validated, fictional 60 + 8 + 2 km operations plan into driveable linear paths.
 /// The line geometry generated here is explicitly placeholder gameplay data, not survey data.
 private struct GeneratedAlignmentRegion {
-    enum Kind: Equatable { case mainline, branch, depot }
+    enum Kind: Equatable { case mainline, branch, depot, zoo, park }
     let kind: Kind
     let offsetM: Double
     let lengthM: Double
@@ -207,6 +213,15 @@ enum RegionalRouteFactory {
         let mainlineLengthM = plan.network.mainlineLengthKm * 1_000
         let branchLengthM = plan.network.branchLengthKm * 1_000
         let depotLengthM = plan.network.depotSpurLengthKm * 1_000
+        // Zoo line (quality42): a short 2.5 km shuttle branching at 大野
+        // (S24, mainline chainage 50.71 km). Its length lives here, not in
+        // the operations plan, so the canonical 60+8+2 network is untouched.
+        let zooLengthM = 2_500.0
+        let zooJunctionStationID = "S24"
+        // Theme park line (quality41): a short 2.0 km shuttle branching
+        // at 館川 (S26, mainline chainage 55.161 km).
+        let parkLengthM = 2_000.0
+        let parkJunctionStationID = "S26"
         let stationByID = Dictionary(plan.stations.map { ($0.stationId, $0) }, uniquingKeysWith: { first, _ in first })
         guard let mainStart = stationByID[plan.network.mainlineTermini.first ?? ""],
               let mainEnd = stationByID[plan.network.mainlineTermini.last ?? ""],
@@ -244,6 +259,14 @@ enum RegionalRouteFactory {
             orderedIDs = [plan.network.depotStationID, "DEPOT_END"]
             routeLengthM = depotLengthM
             title = "\(plan.network.name) 車庫入出庫"
+        case .zooLine:
+            orderedIDs = [zooJunctionStationID, "ZOO_END"]
+            routeLengthM = zooLengthM
+            title = "\(plan.network.name) 動物園線 \(category.displayName)"
+        case .parkLine:
+            orderedIDs = [parkJunctionStationID, "PARK_END"]
+            routeLengthM = parkLengthM
+            title = "\(plan.network.name) テーマパーク線 \(category.displayName)"
         }
 
         let pathIDs = direction == .up ? orderedIDs : Array(orderedIDs.reversed())
@@ -255,6 +278,14 @@ enum RegionalRouteFactory {
             if stationID == "DEPOT_END" {
                 guard variant == .depotTransfer else { throw RegionalRouteFactoryError.invalidStationReference }
                 rawPosition = depotLengthM
+                station = nil
+            } else if stationID == "ZOO_END" {
+                guard variant == .zooLine else { throw RegionalRouteFactoryError.invalidStationReference }
+                rawPosition = zooLengthM
+                station = nil
+            } else if stationID == "PARK_END" {
+                guard variant == .parkLine else { throw RegionalRouteFactoryError.invalidStationReference }
+                rawPosition = parkLengthM
                 station = nil
             } else {
                 guard let item = stationByID[stationID] else { throw RegionalRouteFactoryError.invalidStationReference }
@@ -273,12 +304,16 @@ enum RegionalRouteFactory {
                         : item.chainageKm * 1_000
                 case .depotTransfer:
                     rawPosition = 0
+                case .zooLine:
+                    rawPosition = 0
+                case .parkLine:
+                    rawPosition = 0
                 }
             }
             let position = direction == .up ? rawPosition : routeLengthM - rawPosition
-            let lineID = station?.lineId ?? plan.network.depotSpurID
+            let lineID = station?.lineId ?? (stationID == "ZOO_END" ? "ZOO" : (stationID == "PARK_END" ? "PARK" : plan.network.depotSpurID))
             let trackID = trackIdentifier(lineID: lineID, direction: direction)
-            let name = station?.name ?? "東央車両基地（架空）"
+            let name = station?.name ?? (stationID == "ZOO_END" ? "動物園" : (stationID == "PARK_END" ? "テーマパーク" : "東央車両基地（架空）"))
             if stops.last.map({ position <= $0.positionM }) == true { throw RegionalRouteFactoryError.invalidStopSequence }
             stops.append(RegionalRouteStop(stationID: stationID, name: name, positionM: position, trackID: trackID))
         }
@@ -337,6 +372,8 @@ enum RegionalRouteFactory {
     private static func trackIdentifier(lineID: String, direction: RegionalTravelDirection) -> String {
         if lineID == "BRANCH" { return direction == .up ? "branch-up" : "branch-down" }
         if lineID == "DEPOT_SPUR" { return direction == .up ? "depot-in" : "depot-out" }
+        if lineID == "ZOO" { return direction == .up ? "zoo-up" : "zoo-down" }
+        if lineID == "PARK" { return direction == .up ? "park-up" : "park-down" }
         return direction == .up ? "main-up" : "main-down"
     }
 
@@ -374,6 +411,19 @@ enum RegionalRouteFactory {
                     tangentRange: 160...360, transitionRange: 90...150, circularRange: 220...420,
                     radiusRange: 450...650, cantRange: 35...70,
                     leadingMarginM: 100, trailingMarginM: 100, seedSalt: 0x94D0_49BB_1331_11EB)
+            case .zoo:
+                // Gentle alignment for the zoo shuttle: one early curve
+                // reads as the branch-off from the mainline, then long
+                // easy tangents along the enclosures.
+                return GeneratedAlignmentRegion(kind: kind, offsetM: offsetM, lengthM: lengthM,
+                    tangentRange: 520...1_150, transitionRange: 120...220, circularRange: 480...900,
+                    radiusRange: 700...1_400, cantRange: 40...80,
+                    leadingMarginM: 180, trailingMarginM: 350, seedSalt: 0x5A4F_4F4C_494E_4531)
+            case .park:
+                return GeneratedAlignmentRegion(kind: kind, offsetM: offsetM, lengthM: lengthM,
+                    tangentRange: 480...1_050, transitionRange: 120...220, circularRange: 450...850,
+                    radiusRange: 800...1_600, cantRange: 40...80,
+                    leadingMarginM: 200, trailingMarginM: 300, seedSalt: 0x5041_524B_4C49_4E45)
             }
         }
 
@@ -390,6 +440,10 @@ enum RegionalRouteFactory {
             regions = [region(.branch, offsetM: 0, lengthM: branchLengthM)]
         case .depotTransfer:
             regions = [region(.depot, offsetM: 0, lengthM: depotLengthM)]
+        case .zooLine:
+            regions = [region(.zoo, offsetM: 0, lengthM: lengthM)]
+        case .parkLine:
+            regions = [region(.park, offsetM: 0, lengthM: lengthM)]
         }
 
         func curveRuns(in region: GeneratedAlignmentRegion) -> [GeneratedCurveRun] {
@@ -468,7 +522,17 @@ enum RegionalRouteFactory {
             let nearStation = stations.contains { abs($0.positionM - midpointM) < 720 }
             let baseLimit = [75.0, 90.0, 100.0, 85.0, 110.0, 95.0][localSection % 6]
             let curveLimit = run.map { min(baseLimit, max(40.0, 3.6 * sqrt(max(1, 0.65 * $0.radiusM)))) } ?? baseLimit
-            let speedLimit = nearStation ? min(curveLimit, 55.0) : curveLimit
+            var speedLimit = nearStation ? min(curveLimit, 55.0) : curveLimit
+            if variant == .zooLine {
+                // Zoo line zones (up layout): approach 45, the enclosure
+                // stretch 450-1,900 m is a hard 30 km/h so passengers can
+                // watch the animals, terminal approach 40.
+                let zooCap: Double = midpointM < 450 ? 45 : (midpointM < 1_900 ? 30 : 40)
+                speedLimit = min(speedLimit, zooCap)
+            }
+            if variant == .parkLine {
+                speedLimit = min(speedLimit, 45)
+            }
             // Mainline gradients follow the zone amplitude (city
             // +/-25 permille down to coast/rural +/-5-6), blended at
             // zone boundaries; branch and depot keep the old profile
@@ -477,6 +541,10 @@ enum RegionalRouteFactory {
             if activeRegion?.kind == .mainline {
                 let amplitude = mainlineGradientAmplitude(at: localM)
                 gradient = amplitude * (sin(localM / 1_430 + 0.8) * 0.667 + sin(localM / 6_200 + 2.1) * 0.333)
+            } else if activeRegion?.kind == .zoo {
+                gradient = sin(localM / 1_900 + 0.5) * 1.8
+            } else if activeRegion?.kind == .park {
+                gradient = sin(localM / 1_700 + 0.9) * 1.6
             } else {
                 gradient = sin(localM / 1_430 + 0.8) * 4.2 + sin(localM / 6_200 + 2.1) * 2.1
             }
