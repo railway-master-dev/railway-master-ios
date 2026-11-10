@@ -1358,7 +1358,10 @@ final class SimulatorModel: ObservableObject {
     // position) lead the list, ascending, ahead of the same ten
     // line-wide spots; the screenshot script maps indices to file
     // names, so this order is part of that contract.
-    private static let tourSpotsM: [Double] = [100, 500, 1_000, 1_300, 1_654, 1_800, 1_856, 17_560, 4_466, 7_850, 6_522, 35_050, 38_900, 23_980, 45_327, 59_955]
+    // quality40: station survey — every one of the 32 stations,
+    // shot from 20 m before its centre (the user's choice), so the
+    // platform faces, canopies and station cores fill the frame.
+    private static let tourSpotsM: [Double] = [5, 1_819, 3_851, 5_980, 8_206, 10_335, 12_367, 14_593, 16_915, 19_141, 21_270, 24_174, 26_303, 28_432, 30_657, 32_883, 35_109, 37_335, 39_561, 41_786, 44_012, 46_238, 48_464, 50_690, 52_915, 55_141, 57_367, 59_980, 61_980, 63_980, 65_980, 67_980, 17_905, 3_545]
     private var tourSpotIndex = -1
     private var firstTourWallTime: TimeInterval = -1
     // quality24: after a teleport, the world rebuild can outlast the
