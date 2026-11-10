@@ -349,9 +349,9 @@ public struct RailwayRouteProfile: Codable, Equatable, Sendable {
 
     /// Full-length fictional baseline used only if the canonical JSON route cannot be loaded.
     public static let fictionalMainlineFallback = RailwayRouteProfile(
-        lineName: "環雲本線（架空PLACEHOLDER）",
-        departureStation: "環雲中央",
-        arrivalStation: "東浜",
+        lineName: "東央本線（架空PLACEHOLDER）",
+        departureStation: "海袋",
+        arrivalStation: "鴨河",
         distanceM: 60_000,
         stopMarkerM: 60_000,
         sections: [
