@@ -62,10 +62,28 @@ public struct BlockOccupant: Codable, Equatable, Sendable {
     fileprivate var rearPositionM: Double { max(0, frontPositionM - trainLengthM) }
 }
 
+/// TOO RAILWAY signal aspects (the historical type name is kept for
+/// save compatibility; the set grew from three to five in quality41
+/// on the user's confirmed table: 進行 = unrestricted, 減速 = 75,
+/// 注意 = 55, 警戒 = 25, 停止 = 0 km/h).
 public enum ThreeAspectSignal: String, Codable, CaseIterable, Sendable {
     case red
+    case doubleYellow
     case yellow
+    case yellowGreen
     case green
+
+    /// The speed cap this aspect imposes, or nil for 進行
+    /// (no restriction beyond the route's own limits).
+    public var speedLimitKmh: Double? {
+        switch self {
+        case .green: return nil
+        case .yellowGreen: return 75
+        case .yellow: return 55
+        case .doubleYellow: return 25
+        case .red: return 0
+        }
+    }
 }
 
 public struct BlockSignalReading: Codable, Equatable, Sendable {
@@ -76,8 +94,8 @@ public struct BlockSignalReading: Codable, Equatable, Sendable {
     public let label: OperationsSystemLabel
 }
 
-/// 先頭・最後尾のキロ程とブロック重複に基づく教材用の3現示。
-/// 対象ブロック占有=赤、次ブロック占有=黄、それ以外=緑。
+/// 先頭・最後尾のキロ程とブロック重複に基づく教材用の5現示。
+/// 占有までのブロック数で 停止・警戒・注意・減速・進行 を出す。
 public struct ThreeAspectBlockSystem: Codable, Equatable, Sendable {
     public let blocks: [RailwayBlock]
     public let label: OperationsSystemLabel
@@ -111,20 +129,34 @@ public struct ThreeAspectBlockSystem: Codable, Equatable, Sendable {
         }.map(\.identifier))
     }
 
-    /// `blockID` は信号が守るブロック。黄色は直後のブロックが占有中を示します。
+    /// `blockID` は信号が守るブロック。現示は占有ブロックまでの
+    /// ブロック数で決まる（0=停止、1=警戒、2=注意、3=減速、4以上=進行）。
     public func reading(for blockID: String, occupants: [BlockOccupant]) -> BlockSignalReading? {
         guard let index = blocks.firstIndex(where: { $0.identifier == blockID }) else { return nil }
         let occupied = occupiedBlockIDs(by: occupants)
         let block = blocks[index]
+        // Walk the chain of successive blocks on the same track and
+        // count how many blocks ahead the first occupied one sits.
+        var blocksToOccupied: Int? = occupied.contains(block.identifier) ? 0 : nil
+        var cursor = block
+        var steps = 0
+        while blocksToOccupied == nil && steps < 4 {
+            guard let nextBlock = blocks.filter({
+                $0.trackID == cursor.trackID && $0.startM >= cursor.endM - 0.001
+            }).min(by: { $0.startM < $1.startM }) else { break }
+            steps += 1
+            if occupied.contains(nextBlock.identifier) {
+                blocksToOccupied = steps
+            }
+            cursor = nextBlock
+        }
         let aspect: ThreeAspectSignal
-        if occupied.contains(block.identifier) {
-            aspect = .red
-        } else if let nextBlock = blocks.first(where: {
-            $0.trackID == block.trackID && $0.startM >= block.endM - 0.001
-        }), occupied.contains(nextBlock.identifier) {
-            aspect = .yellow
-        } else {
-            aspect = .green
+        switch blocksToOccupied {
+        case .some(0): aspect = .red
+        case .some(1): aspect = .doubleYellow
+        case .some(2): aspect = .yellow
+        case .some(3): aspect = .yellowGreen
+        default: aspect = .green
         }
         return BlockSignalReading(blockID: block.identifier, aspect: aspect, blockStartM: block.startM, label: .fictionalEducational)
     }
