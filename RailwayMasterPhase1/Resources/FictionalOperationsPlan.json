@@ -3,7 +3,7 @@
   "disclaimer": "架空の地域ネットワーク・運行計画PLACEHOLDERです。全距離・駅名・設備・ダイヤはゲーム設計用の仮値で、実路線・実運行会社・実保安装置を表しません。ネットワーク正本は本線60 km＋支線8 km＋車庫引込線2 km＝計70 kmです。旅客列車の支線経由距離は68 kmで、車庫線を旅客距離へ加算しません。実運行・安全判断には使用できません。",
   "network": {
     "identifier": "fictional_regional_network_60_8_2_v2",
-    "name": "環雲地域ネットワーク（本線60 km＋支線8 km＋車庫線2 km・架空）",
+    "name": "東央電鉄ネットワーク（本線60 km＋支線8 km＋車庫線2 km・架空）",
     "dataStatus": "PLACEHOLDER",
     "totalRouteLengthKm": 70.0,
     "mainlineLengthKm": 60.0,
@@ -25,224 +25,224 @@
   "stations": [
     {
       "stationId": "S01",
-      "name": "環雲中央",
+      "name": "海袋",
       "lineId": "MAIN",
       "chainageKm": 0.0,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S02",
-      "name": "松原町",
+      "name": "阿佐沼",
       "lineId": "MAIN",
       "chainageKm": 1.839,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S03",
-      "name": "川端町",
+      "name": "荻沼",
       "lineId": "MAIN",
       "chainageKm": 3.871,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S04",
-      "name": "新田",
+      "name": "小原",
       "lineId": "MAIN",
       "chainageKm": 6.0,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S05",
-      "name": "桜台",
+      "name": "石神池",
       "lineId": "MAIN",
       "chainageKm": 8.226,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S06",
-      "name": "港南町",
+      "name": "ひばりヶ岡",
       "lineId": "MAIN",
       "chainageKm": 10.355,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S07",
-      "name": "東野",
+      "name": "秋水",
       "lineId": "MAIN",
       "chainageKm": 12.387,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S08",
-      "name": "若葉台",
+      "name": "若草台",
       "lineId": "MAIN",
       "chainageKm": 14.613,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S09",
-      "name": "北原",
+      "name": "東村川",
       "lineId": "MAIN",
       "chainageKm": 16.935,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S10",
-      "name": "高砂町",
+      "name": "西立河",
       "lineId": "MAIN",
       "chainageKm": 19.161,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S11",
-      "name": "山手町",
+      "name": "日原",
       "lineId": "MAIN",
       "chainageKm": 21.29,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S12",
-      "name": "環雲市",
+      "name": "東央千原",
       "lineId": "MAIN",
       "chainageKm": 24.194,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S13",
-      "name": "南町",
+      "name": "幕布",
       "lineId": "MAIN",
       "chainageKm": 26.323,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S14",
-      "name": "旭ヶ丘",
+      "name": "津田池",
       "lineId": "MAIN",
       "chainageKm": 28.452,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S15",
-      "name": "西原町",
+      "name": "三街道",
       "lineId": "MAIN",
       "chainageKm": 30.677,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S16",
-      "name": "緑町",
+      "name": "三鷲",
       "lineId": "MAIN",
       "chainageKm": 32.903,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S17",
-      "name": "桜川",
+      "name": "東央佐原",
       "lineId": "MAIN",
       "chainageKm": 35.129,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S18",
-      "name": "大森町",
+      "name": "茂野",
       "lineId": "MAIN",
       "chainageKm": 37.355,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S19",
-      "name": "海岸通",
+      "name": "上総二ノ宮",
       "lineId": "MAIN",
       "chainageKm": 39.581,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S20",
-      "name": "清水町",
+      "name": "東銀",
       "lineId": "MAIN",
       "chainageKm": 41.806,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S21",
-      "name": "中央市場前",
+      "name": "勝沼",
       "lineId": "MAIN",
       "chainageKm": 44.032,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S22",
-      "name": "千代田町",
+      "name": "木更川",
       "lineId": "MAIN",
       "chainageKm": 46.258,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S23",
-      "name": "岩倉町",
+      "name": "波花",
       "lineId": "MAIN",
       "chainageKm": 48.484,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S24",
-      "name": "川西町",
+      "name": "大野",
       "lineId": "MAIN",
       "chainageKm": 50.71,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S25",
-      "name": "白浜町",
+      "name": "御浜",
       "lineId": "MAIN",
       "chainageKm": 52.935,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S26",
-      "name": "新港町",
+      "name": "館川",
       "lineId": "MAIN",
       "chainageKm": 55.161,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S27",
-      "name": "岬町",
+      "name": "千蔵",
       "lineId": "MAIN",
       "chainageKm": 57.387,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "S28",
-      "name": "東浜",
+      "name": "鴨河",
       "lineId": "MAIN",
       "chainageKm": 60.0,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "B01",
-      "name": "枝川町",
+      "name": "久留野",
       "lineId": "BRANCH",
       "chainageKm": 2.0,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "B02",
-      "name": "深沢",
+      "name": "大櫃",
       "lineId": "BRANCH",
       "chainageKm": 4.0,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "B03",
-      "name": "水沢町",
+      "name": "平川",
       "lineId": "BRANCH",
       "chainageKm": 6.0,
       "dataStatus": "PLACEHOLDER"
     },
     {
       "stationId": "B04",
-      "name": "山里",
+      "name": "上総竜山",
       "lineId": "BRANCH",
       "chainageKm": 8.0,
       "dataStatus": "PLACEHOLDER"
