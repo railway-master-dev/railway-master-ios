@@ -341,6 +341,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var camera = PerspectiveCamera()
     private var sunlight = DirectionalLight()
     private var fillLight = PointLight()
+    private var skyDome: ModelEntity?
     private lazy var renderingCoordinator = RailwayRenderingCoordinator(applier: self)
     private var didBuild = false
     private var routeSignature = ""
@@ -504,6 +505,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         roadCarEntities.removeAll()
         platformPeople.removeAll()
         signalLampHeads.removeAll()
+        skyDome = nil
         dynamicSignalDistance = nil
         dynamicSignalAspect = nil
         aiTrainEntities.removeAll()
@@ -612,6 +614,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         fillLight.light.color = UIColor(red: 0.70, green: 0.79, blue: 0.88, alpha: 1)
         fillLight.position = SIMD3<Float>(0, 16, -30)
         root.addChild(fillLight)
+
+        // quality37: photographic sky dome (photo from BEIZ images,
+        // whose terms allow commercial use in apps without credit),
+        // replacing the flat colour sky — the single biggest
+        // "game look" surface in the frame. The dome follows the
+        // camera in update(), so the horizon stays at eye level
+        // anywhere on the line; if the texture is missing the flat
+        // palette colour remains as the fallback.
+        if let skyTexture = SceneTextureProvider.texture(named: "scenery_sky") {
+            var skyMaterial = UnlitMaterial()
+            skyMaterial.color = .init(tint: .white, texture: .init(skyTexture))
+            skyMaterial.faceCulling = .none
+            skyDome = ModelEntity(mesh: MeshResource.generateSphere(radius: 1_800), materials: [skyMaterial])
+            if let skyDome {
+                root.addChild(skyDome)
+            }
+        }
 
         if quality == .high, sceneFidelityRoute != nil {
             buildSceneFidelityRegion(route: route, chainageM: 0, useLiveCamera: false)
@@ -918,6 +937,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // The fill light follows at cab height (150 m radius).
         sunlight.position = position - simd_normalize(Self.sunTravelDirection) * 120
         fillLight.position = position + SIMD3<Float>(0, 16, 0)
+        skyDome?.position = position
 
         let tint = environment.warmCoolTint
         sunlight.light.intensity = 6_600 * Float(environment.sunLightScale)
@@ -1563,6 +1583,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
 
         buildRailsAndShoulders(trackOffsetsSeen: trackOffsetsSeen, availableOffsets: offsetsFor)
+        buildThroatFans(routeVariant: routeVariant)
+        buildTerminusDivergence(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
         buildTracksideMarkers(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
         // Utility poles are built from prepare() after buildSuburb,
         // so urban poles can avoid the tower footprints.
@@ -1640,32 +1662,49 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // quality25 (B): station zones are excluded too — the
             // wall at ±5.6 m used to run straight through the
             // platform slabs of every station on the line.
-            if sample.distanceM >= nextWallChainage, hasPassingTrack, !corridorReserved(at: sample.distanceM, landmarks: wallLandmarks), !inStationZone(sample.distanceM) {
+            if sample.distanceM >= nextWallChainage, hasPassingTrack, !corridorReserved(at: sample.distanceM, landmarks: wallLandmarks), !inStationZone(sample.distanceM), !nearThroatFan(sample.distanceM) {
                 var spanEnd = index
                 while spanEnd + 1 < samples.count, samples[spanEnd].distanceM - sample.distanceM < 12.75 {
                     spanEnd += 1
                 }
-                let wallSpan = max(Float(samples[spanEnd].distanceM - sample.distanceM), 1)
                 nextWallChainage = sample.distanceM + 12.75
                 let band = urbanBand(distanceM: sample.distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 let wallHeight: Float = band == 2 ? 2.6 : band == 1 ? 2.2 : 1.4
-                // Banked frame, the same convention as the rail
-                // profile (profileStation): xAxis is the canted
-                // lateral, yAxis the canted up. Slabs are appended
-                // to a batch flushed about every 1,200 m instead of
-                // becoming individual entities.
-                let bankCos = cos(sample.bankRadians)
-                let bankSin = sin(sample.bankRadians)
-                let headCos = cos(sample.heading)
-                let headSin = sin(sample.heading)
-                let axisX = SIMD3<Float>(bankCos * headCos, -bankSin, bankCos * headSin)
-                let axisY = SIMD3<Float>(bankSin * headCos, bankCos, bankSin * headSin)
-                let axisZ = simd_cross(axisX, axisY)
-                let base = SIMD3<Float>(sample.x, sample.elevationM, sample.z)
+                // quality37: the slab used to be one level chord per
+                // span, framed on the span-start sample alone — on a
+                // grade the next span started a full step higher
+                // (the sawtooth beside the track in the photos), and
+                // at ±5.6 m on a viaduct it hung in the air beside
+                // the 8.4 m deck. Each span now runs from its start
+                // point to its end point, so neighbours share an
+                // edge and follow the grade; on structures (lift
+                // >= 2 m) the wall stands on the deck edge
+                // (±4.08 m) with its foot at deck level.
+                let endSample = samples[spanEnd]
+                let elevated = sample.elevationM - groundLevelM(at: sample) >= 2
+                let wallLateral: Float = elevated ? 4.08 : 5.6
+                let footDrop: Float = elevated ? 0.49 : 0
+                func wallPoint(_ s: RouteSample, side: Double) -> SIMD3<Float> {
+                    let bc = cos(s.bankRadians)
+                    let bs = sin(s.bankRadians)
+                    let ax = SIMD3<Float>(bc * cos(s.heading), -bs, bc * sin(s.heading))
+                    return SIMD3<Float>(s.x, s.elevationM - footDrop, s.z) + ax * (Float(side) * wallLateral)
+                }
                 for side in [-1.0, 1.0] {
-                    let center = base + axisX * (Float(side) * 5.6) + axisY * (wallHeight / 2)
+                    let p0 = wallPoint(sample, side: side)
+                    let p1 = wallPoint(endSample, side: side)
+                    var axisZ = p1 - p0
+                    let spanLength = max(simd_length(axisZ), 1)
+                    axisZ = axisZ / spanLength
+                    let bc = cos(sample.bankRadians)
+                    let bs = sin(sample.bankRadians)
+                    let rawX = SIMD3<Float>(bc * cos(sample.heading), -bs, bc * sin(sample.heading))
+                    var axisY = simd_cross(rawX, axisZ)
+                    axisY = axisY / max(simd_length(axisY), 0.000001)
+                    let axisX = simd_cross(axisY, axisZ)
+                    let center = (p0 + p1) / 2 + axisY * (wallHeight / 2)
                     wallBatch.addBoxAxes(center: center,
-                                         size: SIMD3<Float>(0.18, wallHeight, wallSpan + 0.3),
+                                         size: SIMD3<Float>(0.18, wallHeight, spanLength + 0.3),
                                          ax: axisX, ay: axisY, az: axisZ)
                     // quality25 (G): in the showcase section the
                     // bare slab gets its real component structure —
@@ -1674,11 +1713,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // the way precast noise-barrier panels bolt to
                     // their H-posts.
                     if sample.distanceM <= 1_856 {
-                        let capCenter = base + axisX * (Float(side) * 5.6) + axisY * (wallHeight + 0.05)
+                        let capCenter = center + axisY * (wallHeight / 2 + 0.05)
                         showcaseWallBatch.addBoxAxes(center: capCenter,
-                                                     size: SIMD3<Float>(0.34, 0.10, wallSpan + 0.3),
+                                                     size: SIMD3<Float>(0.34, 0.10, spanLength + 0.3),
                                                      ax: axisX, ay: axisY, az: axisZ)
-                        let postCenter = center - axisZ * (wallSpan / 2)
+                        let postCenter = center - axisZ * (spanLength / 2)
                         showcaseWallBatch.addBoxAxes(center: postCenter,
                                                      size: SIMD3<Float>(0.30, wallHeight, 0.16),
                                                      ax: axisX, ay: axisY, az: axisZ)
@@ -1704,8 +1743,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// signals with station entry signals.
     private func buildSignals(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
-        let lateral: Float = travelDirection == .up ? -3.7 : 3.7
         let headMaterial = Self.pbr(UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1), metallic: 0.3, roughness: 0.6)
+        let plateMaterial = Self.pbr(.white, roughness: 0.6)
         var targets: [Double] = stride(from: 0.0, to: 60_000.0, by: 1_500.0).map { $0 }
         for placement in stationModelPlacements {
             let center = chainageFromCenter(distanceM: placement.chainageM, route: route, travelDirection: travelDirection)
@@ -1716,6 +1755,22 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var dedupedTargets: [Double] = []
         for target in targets where dedupedTargets.last.map({ target - $0 >= 250 }) ?? true {
             dedupedTargets.append(target)
+        }
+        // quality37: a signal post at ±3.7 m would stand on a throat
+        // fan siding (the siding sweeps from 2.1 m out to 6.3 m), so
+        // targets inside a fan span move just outside it. The fan
+        // spans are kept in the placements' frame; convert to the
+        // centre frame these targets use.
+        let fanSpansCenter: [(start: Double, end: Double)] = throatFanSpans().map { span in
+            let a = chainageFromCenter(distanceM: span.start, route: route, travelDirection: travelDirection)
+            let b = chainageFromCenter(distanceM: span.end, route: route, travelDirection: travelDirection)
+            return (start: min(a, b), end: max(a, b))
+        }
+        dedupedTargets = dedupedTargets.map { target in
+            for span in fanSpansCenter where target > span.start && target < span.end {
+                return target - span.start < span.end - target ? span.start - 12 : span.end + 12
+            }
+            return target
         }
         for target in dedupedTargets {
             var best: RouteSample?
@@ -1729,21 +1784,42 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             guard let sample = best else { continue }
             let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            // quality37: the post used to stand 1.6 m from the
+            // running track's centre — inside the structure gauge
+            // (about 1.9 m), as the user spotted. It now stands
+            // 2.25 m out at ground level; on a viaduct it steps in
+            // to the deck edge and its foot drops to the deck,
+            // like the noise walls. The head is a real three-lamp
+            // unit: backboard, hooded round lenses in the real
+            // order (yellow over red over green), ladder, plate.
+            let lift = sample.elevationM - groundLevelM(at: sample)
+            let sideSign: Float = travelDirection == .up ? -1 : 1
+            let lateral = sideSign * (lift >= 2 ? Float(4.08) : Float(4.35))
             let base = routeOffsetPoint(sample, lateral: lateral)
-            addBox(parent: world, name: "signal-post-\(Int(target))", size: SIMD3<Float>(0.14, 3.6, 0.14),
-                   position: SIMD3<Float>(base.x, base.y + 1.8, base.z), material: poleMaterial, orientation: yaw)
-            addBox(parent: world, name: "signal-head-\(Int(target))", size: SIMD3<Float>(0.36, 1.1, 0.24),
-                   position: SIMD3<Float>(base.x, base.y + 3.9, base.z), material: headMaterial, orientation: yaw)
-            // Lamps sit on the face turned toward the approaching train
-            // (opposite the direction of travel), red over yellow over
-            // green.
+            let footY = base.y - (lift >= 2 ? Float(0.49) : Float(0.10))
+            let postTop = base.y + 4.62
             let forward = SIMD3<Float>(sin(sample.heading), 0, -cos(sample.heading))
-            let lampX = base.x - forward.x * 0.16
-            let lampZ = base.z - forward.z * 0.16
+            addBox(parent: world, name: "signal-post-\(Int(target))", size: SIMD3<Float>(0.16, postTop - footY, 0.16),
+                   position: SIMD3<Float>(base.x, (footY + postTop) / 2, base.z), material: poleMaterial, orientation: yaw)
+            addBox(parent: world, name: "signal-backboard-\(Int(target))", size: SIMD3<Float>(0.62, 1.34, 0.04),
+                   position: SIMD3<Float>(base.x + forward.x * 0.09, base.y + 3.9, base.z + forward.z * 0.09), material: headMaterial, orientation: yaw)
+            addBox(parent: world, name: "signal-head-\(Int(target))", size: SIMD3<Float>(0.36, 1.16, 0.24),
+                   position: SIMD3<Float>(base.x, base.y + 3.9, base.z), material: headMaterial, orientation: yaw)
+            addBox(parent: world, name: "signal-ladder-\(Int(target))", size: SIMD3<Float>(0.3, postTop - footY - 0.4, 0.04),
+                   position: SIMD3<Float>(base.x + forward.x * 0.15, (footY + postTop) / 2, base.z + forward.z * 0.15), material: headMaterial, orientation: yaw)
+            addBox(parent: world, name: "signal-plate-\(Int(target))", size: SIMD3<Float>(0.22, 0.3, 0.02),
+                   position: SIMD3<Float>(base.x - forward.x * 0.1, base.y + 2.55, base.z - forward.z * 0.1), material: plateMaterial, orientation: yaw)
+            // Lamps sit on the face turned toward the approaching
+            // train (opposite the direction of travel).
+            let lampX = base.x - forward.x * 0.17
+            let lampZ = base.z - forward.z * 0.17
             var lamps: [ModelEntity] = []
             for lampY in [4.25, 3.9, 3.55] {
-                let lamp = ModelEntity(mesh: MeshResource.generateBox(size: SIMD3<Float>(0.17, 0.17, 0.05)),
+                addBox(parent: world, name: "signal-hood-\(Int(target))-\(lampY)", size: SIMD3<Float>(0.27, 0.06, 0.3),
+                       position: SIMD3<Float>(lampX, base.y + Float(lampY) + 0.14, lampZ), material: headMaterial, orientation: yaw)
+                let lamp = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.105),
                                        materials: [signalDarkLampMaterial])
+                lamp.scale = SIMD3<Float>(1, 1, 0.45)
                 lamp.position = SIMD3<Float>(lampX, base.y + Float(lampY), lampZ)
                 lamp.orientation = yaw
                 world.addChild(lamp)
@@ -1756,8 +1832,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
     private func applyAspect(_ lamps: [ModelEntity], aspect: ThreeAspectSignal) {
         guard lamps.count == 3 else { return }
-        lamps[0].model?.materials = [aspect == .red ? signalRedMaterial : signalDarkLampMaterial]
-        lamps[1].model?.materials = [aspect == .yellow ? signalYellowMaterial : signalDarkLampMaterial]
+        // The head's lamp order is the real three-lamp order:
+        // yellow over red over green.
+        lamps[0].model?.materials = [aspect == .yellow ? signalYellowMaterial : signalDarkLampMaterial]
+        lamps[1].model?.materials = [aspect == .red ? signalRedMaterial : signalDarkLampMaterial]
         lamps[2].model?.materials = [aspect == .green ? signalGreenMaterial : signalDarkLampMaterial]
     }
 
@@ -1890,7 +1968,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // (which reach 3.6–8.1 m from the route centre) and the
         // crossbeam would cut across the station core. The wires
         // simply span the station, as they span any longer gap.
-        chainages = chainages.filter { !inStationZone($0) }
+        // quality37: also clear of the throat fan sidings — a mast
+        // at ±4.0 m would stand on a siding that sweeps out to
+        // 6.3 m. The wires span the throat, as they span stations.
+        chainages = chainages.filter { !inStationZone($0) && !nearThroatFan($0) }
         // Track laterals at a chainage, the same rule as the
         // trackbed (buildTrack): both tracks where a passing track
         // exists, otherwise only the running track — wires are
@@ -2867,6 +2948,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let chainage = sample.distanceM
                 let active = chainage >= coveredMin && chainage <= coveredMax
                     && !inStationZone(chainage)
+                    && !nearThroatFan(chainage)
                     && !corridorReserved(at: chainage, landmarks: landmarks)
                 if active {
                     if runStart == nil { runStart = index }
@@ -4696,6 +4778,209 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 d += step
             }
             flushRun()
+        }
+    }
+
+    /// quality37: the multi-track stations (the 5-track major
+    /// station and the two 3-track passing stations) get fan
+    /// sidings on both throats: a track that leaves the running
+    /// line, runs parallel outside it and merges back before the
+    /// platform starts — the visible branching the plain two-track
+    /// world never had. The specs come from the station placements,
+    /// in the same chainage frame the placement loop uses.
+    private func throatFanSpecs() -> [(center: Double, half: Double)] {
+        var specs: [(center: Double, half: Double)] = []
+        for placement in stationModelPlacements {
+            if placement.archetype == "major_5track_4platform" || placement.archetype == "passing_3track_2platform" {
+                specs.append((center: placement.chainageM, half: platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2))
+            }
+        }
+        return specs
+    }
+
+    private func throatFanSpans() -> [(start: Double, end: Double)] {
+        var spans: [(start: Double, end: Double)] = []
+        for spec in throatFanSpecs() {
+            spans.append((start: spec.center - spec.half - 340, end: spec.center - spec.half))
+            spans.append((start: spec.center + spec.half, end: spec.center + spec.half + 340))
+        }
+        return spans
+    }
+
+    /// Walls, roads, catenary masts and signal posts all keep out
+    /// of the fan spans: the siding sweeps through their laterals.
+    private func nearThroatFan(_ chainage: Double) -> Bool {
+        for span in throatFanSpans() where chainage >= span.start - 15 && chainage <= span.end + 15 {
+            return true
+        }
+        return false
+    }
+
+    /// Siding lateral across its 340 m span: diverge over the
+    /// first 200 m, hold at 6.3 m, converge over the last 80 m.
+    private func throatFanLateral(u: Double) -> Float {
+        func smooth(_ x: Double) -> Double {
+            let t = min(max(x, 0), 1)
+            return t * t * (3 - 2 * t)
+        }
+        let diverge = smooth(u / (200.0 / 340.0))
+        let converge = smooth((u - 260.0 / 340.0) / (80.0 / 340.0))
+        return Float(2.1 + 4.2 * diverge * (1 - converge))
+    }
+
+    private func buildThroatFans(routeVariant: RegionalRouteVariant) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        guard let firstSample = samples.first, let lastSample = samples.last, firstSample.distanceM < lastSample.distanceM else { return }
+        let railSteel = Self.pbr(UIColor(red: 0.52, green: 0.57, blue: 0.60, alpha: 1), metallic: 0.85, roughness: 0.36)
+        let runningBand = Self.pbr(UIColor(red: 0.78, green: 0.82, blue: 0.85, alpha: 1), metallic: 0.95, roughness: 0.12)
+        let shoulderMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_ballast", normalName: "normal_ballast")
+        let trackbedMaterial = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_trackbed", normalName: "normal_trackbed")
+        let deckMaterial = Self.pbr(UIColor(red: 0.46, green: 0.48, blue: 0.47, alpha: 1), roughness: 0.84)
+        let railProfile: [(x: Float, y: Float)] = [
+            (-0.075, 0.145), (0.075, 0.145), (0.075, 0.175), (0.018, 0.185),
+            (0.018, 0.255), (0.037, 0.265), (0.037, 0.305), (-0.037, 0.305),
+            (-0.037, 0.265), (-0.018, 0.255), (-0.018, 0.185), (-0.075, 0.175)
+        ]
+        let bandProfile: [(x: Float, y: Float)] = [(-0.026, 0.3065), (0.026, 0.3065)]
+        let shoulderLeft: [(x: Float, y: Float)] = [(-2.65, 0.03), (-1.72, 0.165)]
+        let shoulderRight: [(x: Float, y: Float)] = [(1.72, 0.165), (2.65, 0.03)]
+        let zeroOffsets = [Float](repeating: 0, count: samples.count)
+        for spec in throatFanSpecs() {
+            let spans: [(start: Double, end: Double, tag: String)] = [
+                (start: spec.center - spec.half - 340, end: spec.center - spec.half, tag: "in"),
+                (start: spec.center + spec.half, end: spec.center + spec.half + 340, tag: "out")
+            ]
+            for span in spans {
+                guard let lo = samples.firstIndex(where: { $0.distanceM >= span.start - 8.5 }),
+                      let hi = samples.lastIndex(where: { $0.distanceM <= span.end + 8.5 }), lo < hi else { continue }
+                let range = lo..<(hi + 1)
+                // Widened deck under the fan: on the elevated
+                // Kankumoshi throat the siding would otherwise hang
+                // off the 8.4 m deck edge. At ground level the slab
+                // lies below the formation and stays invisible.
+                if let deck = ribbonEntity(name: "fan-deck-\(Int(spec.center))-\(span.tag)", width: 17, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
+                    world.addChild(deck)
+                }
+                for side: Float in [-1, 1] {
+                    let sideTag = side > 0 ? "r" : "l"
+                    let offsets = samples.map { sample -> Float in
+                        let u = (min(max(sample.distanceM, span.start), span.end) - span.start) / 340
+                        return side * throatFanLateral(u: u)
+                    }
+                    // 5 mm above the running trackbed so the two
+                    // ribbons never z-fight where the siding lies
+                    // on top of the running line at the pinch ends.
+                    if let bed = ribbonEntity(name: "fan-trackbed-\(Int(spec.center))-\(span.tag)-\(sideTag)", width: 4.6, y: 0.185, tileLength: 5, offsets: offsets, material: trackbedMaterial, range: range) {
+                        world.addChild(bed)
+                    }
+                    var stations: [ProfileStation] = []
+                    var d = span.start
+                    while d < span.end {
+                        stations.append(profileStation(at: d, trackLateral: side * throatFanLateral(u: (d - span.start) / 340)))
+                        d += 8.5
+                    }
+                    stations.append(profileStation(at: span.end, trackLateral: side * throatFanLateral(u: 1)))
+                    let prefix = "fan-\(Int(spec.center))-\(span.tag)-\(sideTag)"
+                    for railSide: Float in [-0.72, 0.72] {
+                        let profile = railProfile.map { (x: $0.x + railSide, y: $0.y) }
+                        if let rail = profileStripEntity(name: "\(prefix)-rail-\(railSide)", stations: stations, profile: profile, closed: true, material: railSteel) {
+                            world.addChild(rail)
+                        }
+                        let band = bandProfile.map { (x: $0.x + railSide, y: $0.y) }
+                        if let bandEntity = profileStripEntity(name: "\(prefix)-band-\(railSide)", stations: stations, profile: band, closed: false, material: runningBand) {
+                            world.addChild(bandEntity)
+                        }
+                    }
+                    if let left = profileStripEntity(name: "\(prefix)-shoulder-l", stations: stations, profile: shoulderLeft, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+                        world.addChild(left)
+                    }
+                    if let right = profileStripEntity(name: "\(prefix)-shoulder-r", stations: stations, profile: shoulderRight, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+                        world.addChild(right)
+                    }
+                }
+            }
+        }
+    }
+
+    /// quality37: at Touhama the branch visibly leaves the
+    /// terminus. A track peels away from the inland running track
+    /// past the end of the line on fabricated profile stations,
+    /// and buffer stops close both running tracks — the end of
+    /// the main line and the start of the branch finally read as
+    /// a junction instead of the two tracks simply stopping.
+    private func buildTerminusDivergence(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        guard let firstSample = samples.first, let lastSample = samples.last, firstSample.distanceM < lastSample.distanceM else { return }
+        guard let terminus = stationModelPlacements.first(where: { $0.archetype == "junction_3platform" }) else { return }
+        let center = terminus.chainageM
+        let inlandSign = -seaSideSign(travelDirection: travelDirection)
+        // Buffer stops on both running tracks, 10 m before the end.
+        var bufferBatch = MeshBatchBuilder()
+        for lateral: Float in [-2.1, 2.1] {
+            let st = profileStation(at: center - 10, trackLateral: lateral)
+            let tangent = -simd_cross(st.xAxis, st.yAxis)
+            for postU: Float in [-0.85, 0.85] {
+                bufferBatch.addBoxAxes(center: st.center + postU * st.xAxis + 0.55 * st.yAxis,
+                                       size: SIMD3<Float>(0.28, 1.1, 0.28), ax: st.xAxis, ay: st.yAxis, az: tangent)
+            }
+            bufferBatch.addBoxAxes(center: st.center + st.yAxis,
+                                   size: SIMD3<Float>(2.4, 0.42, 0.3), ax: st.xAxis, ay: st.yAxis, az: tangent)
+            bufferBatch.addBoxAxes(center: st.center + 0.15 * st.yAxis,
+                                   size: SIMD3<Float>(2.4, 0.3, 0.8), ax: st.xAxis, ay: st.yAxis, az: tangent)
+        }
+        if let buffers = bufferBatch.build(name: "terminus-buffers", material: poleMaterial) {
+            world.addChild(buffers)
+        }
+        // The diverging track: lateral grows with the square of
+        // the distance past its root, the way a turnout curve
+        // leaves the straight — slow enough at the root to clear
+        // the platform face (3.62 m) until the line has ended.
+        let railSteel = Self.pbr(UIColor(red: 0.52, green: 0.57, blue: 0.60, alpha: 1), metallic: 0.85, roughness: 0.36)
+        let runningBand = Self.pbr(UIColor(red: 0.78, green: 0.82, blue: 0.85, alpha: 1), metallic: 0.95, roughness: 0.12)
+        let shoulderMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_ballast", normalName: "normal_ballast")
+        let formationMaterial = Self.pbr(UIColor(red: 0.24, green: 0.28, blue: 0.24, alpha: 1), roughness: 1)
+        let branchBedMaterial = Self.pbr(UIColor(red: 0.37, green: 0.36, blue: 0.34, alpha: 1), roughness: 1)
+        let railProfile: [(x: Float, y: Float)] = [
+            (-0.075, 0.145), (0.075, 0.145), (0.075, 0.175), (0.018, 0.185),
+            (0.018, 0.255), (0.037, 0.265), (0.037, 0.305), (-0.037, 0.305),
+            (-0.037, 0.265), (-0.018, 0.255), (-0.018, 0.185), (-0.075, 0.175)
+        ]
+        let bandProfile: [(x: Float, y: Float)] = [(-0.026, 0.3065), (0.026, 0.3065)]
+        let shoulderLeft: [(x: Float, y: Float)] = [(-2.65, 0.03), (-1.72, 0.165)]
+        let shoulderRight: [(x: Float, y: Float)] = [(1.72, 0.165), (2.65, 0.03)]
+        let base = profileStation(at: center - 30, trackLateral: inlandSign * 2.1)
+        let tangent = -simd_cross(base.xAxis, base.yAxis)
+        var stations: [ProfileStation] = []
+        var t = 0.0
+        while t <= 330 {
+            let lateral = inlandSign * Float(2.1 + (t * t) / 2400.0)
+            let c = base.center + Float(t) * tangent + (lateral - inlandSign * 2.1) * base.xAxis
+            stations.append(ProfileStation(center: c, xAxis: base.xAxis, yAxis: base.yAxis, distanceM: center - 30 + t))
+            t += 8.5
+        }
+        let formationProfile: [(x: Float, y: Float)] = [(-6.5, -0.06), (6.5, -0.06)]
+        if let formation = profileStripEntity(name: "branch-formation", stations: stations, profile: formationProfile, closed: false, material: formationMaterial) {
+            world.addChild(formation)
+        }
+        let bedProfile: [(x: Float, y: Float)] = [(-2.3, 0.185), (2.3, 0.185)]
+        if let bed = profileStripEntity(name: "branch-trackbed", stations: stations, profile: bedProfile, closed: false, material: branchBedMaterial) {
+            world.addChild(bed)
+        }
+        for railSide: Float in [-0.72, 0.72] {
+            let profile = railProfile.map { (x: $0.x + railSide, y: $0.y) }
+            if let rail = profileStripEntity(name: "branch-rail-\(railSide)", stations: stations, profile: profile, closed: true, material: railSteel) {
+                world.addChild(rail)
+            }
+            let band = bandProfile.map { (x: $0.x + railSide, y: $0.y) }
+            if let bandEntity = profileStripEntity(name: "branch-band-\(railSide)", stations: stations, profile: band, closed: false, material: runningBand) {
+                world.addChild(bandEntity)
+            }
+        }
+        if let left = profileStripEntity(name: "branch-shoulder-l", stations: stations, profile: shoulderLeft, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+            world.addChild(left)
+        }
+        if let right = profileStripEntity(name: "branch-shoulder-r", stations: stations, profile: shoulderRight, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+            world.addChild(right)
         }
     }
 
