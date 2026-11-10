@@ -2864,7 +2864,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 || name.hasPrefix("trackbed_")
                 || name.hasPrefix("rail_")
                 || name.hasPrefix("sleeper_")
-                || name.hasPrefix("footbridge_")
+                || name.hasPrefix("station_")
                 || name.hasPrefix("bench_")
                 || name.hasPrefix("vending_")
                 || name.hasPrefix("bin_") {
