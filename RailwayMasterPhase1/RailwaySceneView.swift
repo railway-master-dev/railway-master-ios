@@ -398,14 +398,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private let sleeperMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.72, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.88, textureName: "scenery_timber")
     private let railMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
     private let concreteMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.87, textureName: "scenery_concrete", normalName: "normal_concrete")
-    private let poleMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.58, blue: 0.58, alpha: 1), metallic: 0.62, roughness: 0.42, textureName: "scenery_steel")
+    private let poleMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.75, green: 0, blue: 0.75, alpha: 1), metallic: 0.62, roughness: 0.42, textureName: "scenery_steel")
     private let wireMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.66, blue: 0.57, alpha: 1), metallic: 0.84, roughness: 0.24)
     private let roadMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.78, textureName: "scenery_asphalt", normalName: "normal_asphalt")
     private let glassMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.12, green: 0.26, blue: 0.31, alpha: 1), metallic: 0.18, roughness: 0.20)
     private let roofMaterials = [
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.45, green: 0.38, blue: 0.33, alpha: 1), roughness: 0.84, textureName: "scenery_steel"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.50, blue: 0.44, alpha: 1), roughness: 0.82, textureName: "scenery_steel"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.40, green: 0.46, blue: 0.50, alpha: 1), metallic: 0.12, roughness: 0.71, textureName: "scenery_steel")
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1, green: 1, blue: 1, alpha: 1), roughness: 0.84, textureName: "scenery_steel"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1, green: 1, blue: 1, alpha: 1), roughness: 0.82, textureName: "scenery_steel"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1, green: 1, blue: 1, alpha: 1), metallic: 0.12, roughness: 0.71, textureName: "scenery_steel")
     ]
     private let buildingMaterials = [
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.89, textureName: "scenery_brick_warm"),
@@ -1548,11 +1548,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var wallBatchIndex = 0
         var wallBatchStartChainage = samples.first?.distanceM ?? 0
         func flushWallBatch() {
-            if let mesh = wallBatch.build(name: "lineside-wall-batch-\(wallBatchIndex)", material: concreteMaterial) {
+            if let mesh = wallBatch.build(name: "lineside-wall-batch-\(wallBatchIndex)", material: Self.pbr(UIColor(red: 1, green: 0, blue: 0, alpha: 1), roughness: 0.9)) {
                 world.addChild(mesh)
                 wallBatchIndex += 1
             }
-            if let trim = showcaseWallBatch.build(name: "showcase-walltrim-\(wallBatchIndex)", material: poleMaterial) {
+            if let trim = showcaseWallBatch.build(name: "showcase-walltrim-\(wallBatchIndex)", material: Self.pbr(UIColor(red: 0, green: 1, blue: 0, alpha: 1), roughness: 0.9)) {
                 world.addChild(trim)
             }
             wallBatch = MeshBatchBuilder()
@@ -2448,7 +2448,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             spanStart += 10.5
         }
-        if let trough = troughBatch.build(name: "showcase-cable-trough", material: concreteMaterial) {
+        if let trough = troughBatch.build(name: "showcase-cable-trough", material: Self.pbr(UIColor(red: 1, green: 1, blue: 0, alpha: 1), roughness: 0.9)) {
             world.addChild(trough)
         }
 
@@ -2515,7 +2515,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // elevation -0.49 m, the deck ribbon's height): the deck is
         // only 8.4 m wide, so a fence left at 6.2 m would hang in
         // the air beside it for the whole elevated kilometre.
-        var fenceMaterial = Self.texturedPBR(.white, metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
+        var fenceMaterial = Self.texturedPBR(UIColor(red: 0, green: 0, blue: 1, alpha: 1), metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
         fenceMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
         // The texture's alpha is binary (wire or hole), so plain
         // transparent blending already renders the cutout; no
