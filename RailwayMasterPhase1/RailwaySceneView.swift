@@ -1287,6 +1287,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let forestLaterals: [Float] = samples.map { clampedWallLateral(side: 1, standoff: 300, route: route, sample: $0) }
         let forestBottoms: [Float] = samples.map { groundLevelM(at: $0) - 3 }
         let forestTops: [Float] = samples.map { groundLevelM(at: $0) + 21 }
+        // quality34: inside the urban bands the same 300 m layer
+        // carries the skyline panorama instead of trees, taller, so
+        // the city has a mid-distance mass of buildings behind the
+        // real tower rows instead of flat apron running straight
+        // out to the 680 m backdrop.
+        let cityTops: [Float] = samples.map { groundLevelM(at: $0) + 52 }
         let forestSeaSign = seaSideSign(travelDirection: travelDirection)
         for sideSign: Float in [-1, 1] {
             let laterals = forestLaterals.map { $0 * sideSign }
@@ -1310,6 +1316,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                                              tileLength: 600, material: forestMaterial,
                                                              range: runStart..<runEnd) {
                             world.addChild(forest)
+                        }
+                    } else if runKey >= 10 {
+                        // quality34: urban run of the mid layer —
+                        // skyline panorama at 300 m (see cityTops).
+                        if let city = verticalRibbonEntity(name: "cityline-mid-\(sideSign > 0 ? "r" : "l")-\(runStart)",
+                                                           lateralOffsets: laterals, bottomYs: forestBottoms, topYs: cityTops,
+                                                           tileLength: 900, material: skylineMaterial,
+                                                           range: runStart..<runEnd) {
+                            world.addChild(city)
                         }
                     }
                     runStart = i
@@ -2062,6 +2077,61 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         baseBand.orientation = orientation
     }
 
+    /// quality34: one-box towers for the deep urban rows (roughly
+    /// 60 m and 110 m out). At that distance the segmented facade,
+    /// roof block and base band of addTower are invisible, so a
+    /// single box with a facade texture carries the mass; the rows
+    /// give the city depth behind the detailed front rows, which
+    /// used to stand alone against flat empty apron.
+    private func addDistantTower(at distance: Double, side: Float, seed: Int, lateral: Float, band: Int) {
+        let sample = sample(at: distance)
+        let groundY = groundLevelM(at: sample)
+        let width: Float = 17 + Float((seed / 3) % 4) * 2.2
+        let depth: Float = 15 + Float((seed / 7) % 4) * 2.4
+        var height: Float = band == 2 ? 26 + Float((seed * 31) % 30) : 19 + Float((seed * 31) % 20)
+        // Beside an elevated section the deep rows also rise from
+        // the valley floor; keep their tops above rail level so
+        // they register over the nearer rows' bases.
+        let structureHeight = sample.elevationM - groundY
+        if structureHeight > 3 {
+            height = max(height, structureHeight + 9 + Float((seed * 13) % 13))
+        }
+        let offset = side * lateral
+        let x = sample.x + offset * cos(sample.heading)
+        let z = sample.z + offset * sin(sample.heading)
+        let body = addBox(parent: world, name: "distant-tower-\(seed)",
+                          size: SIMD3<Float>(width, height, depth),
+                          position: SIMD3<Float>(x, groundY + height / 2, z),
+                          material: officeMaterials[abs(seed) % officeMaterials.count])
+        body.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+    }
+
+    /// quality34: a plain second-row house for the suburbs, about
+    /// 25 m out, so the housing does not stop at one trackside row.
+    private func addBackRowHouse(at distance: Double, side: Float, seed: Int) {
+        let sample = sample(at: distance)
+        let groundY = groundLevelM(at: sample)
+        let lateral: Float = 24 + Float(seed % 3) * 2.2
+        let width: Float = 5.4 + Float((seed / 3) % 3) * 0.9
+        let depth: Float = 5.8 + Float((seed / 5) % 3) * 0.8
+        let height: Float = 3.8 + Float((seed / 7) % 4) * 0.6
+        guard buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) else { return }
+        let offset = side * lateral
+        let x = sample.x + offset * cos(sample.heading)
+        let z = sample.z + offset * sin(sample.heading)
+        let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+        let body = addBox(parent: world, name: "back-row-home-\(seed)",
+                          size: SIMD3<Float>(width, height, depth),
+                          position: SIMD3<Float>(x, groundY + height / 2, z),
+                          material: seed % 3 == 2 ? houseFacadeMaterial : buildingMaterials[abs(seed) % buildingMaterials.count])
+        body.orientation = orientation
+        let roof = addBox(parent: world, name: "back-row-roof-\(seed)",
+                          size: SIMD3<Float>(width + 0.45, 0.24, depth + 0.35),
+                          position: SIMD3<Float>(x, groundY + height + 0.14, z),
+                          material: roofMaterials[abs(seed) % roofMaterials.count])
+        roof.orientation = orientation
+    }
+
     private func buildSuburb(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         let sceneryMaterials = buildingMaterials
         let landmarks = fictionalCorridorLandmarks(for: route)
@@ -2089,6 +2159,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // eye level between the towers.
                     if band == 2 {
                         addTower(at: distance + 13, side: urbanIndex.isMultiple(of: 2) ? 1 : -1, seed: urbanIndex * 11 + 5, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection, lateralOverride: 11.8, heightScale: 0.34)
+                    }
+                    // quality34: deep rows of plain towers behind
+                    // the detailed frontage (about 60 m and 110 m
+                    // out), so the buildings have depth instead of
+                    // ending at the trackside row.
+                    if urbanIndex.isMultiple(of: 2) {
+                        addDistantTower(at: distance + 7, side: 1, seed: urbanIndex * 13 + 7, lateral: 58 + Float((urbanIndex / 2) % 3) * 6, band: band)
+                        addDistantTower(at: distance + 16, side: -1, seed: urbanIndex * 13 + 8, lateral: 64 + Float((urbanIndex / 2) % 3) * 6, band: band)
+                    }
+                    if urbanIndex.isMultiple(of: 3) {
+                        addDistantTower(at: distance + 3, side: -1, seed: urbanIndex * 19 + 11, lateral: 102 + Float((urbanIndex / 3) % 3) * 10, band: band)
+                        addDistantTower(at: distance + 19, side: 1, seed: urbanIndex * 19 + 12, lateral: 112 + Float((urbanIndex / 3) % 3) * 10, band: band)
                     }
                 }
                 urbanIndex += 1
@@ -2164,6 +2246,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let doorPoint = groundOffsetPoint(sample, lateral: facadeLateral)
                 let door = addBox(parent: world, name: "door-\(index)", size: SIMD3<Float>(0.07, 1.8, 0.78), position: SIMD3<Float>(doorPoint.x, doorPoint.y + 0.95, doorPoint.z), material: roofMaterials[(index + 1) % roofMaterials.count])
                 door.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            }
+
+            // quality34: a second row of houses deeper in the
+            // suburb (about 25 m out) every fourth house, never on
+            // the sea side of the coastal stretch.
+            if index % 4 == 2,
+               !(isCoastal(distanceM: distance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                 && sign == seaSideSign(travelDirection: travelDirection)) {
+                addBackRowHouse(at: distance + 6, side: sign, seed: index * 3 + 1)
             }
 
             if index.isMultiple(of: 2), foliageCount < renderQualitySettings.foliageInstanceLimit {
