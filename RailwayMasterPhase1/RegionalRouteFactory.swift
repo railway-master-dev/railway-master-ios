@@ -278,7 +278,7 @@ enum RegionalRouteFactory {
             let position = direction == .up ? rawPosition : routeLengthM - rawPosition
             let lineID = station?.lineId ?? plan.network.depotSpurID
             let trackID = trackIdentifier(lineID: lineID, direction: direction)
-            let name = station?.name ?? "環雲車両基地（架空）"
+            let name = station?.name ?? "東央車両基地（架空）"
             if stops.last.map({ position <= $0.positionM }) == true { throw RegionalRouteFactoryError.invalidStopSequence }
             stops.append(RegionalRouteStop(stationID: stationID, name: name, positionM: position, trackID: trackID))
         }
