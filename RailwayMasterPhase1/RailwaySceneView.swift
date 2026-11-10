@@ -453,6 +453,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// Full-facade photo texture for suburban houses (windows and door are
     /// painted in, so those houses skip the separate window/door boxes).
     private let houseFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_house_facade")
+    /// quality40: two more house facades, flattened from the
+    /// user's own reference renders of a modern house (wood over
+    /// concrete side; lattice-door entrance front).
+    private let houseFacadeMaterial2 = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_house_facade_2")
+    private let houseFacadeMaterial3 = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_house_facade_3")
+    /// quality40: station-front cafe facade, flattened from the
+    /// user's reference render (the sign reads カフェ・木漏れ日).
+    private let cafeFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.9, textureName: "scenery_cafe_facade")
     /// Platform-edge tactile paving: the safety yellow band reads as
     /// tactile paving at platform distance even without modelled dots.
     private let tactileMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.87, green: 0.66, blue: 0.10, alpha: 1), roughness: 0.9)
@@ -2148,7 +2156,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // quality29: no station check used to exist here, so a
         // tower face could land inside a station platform (the
         // Matsubaracho apartment sliced by the platform back).
-        guard buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) else { return }
+        guard buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2),
+              buildingClearOfFans(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) else { return }
         let segments = max(1, Int((height / 15).rounded()))
         let segmentHeight = height / Float(segments)
         let offset = side * lateral
@@ -2266,6 +2275,82 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         roof.orientation = orientation
     }
 
+    /// Accent stripe/sign material for the roadside commercial
+    /// buildings: konbini orange, green or blue by seed.
+    private func commercialAccent(seed: Int) -> PhysicallyBasedMaterial {
+        let palette = [
+            UIColor(red: 0.95, green: 0.45, blue: 0.1, alpha: 1),
+            UIColor(red: 0.1, green: 0.55, blue: 0.3, alpha: 1),
+            UIColor(red: 0.1, green: 0.35, blue: 0.8, alpha: 1),
+        ]
+        return Self.pbr(palette[abs(seed) % palette.count], roughness: 0.5)
+    }
+
+    /// quality40: a convenience store on a suburban plot — parking
+    /// lot with stall stripes on the track side, then the store:
+    /// concrete body, full-width glass storefront with a warm glow
+    /// band, the coloured stripe under the roof, and a tall sign
+    /// pole at the lot corner. Real konbini proportions (about
+    /// 16 m frontage, 3.9 m eaves, sign pole about 6 m).
+    private func buildConvenienceStore(at distance: Double, sample: RouteSample, sign: Float, groundY: Float, seed: Int) {
+        let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+        let accent = commercialAccent(seed: seed)
+        var glow = PhysicallyBasedMaterial()
+        glow.baseColor = .init(tint: UIColor(red: 0.98, green: 0.9, blue: 0.7, alpha: 1))
+        glow.emissiveColor = .init(color: UIColor(red: 0.9, green: 0.72, blue: 0.4, alpha: 1))
+        glow.emissiveIntensity = 0.7
+
+        let pad = groundOffsetPoint(sample, lateral: sign * 9.7)
+        _ = addBox(parent: world, name: "konbini-pad-\(seed)", size: SIMD3<Float>(7, 0.07, 11), position: SIMD3<Float>(pad.x, groundY + 0.035, pad.z), material: roadMaterial, orientation: orientation)
+        for stripe in 0..<4 {
+            let sp = groundOffsetPoint(sample(at: distance + Double(stripe) * 2.6 - 3.9), lateral: sign * 7.6)
+            _ = addBox(parent: world, name: "konbini-stripe-\(seed)-\(stripe)", size: SIMD3<Float>(2.4, 0.015, 0.14), position: SIMD3<Float>(sp.x, groundY + 0.075, sp.z), material: roofMaterials[2], orientation: orientation)
+        }
+        let body = groundOffsetPoint(sample, lateral: sign * 17.7)
+        _ = addBox(parent: world, name: "konbini-body-\(seed)", size: SIMD3<Float>(9, 3.9, 16), position: SIMD3<Float>(body.x, groundY + 1.95, body.z), material: concreteMaterial, orientation: orientation)
+        let face = groundOffsetPoint(sample, lateral: sign * 13.22)
+        _ = addBox(parent: world, name: "konbini-glass-\(seed)", size: SIMD3<Float>(0.12, 2.1, 14.6), position: SIMD3<Float>(face.x, groundY + 1.3, face.z), material: glassMaterial, orientation: orientation)
+        _ = addBox(parent: world, name: "konbini-glow-\(seed)", size: SIMD3<Float>(0.06, 0.45, 14.6), position: SIMD3<Float>(face.x, groundY + 2.75, face.z), material: glow, orientation: orientation)
+        _ = addBox(parent: world, name: "konbini-band-\(seed)", size: SIMD3<Float>(9.25, 0.55, 16.25), position: SIMD3<Float>(body.x, groundY + 3.5, body.z), material: accent, orientation: orientation)
+        _ = addBox(parent: world, name: "konbini-roof-\(seed)", size: SIMD3<Float>(9.7, 0.22, 16.7), position: SIMD3<Float>(body.x, groundY + 4.0, body.z), material: roofMaterials[0], orientation: orientation)
+        let pole = groundOffsetPoint(sample(at: distance + 6.5), lateral: sign * 7.3)
+        _ = addBox(parent: world, name: "konbini-pole-\(seed)", size: SIMD3<Float>(0.14, 6.2, 0.14), position: SIMD3<Float>(pole.x, groundY + 3.1, pole.z), material: poleMaterial)
+        _ = addBox(parent: world, name: "konbini-sign-\(seed)", size: SIMD3<Float>(0.3, 1.15, 1.15), position: SIMD3<Float>(pole.x, groundY + 5.5, pole.z), material: accent, orientation: orientation)
+        let signFace = groundOffsetPoint(sample(at: distance + 6.5), lateral: sign * 7.08)
+        _ = addBox(parent: world, name: "konbini-signface-\(seed)", size: SIMD3<Float>(0.08, 0.9, 0.9), position: SIMD3<Float>(signFace.x, groundY + 5.5, signFace.z), material: roofMaterials[2], orientation: orientation)
+    }
+
+    /// quality40: a supermarket — a much bigger flat box (about
+    /// 34 m frontage, 7 m high) with an accent band under the roof,
+    /// a glass entrance, rooftop plant boxes, a wide striped lot
+    /// and a tall pole sign.
+    private func buildSupermarket(at distance: Double, sample: RouteSample, sign: Float, groundY: Float, seed: Int) {
+        let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+        let accent = commercialAccent(seed: seed + 1)
+
+        let pad = groundOffsetPoint(sample, lateral: sign * 9.8)
+        _ = addBox(parent: world, name: "super-pad-\(seed)", size: SIMD3<Float>(7.2, 0.07, 30), position: SIMD3<Float>(pad.x, groundY + 0.035, pad.z), material: roadMaterial, orientation: orientation)
+        for stripe in 0..<6 {
+            let sp = groundOffsetPoint(sample(at: distance + Double(stripe) * 5 - 12.5), lateral: sign * 7.6)
+            _ = addBox(parent: world, name: "super-stripe-\(seed)-\(stripe)", size: SIMD3<Float>(2.4, 0.015, 0.14), position: SIMD3<Float>(sp.x, groundY + 0.075, sp.z), material: roofMaterials[2], orientation: orientation)
+        }
+        let body = groundOffsetPoint(sample, lateral: sign * 21)
+        _ = addBox(parent: world, name: "super-body-\(seed)", size: SIMD3<Float>(16, 7, 34), position: SIMD3<Float>(body.x, groundY + 3.5, body.z), material: concreteMaterial, orientation: orientation)
+        _ = addBox(parent: world, name: "super-band-\(seed)", size: SIMD3<Float>(16.25, 1.1, 34.25), position: SIMD3<Float>(body.x, groundY + 5.7, body.z), material: accent, orientation: orientation)
+        let face = groundOffsetPoint(sample, lateral: sign * 12.92)
+        _ = addBox(parent: world, name: "super-glass-\(seed)", size: SIMD3<Float>(0.12, 3.2, 11), position: SIMD3<Float>(face.x, groundY + 1.6, face.z), material: glassMaterial, orientation: orientation)
+        _ = addBox(parent: world, name: "super-roof-\(seed)", size: SIMD3<Float>(16.7, 0.3, 34.7), position: SIMD3<Float>(body.x, groundY + 7.15, body.z), material: roofMaterials[1], orientation: orientation)
+        for plant in 0..<2 {
+            let pp = groundOffsetPoint(sample(at: distance + (plant == 0 ? -8.0 : 8.0)), lateral: sign * (plant == 0 ? 19 : 23))
+            _ = addBox(parent: world, name: "super-plant-\(seed)-\(plant)", size: SIMD3<Float>(4.5, 1.3, 3.2), position: SIMD3<Float>(pp.x, groundY + 7.9, pp.z), material: concreteMaterial, orientation: orientation)
+        }
+        let pole = groundOffsetPoint(sample(at: distance + 13), lateral: sign * 7.4)
+        _ = addBox(parent: world, name: "super-pole-\(seed)", size: SIMD3<Float>(0.18, 9.5, 0.18), position: SIMD3<Float>(pole.x, groundY + 4.75, pole.z), material: poleMaterial)
+        _ = addBox(parent: world, name: "super-sign-\(seed)", size: SIMD3<Float>(0.35, 1.9, 2.4), position: SIMD3<Float>(pole.x, groundY + 8.4, pole.z), material: accent, orientation: orientation)
+        let signFace = groundOffsetPoint(sample(at: distance + 13), lateral: sign * 7.12)
+        _ = addBox(parent: world, name: "super-signface-\(seed)", size: SIMD3<Float>(0.08, 1.5, 2.0), position: SIMD3<Float>(signFace.x, groundY + 8.4, signFace.z), material: roofMaterials[2], orientation: orientation)
+    }
+
     private func buildSuburb(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         let sceneryMaterials = buildingMaterials
         let landmarks = fictionalCorridorLandmarks(for: route)
@@ -2276,6 +2361,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let buildingLimit = max(1, renderQualitySettings.sceneryInstanceLimit * 3 / 4)
         let buildingStep = max(45, (route.distanceM - 114) / Double(buildingLimit))
         var distance = 34.0
+        var commercialSites: [(chainage: Double, side: Float)] = []
         while distance < route.distanceM - 80 {
             let band = urbanBand(distanceM: distance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             if band > 0 {
@@ -2350,7 +2436,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // quality29: houses keep clear of station platforms too
             // (a house face could reach 5.1 m from the centre, well
             // inside the 8.12 m platform back).
-            if !buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) {
+            if !buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2)
+                || !buildingClearOfFans(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) {
                 index += 1
                 distance += buildingStep
                 continue
@@ -2369,6 +2456,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 continue
             }
             let nearestStation = stationModelPlacements.map { abs($0.chainageM - distance) }.min() ?? .infinity
+            // quality40: roadside commercial plots near stations —
+            // a convenience store (glass front, stripe band, sign
+            // pole, parking) or, rarer, a supermarket (big box,
+            // roof band, tall sign, wide lot). They replace house
+            // plots and keep 150 m from each other per side.
+            let commercialNear = commercialSites.contains { $0.side == sign && abs($0.chainage - distance) < 150 }
+            if nearestStation <= 380, !commercialNear, index % 17 == 5 {
+                commercialSites.append((chainage: distance, side: sign))
+                buildConvenienceStore(at: distance, sample: sample, sign: sign, groundY: groundY, seed: index)
+                index += 1
+                distance += buildingStep
+                continue
+            }
+            if nearestStation <= 600, !commercialNear, index % 41 == 20 {
+                commercialSites.append((chainage: distance, side: sign))
+                buildSupermarket(at: distance, sample: sample, sign: sign, groundY: groundY, seed: index)
+                index += 1
+                distance += buildingStep
+                continue
+            }
             if nearestStation <= 260, !shed, index % 3 == 0 {
                 // Station-front apartment slab instead of a house:
                 // flat-roofed, facade-textured, 3-5 floors.
@@ -2396,7 +2503,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // Every third house wears the full photo facade; its windows
             // and door are painted in, so the separate boxes are skipped.
             let useFacadeTexture = !shed && index % 3 == 2
-            let bodyMaterial = useFacadeTexture ? houseFacadeMaterial : sceneryMaterials[index % sceneryMaterials.count]
+            let facadeVariants = [houseFacadeMaterial, houseFacadeMaterial2, houseFacadeMaterial3]
+            let bodyMaterial = useFacadeTexture ? facadeVariants[(index / 3) % facadeVariants.count] : sceneryMaterials[index % sceneryMaterials.count]
             let building = addBox(parent: world, name: shed ? "fictional-shed-\(index)" : "fictional-home-\(index)", size: SIMD3<Float>(width, height, depth), position: SIMD3<Float>(x, groundY + height / 2, z), material: bodyMaterial)
             building.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
 
@@ -4070,6 +4178,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         return true
     }
 
+    /// quality40: the throat fans widen the formation to a 17 m
+    /// deck, but building placement only ever cleared the normal
+    /// track width — at Touou-Chihara a tower face landed inside
+    /// the fan deck and the siding ran into the building (user
+    /// report on the quality38 photos). Inside a fan span a
+    /// building's face must stay 11 m or more from the centre.
+    private func buildingClearOfFans(chainage: Double, halfLength: Double, lateral: Float, halfDepth: Float) -> Bool {
+        if abs(lateral) - halfDepth >= 11 { return true }
+        for span in throatFanSpans() {
+            if chainage + halfLength > span.start - 10 && chainage - halfLength < span.end + 10 { return false }
+        }
+        return true
+    }
+
     private func inStationZone(_ chainage: Double, extraMargin: Double = 0) -> Bool {
         for placement in stationModelPlacements {
             let half = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2 + 20 + extraMargin
@@ -4431,6 +4553,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var roofBatch = MeshBatchBuilder()
         var baseBatch = MeshBatchBuilder()
         var bodyBatches = officeMaterials.map { _ in MeshBatchBuilder() }
+        var cafeBatch = MeshBatchBuilder()
         var shrubBlobs: [(center: SIMD3<Float>, radii: SIMD3<Float>)] = []
         let topFull: Float = 0.3065 + 1.10
 
@@ -4526,14 +4649,24 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         let bSample = sample(at: placement.chainageM + length * fraction)
                         let bWidth: Float = 11 + Float(seed % 3) * 1.6
                         let bDepth: Float = 7.5 + Float((seed / 3) % 2) * 1.5
-                        let bHeight: Float = 9 + Float((seed * 29) % 70) / 10
+                        var bHeight: Float = 9 + Float((seed * 29) % 70) / 10
                         let bLateral = backLateral + sideSign * (12.5 + bDepth / 2)
                         let bx = bSample.x + bLateral * cos(bSample.heading)
                         let bz = bSample.z + bLateral * sin(bSample.heading)
                         let baseY = bSample.elevationM - 0.06
-                        bodyBatches[abs(seed) % bodyBatches.count].addBox(center: SIMD3<Float>(bx, baseY + bHeight / 2, bz), size: SIMD3<Float>(bDepth, bHeight, bWidth), yaw: -bSample.heading)
+                        // quality40: every fifth frontage slot is
+                        // the station cafe (user reference): two
+                        // storeys, and no podium band — the band
+                        // would swallow its entrance.
+                        let isCafe = abs(seed) % 5 == 2
+                        if isCafe { bHeight = 7 }
+                        if isCafe {
+                            cafeBatch.addBox(center: SIMD3<Float>(bx, baseY + bHeight / 2, bz), size: SIMD3<Float>(bDepth, bHeight, bWidth), yaw: -bSample.heading)
+                        } else {
+                            bodyBatches[abs(seed) % bodyBatches.count].addBox(center: SIMD3<Float>(bx, baseY + bHeight / 2, bz), size: SIMD3<Float>(bDepth, bHeight, bWidth), yaw: -bSample.heading)
+                            baseBatch.addBox(center: SIMD3<Float>(bx, baseY + 1.0, bz), size: SIMD3<Float>(bDepth + 0.15, 2.0, bWidth + 0.15), yaw: -bSample.heading)
+                        }
                         roofBatch.addBox(center: SIMD3<Float>(bx, baseY + bHeight + 0.12, bz), size: SIMD3<Float>(bDepth + 0.4, 0.24, bWidth + 0.4), yaw: -bSample.heading)
-                        baseBatch.addBox(center: SIMD3<Float>(bx, baseY + 1.0, bz), size: SIMD3<Float>(bDepth + 0.15, 2.0, bWidth + 0.15), yaw: -bSample.heading)
                     }
 
                     // -- Trees between the forecourt and the
@@ -4571,6 +4704,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for (materialIndex, batch) in bodyBatches.enumerated() {
             if let mesh = batch.build(name: "station-front-body-\(materialIndex)", material: officeMaterials[materialIndex]) { world.addChild(mesh) }
         }
+        if let mesh = cafeBatch.build(name: "station-front-cafes", material: cafeFacadeMaterial) { world.addChild(mesh) }
         if let shrubs = foliageBlobEntity(name: "station-shrubs", blobs: shrubBlobs, material: foliageMaterials[0], longitudes: 6, latitudes: 5) { world.addChild(shrubs) }
     }
 
