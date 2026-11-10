@@ -10,6 +10,8 @@ public enum FictionalTrackLine: String, Equatable, Sendable {
     case main
     case branch
     case depotSpur
+    case zoo
+    case park
 }
 
 public enum FictionalPlayablePath: String, Equatable, Sendable {
@@ -17,6 +19,8 @@ public enum FictionalPlayablePath: String, Equatable, Sendable {
     case throughBranch
     case branchShuttle
     case depotTransfer
+    case zooLine
+    case parkLine
 }
 
 public enum FictionalPathDirection: String, Equatable, Sendable {
@@ -68,6 +72,8 @@ public enum FictionalTrackImpactSchedule {
     public static let mainLengthM = 60_000.0
     public static let branchLengthM = 8_000.0
     public static let depotLengthM = 2_000.0
+    public static let zooLengthM = 2_500.0
+    public static let parkLengthM = 2_000.0
     /// PLACEHOLDER standard-rail length. Not a copied asset.
     public static let jointedSpacingM = 25.0
     /// PLACEHOLDER insulation joint / rare weld on continuous-welded rail.
@@ -91,7 +97,10 @@ public enum FictionalTrackImpactSchedule {
             span("depot-lead", .depotSpur, .depotLead, 14, 40),
             span("depot-yard-ladder", .depotSpur, .yardLadder, 1_962, 1_988),
             span("branch-junction-main", .main, .branchJunction, 59_974, 60_000),
-            span("branch-junction-branch", .branch, .branchJunction, 0, 28)
+            span("branch-junction-branch", .branch, .branchJunction, 0, 28),
+            span("zoo-junction", .zoo, .branchJunction, 0, 28),
+            span("park-junction", .park, .branchJunction, 0, 28)
+
         ]
         let loops: [(String, FictionalTrackLine, Double)] = [
             ("S05", .main, 8_226),
@@ -114,6 +123,8 @@ public enum FictionalTrackImpactSchedule {
         case .throughBranch: mainLengthM + branchLengthM
         case .branchShuttle: branchLengthM
         case .depotTransfer: depotLengthM
+        case .zooLine: zooLengthM
+        case .parkLine: parkLengthM
         }
     }
 
@@ -132,12 +143,18 @@ public enum FictionalTrackImpactSchedule {
             return (.branch, fromUpStart)
         case .depotTransfer:
             return (.depotSpur, fromUpStart)
+        case .zooLine:
+            return (.zoo, fromUpStart)
+        case .parkLine:
+            return (.park, fromUpStart)
         }
     }
 
     public static func isJointedRail(line: FictionalTrackLine, chainageM: Double) -> Bool {
         switch line {
-        case .branch, .depotSpur:
+        case .branch, .depotSpur, .zoo, .park:
+            // Short lines run on 25 m standard-length (jointed) rail
+            // end to end, so every bogie clicks every 25 m.
             return true
         case .main:
             return mainStationChainageM.contains { abs($0 - chainageM) <= stationJointedRadiusM }
