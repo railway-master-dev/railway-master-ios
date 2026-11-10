@@ -488,7 +488,7 @@ require("import ProtectionSystems" in protection_host_source and "makeProtection
 test_files = list((ROOT / "RailwayMasterPhase1Tests").glob("*.swift"))
 test_source = "\n".join(path.read_text(encoding="utf-8") for path in test_files)
 test_count = len(re.findall(r"\bfunc\s+test[A-Za-z0-9_]*\s*\(", test_source))
-require(test_count == 44, f"Expected 44 XCTest methods, found {test_count}")
+require(test_count == 46, f"Expected 46 XCTest methods, found {test_count}")
 
 scheme = ROOT / "RailwayMasterPhase1.xcodeproj" / "xcshareddata" / "xcschemes" / "RailwayMasterPhase1.xcscheme"
 ET.parse(scheme)
