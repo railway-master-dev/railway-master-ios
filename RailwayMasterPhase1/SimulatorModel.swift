@@ -40,7 +40,6 @@ enum SimulationRunPhase: String, Sendable {
 @MainActor
 final class SimulatorModel: ObservableObject {
     private static let blockLengthM = 500.0
-    private static let yellowSignalSpeedKmh = 45.0
     private static let safetyMarginM = 18.0
     private static let arrivalToleranceM = 4.0
     private static let overshootToleranceM = 12.0
@@ -316,6 +315,16 @@ final class SimulatorModel: ObservableObject {
         audio.setTractionSoundProfile(selectedSoundProfile)
         updateAudio()
         refreshSaveSlots()
+        // CI screenshot tours for the short lines (`-RMZooTour` /
+        // `-RMParkTour` together with `-RMDemoDrive -RMTour`): start
+        // on the requested shuttle so the tour photographs it.
+        if tourEnabled {
+            if ProcessInfo.processInfo.arguments.contains("-RMZooTour") {
+                selectRoute(variant: .zooLine, category: .local, direction: .up)
+            } else if ProcessInfo.processInfo.arguments.contains("-RMParkTour") {
+                selectRoute(variant: .parkLine, category: .local, direction: .up)
+            }
+        }
     }
 
     /// Frame time is only an input clock. All simulation systems advance together at 120 Hz.
@@ -546,6 +555,8 @@ final class SimulatorModel: ObservableObject {
         case .mainline, .throughBranch: compatiblePaths.insert("mainline")
         case .branchShuttle: compatiblePaths.insert("branch")
         case .depotTransfer: compatiblePaths.insert("depotSpur")
+        case .zooLine: break // The zoo shuttle runs alone; no AI traffic paths map onto it.
+        case .parkLine: break // Same for the theme park shuttle.
         }
         for train in trafficSnapshot?.trains ?? [] where compatiblePaths.contains(train.routePathID) {
             states.append(RegionalGameModeTrainState(
@@ -800,6 +811,14 @@ final class SimulatorModel: ObservableObject {
             trackID = travelDirection == .up ? "depot-in" : "depot-out"
             position = travelDirection == .up ? routePosition : 2_000 - routePosition
             direction = travelDirection == .up ? .increasing : .decreasing
+        case .zooLine:
+            trackID = travelDirection == .up ? "zoo-up" : "zoo-down"
+            position = travelDirection == .up ? routePosition : 2_500 - routePosition
+            direction = travelDirection == .up ? .increasing : .decreasing
+        case .parkLine:
+            trackID = travelDirection == .up ? "park-up" : "park-down"
+            position = travelDirection == .up ? routePosition : 2_000 - routePosition
+            direction = travelDirection == .up ? .increasing : .decreasing
         }
         guard position.isFinite, position >= 0 else { return nil }
         return SharedTrainState(
@@ -843,22 +862,14 @@ final class SimulatorModel: ObservableObject {
             previousLimit = section.speedLimitKmh
         }
 
-        if let signal, let block = signalBlock {
-            switch signal.aspect {
-            case .red:
-                let stopPosition = max(engine.positionM + 0.1, block.startM - 2)
-                if stopPosition <= route.distanceM,
-                   let target = try? SafetyStopTarget(identifier: "red-signal-\(block.identifier)", positionM: stopPosition, targetSpeedKmh: 0) {
-                    targets.append(target)
-                }
-            case .yellow:
-                let targetPosition = max(engine.positionM + 0.1, block.startM - 2)
-                if targetPosition <= route.distanceM,
-                   let target = try? SafetyStopTarget(identifier: "yellow-signal-\(block.identifier)", positionM: targetPosition, targetSpeedKmh: Self.yellowSignalSpeedKmh) {
-                    targets.append(target)
-                }
-            case .green:
-                break
+        if let signal, let block = signalBlock, let aspectCap = signal.aspect.speedLimitKmh {
+            // Every restrictive aspect becomes a pattern target at the
+            // block start: 停止 0 / 警戒 25 / 注意 55 / 減速 75 km/h
+            // (TOO RAILWAY table, quality41). 進行 adds no target.
+            let targetPosition = max(engine.positionM + 0.1, block.startM - 2)
+            if targetPosition <= route.distanceM,
+               let target = try? SafetyStopTarget(identifier: "signal-\(signal.aspect.rawValue)-\(block.identifier)", positionM: targetPosition, targetSpeedKmh: aspectCap) {
+                targets.append(target)
             }
         }
 
@@ -1324,7 +1335,7 @@ final class SimulatorModel: ObservableObject {
         // presented — with the train standing at the spot.
         if tourEnabled, tourReadyPendingIndex >= 0,
            simulationTime >= tourTeleportSimTime + 4,
-           abs(engine.positionM - Self.tourSpotsM[tourReadyPendingIndex]) < 5 {
+           abs(engine.positionM - tourSpots[tourReadyPendingIndex]) < 5 {
             let line = "READY spot=\(tourReadyPendingIndex) pos=\(Int(engine.positionM))\n"
             if let data = line.data(using: .utf8) { handle.write(data) }
             tourAwaitingAckIndex = tourReadyPendingIndex
@@ -1362,6 +1373,20 @@ final class SimulatorModel: ObservableObject {
     // shot from 20 m before its centre (the user's choice), so the
     // platform faces, canopies and station cores fill the frame.
     private static let tourSpotsM: [Double] = [5, 1_819, 3_851, 5_980, 8_206, 10_335, 12_367, 14_593, 16_915, 19_141, 21_270, 24_174, 26_303, 28_432, 30_657, 32_883, 35_109, 37_335, 39_561, 41_786, 44_012, 46_238, 48_464, 50_690, 52_915, 55_141, 57_367, 59_980, 61_980, 63_980, 65_980, 67_980, 17_905, 3_545]
+
+    /// The active tour's spots: the short-line tours launched with
+    /// `-RMZooTour` / `-RMParkTour` photograph their own routes
+    /// (zoo: gate, each enclosure band, terminal; park: entrance,
+    /// grounds, terminal).
+    private var tourSpots: [Double] {
+        if ProcessInfo.processInfo.arguments.contains("-RMZooTour") {
+            return [80, 620, 1_030, 1_520, 1_760, 2_430]
+        }
+        if ProcessInfo.processInfo.arguments.contains("-RMParkTour") {
+            return [120, 900, 1_300, 1_930]
+        }
+        return Self.tourSpotsM
+    }
     private var tourSpotIndex = -1
     private var firstTourWallTime: TimeInterval = -1
     // quality24: after a teleport, the world rebuild can outlast the
@@ -1399,8 +1424,8 @@ final class SimulatorModel: ObservableObject {
             // while the first build was still presenting nothing).
             if elapsed >= 25, simulationTime >= 15 {
                 tourSpotIndex = 0
-                teleportForTour(to: Self.tourSpotsM[0])
-                logTourTeleport(to: Self.tourSpotsM[0], spotIndex: 0)
+                teleportForTour(to: tourSpots[0])
+                logTourTeleport(to: tourSpots[0], spotIndex: 0)
                 tourReadyPendingIndex = 0
                 tourTeleportSimTime = simulationTime
             }
@@ -1418,10 +1443,10 @@ final class SimulatorModel: ObservableObject {
                     tourAwaitingAckIndex = -1
                     tourReadyWallTime = -1
                     let next = tourSpotIndex + 1
-                    if next < Self.tourSpotsM.count {
+                    if next < tourSpots.count {
                         tourSpotIndex = next
-                        teleportForTour(to: Self.tourSpotsM[next])
-                        logTourTeleport(to: Self.tourSpotsM[next], spotIndex: next)
+                        teleportForTour(to: tourSpots[next])
+                        logTourTeleport(to: tourSpots[next], spotIndex: next)
                         tourReadyPendingIndex = next
                         tourTeleportSimTime = simulationTime
                     }
@@ -2085,6 +2110,8 @@ final class SimulatorModel: ObservableObject {
         case .throughBranch: .throughBranch
         case .branchShuttle: .branchShuttle
         case .depotTransfer: .depotTransfer
+        case .zooLine: .zooLine
+        case .parkLine: .parkLine
         }
     }
 
