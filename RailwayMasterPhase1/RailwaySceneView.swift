@@ -581,9 +581,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // "not real" cue in the CI #213 tour photos). The range is
         // capped at ~250 m so the shadow map stays detailed around
         // the line instead of covering the whole visible distance.
-        // DIAG6 (throwaway): shadow component intentionally NOT
-        // set — discriminates shadow vs geometry for the dark
-        // bands seen on the track in tour photos.
+        if #available(iOS 26.0, *) {
+            var sunlightShadow = DirectionalLightComponent.Shadow()
+            sunlightShadow.shadowProjection = .automatic(maximumDistance: 250)
+            sunlight.components.set(sunlightShadow)
+        }
         // quality25 (D): the orientation this replaces —
         // simd_quatf(angle: -.pi/3.6, axis: (-0.6, 0.8, -0.3)) —
         // rotates the light's forward vector [0, 0, -1] to
@@ -1569,13 +1571,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // quality24 (C3): placements in this loop are gated by
         // CHAINAGE, not by sample index. The alignment polyline is
         // now sampled at 8.5 m, but sleepers keep their ~42.5 m
-        // cadence and ballast slabs their ~127.5 m span — both sit
-        // under the trackbed ribbon, so their chord error is
-        // invisible and their entity counts must not grow. The
-        // lineside walls below are the exception: they drop to a
-        // 12.75 m pitch and merge into batched meshes.
+        // cadence and sit under the trackbed ribbon, so their chord
+        // error is invisible and their entity counts must not grow.
+        // (The ~127.5 m ballast slabs that shared this gating were
+        // removed in quality36 — see the note at the sleeper gate.)
+        // The lineside walls below are the exception: they drop to
+        // a 12.75 m pitch and merge into batched meshes.
         var nextSleeperChainage = samples.first?.distanceM ?? 0
-        var nextBallastChainage = samples.first?.distanceM ?? 0
         var nextWallChainage = samples.first?.distanceM ?? 0
         var wallBatch = MeshBatchBuilder()
         // quality25 (G): showcase-section wall dressing (coping and
@@ -1602,24 +1604,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let isMainlineSection = travelDirection == .up ? sample.distanceM < 60_000 : sample.distanceM >= 8_000
             let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
             let trackOffsets: [Float] = hasPassingTrack ? [-2.1, 2.1] : [travelDirection == .up ? -2.1 : 2.1]
-            if sample.distanceM >= nextBallastChainage {
-                // Tile each slab to the next gated sample so the run
-                // stays continuous on any sampling grid.
-                var spanEnd = index
-                while spanEnd + 1 < samples.count, samples[spanEnd].distanceM - sample.distanceM < 127.5 {
-                    spanEnd += 1
-                }
-                let segmentLength = max(Float(samples[spanEnd].distanceM - sample.distanceM), 8)
-                nextBallastChainage = sample.distanceM + 127.5
-                for (trackIndex, lateral) in trackOffsets.enumerated() {
-                    let centerX = sample.x + lateral * cos(sample.heading)
-                    let centerZ = sample.z + lateral * sin(sample.heading)
-                    addSurfaceBox(parent: world, name: "ballast-\(index)-\(trackIndex)", size: SIMD3<Float>(3.2, 0.15, segmentLength), position: SIMD3<Float>(centerX, sample.elevationM - 0.01, centerZ), color: UIColor(red: 1, green: 0, blue: 0, alpha: 1), roughness: 0.96, orientation: trackOrientation)
-                    // Rails are no longer boxes: buildRailsAndShoulders
-                    // extrudes a true head/web/base profile along the
-                    // line (see below).
-                }
-            }
+            // quality36: the dark ballast slab boxes that used to be
+            // placed here (3.2 m wide, ~127.5 m long, flat grey) are
+            // REMOVED. They were pitched as rigid chords while the
+            // trackbed ribbon follows the grade sample by sample, so
+            // on every grade and curve they sliced up through the
+            // ribbon and read in tour photos as unexplained black
+            // bands lying on the track (isolated by the diag6
+            // red-slab build, 2026-11-10). The ribbon and the
+            // fidelity trackbed below it carry the formation now.
             if sample.distanceM >= nextSleeperChainage {
                 nextSleeperChainage = sample.distanceM + 42.5
                 for (trackIndex, lateral) in trackOffsets.enumerated() {
@@ -1699,16 +1692,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         flushWallBatch()
     }
 
-    /// Trackside colour-light signals at the canonical 3 km spacing on
-    /// the main line (the route data carries its signals every 3 km,
-    /// sighted on the left of the running track). Each head defaults to
-    /// green; the signal protecting the block ahead is re-lit from the
+    /// Trackside colour-light signals on the main line, sighted on
+    /// the left of the running track. Each head defaults to green;
+    /// the signal protecting the block ahead is re-lit from the
     /// model's actual reading in updateSignalAspect.
+    /// quality36: the placement grid densified from the route data's
+    /// 3 km block spacing — at 3 km the tour photos never contained
+    /// a signal at all (every spot sat just past one). Signals now
+    /// stand every 1.5 km, plus a home signal 400 m before every
+    /// mainline station, the way real lines mix automatic block
+    /// signals with station entry signals.
     private func buildSignals(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
         let lateral: Float = travelDirection == .up ? -3.7 : 3.7
         let headMaterial = Self.pbr(UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1), metallic: 0.3, roughness: 0.6)
-        for target in stride(from: 0.0, to: 60_000.0, by: 3_000.0) {
+        var targets: [Double] = stride(from: 0.0, to: 60_000.0, by: 1_500.0).map { $0 }
+        for placement in stationModelPlacements {
+            let center = chainageFromCenter(distanceM: placement.chainageM, route: route, travelDirection: travelDirection)
+            guard center > 600, center < 59_400 else { continue }
+            targets.append(center + (travelDirection == .up ? -400 : 400))
+        }
+        targets.sort()
+        var dedupedTargets: [Double] = []
+        for target in targets where dedupedTargets.last.map({ target - $0 >= 250 }) ?? true {
+            dedupedTargets.append(target)
+        }
+        for target in dedupedTargets {
             var best: RouteSample?
             var bestDelta = Double.greatestFiniteMagnitude
             for sample in samples where isMainlineSection(distanceM: sample.distanceM, routeVariant: routeVariant, travelDirection: travelDirection) {
