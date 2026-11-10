@@ -604,7 +604,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
             buildFictionalCorridorLandmarks(route: route, quality: quality)
             buildShowcaseSection(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildDestinationPlatform(route: route)
+            // quality29: buildDestinationPlatform is gone. It was a
+            // pre-quality25 leftover that laid two rigid 115 m
+            // concrete boxes centred ON the tracks at the demo's
+            // destination (lateral +/-1.9 m, top above rail head),
+            // pitched level while the track climbs ~20 per mille —
+            // at Matsubaracho the boxes sliced through both tracks
+            // diagonally for the whole platform length, which is
+            // the "broken track" in the Codemagic photos. The
+            // curve-following platforms from buildStationPlatforms
+            // below serve every station, the destination included.
         }
         buildLevelCrossings(route: route)
         buildConsist(carCount: safeCarCount, useHighFidelityLead: quality == .high)
@@ -1966,6 +1975,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             height = max(15, height)
         }
         height *= heightScale
+        // quality29: no station check used to exist here, so a
+        // tower face could land inside a station platform (the
+        // Matsubaracho apartment sliced by the platform back).
+        guard buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) else { return }
         let segments = max(1, Int((height / 15).rounded()))
         let segmentHeight = height / Float(segments)
         let offset = side * lateral
@@ -2060,6 +2073,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let width = (shed ? 7.2 : 4.6) + Float((index * 7) % 4) * 0.75
             let depth = (shed ? 4.2 : 5.4) + Float((index * 5) % 4) * 0.8
             let height = (shed ? 2.6 : 3.6) + Float((index * 11) % 6) * 0.65
+            // quality29: houses keep clear of station platforms too
+            // (a house face could reach 5.1 m from the centre, well
+            // inside the 8.12 m platform back).
+            if !buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) {
+                index += 1
+                distance += buildingStep
+                continue
+            }
             let offset = sign * lateral
             let x = sample.x + offset * cos(sample.heading)
             let z = sample.z + offset * sin(sample.heading)
@@ -2599,22 +2620,6 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
-    private func buildDestinationPlatform(route: RailwayRouteProfile) {
-        let sample = sample(at: route.stopMarkerM)
-        for side in [-1.0, 1.0] {
-            let lateral = Float(side) * 1.9
-            let x = sample.x + lateral * cos(sample.heading)
-            let z = sample.z + lateral * sin(sample.heading)
-            let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
-            addBox(parent: world, name: "arrival-platform-\(Int(side))", size: SIMD3<Float>(2.0, 0.48, 115), position: SIMD3<Float>(x, sample.elevationM + 0.24, z), material: concreteMaterial, orientation: yaw)
-            addBox(parent: world, name: "tactile-strip-\(Int(side))", size: SIMD3<Float>(0.3, 0.035, 115), position: SIMD3<Float>(x - Float(side) * 0.8 * cos(sample.heading), sample.elevationM + 0.50, z - Float(side) * 0.8 * sin(sample.heading)), material: tactileMaterial, orientation: yaw)
-        }
-        let signSample = self.sample(at: max(route.stopMarkerM - 42, 0))
-        let signYaw = simd_quatf(angle: -signSample.heading, axis: SIMD3<Float>(0, 1, 0))
-        addBox(parent: world, name: "fictional-station-sign-post", size: SIMD3<Float>(0.12, 2.8, 0.12), position: SIMD3<Float>(signSample.x + 3.4, signSample.elevationM + 1.4, signSample.z), material: poleMaterial)
-        addBox(parent: world, name: "fictional-station-sign", size: SIMD3<Float>(2.4, 0.75, 0.14), position: SIMD3<Float>(signSample.x + 3.4, signSample.elevationM + 2.6, signSample.z), material: glassMaterial, orientation: signYaw)
-    }
-
     private func buildRoadTraffic(
         route: RailwayRouteProfile,
         scenario: TrafficScenario?,
@@ -2821,8 +2826,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // and its straight 42 m track parts are removed —
                 // the app builds curve-following platforms at the
                 // corrected length and the app track already runs
-                // through the station. Building, canopy, footbridge,
-                // signs, benches and vending machines stay.
+                // through the station. Building, canopy, footbridge
+                // and signs stay. quality29: benches, vending
+                // machines and bins are removed too — as part of the
+                // rigid 42 m GLB they cannot follow the platform's
+                // grade (on Matsubaracho's 20 per mille they ended
+                // up sunk into the new platform away from the
+                // anchor point), so buildStationFurniture now
+                // places them procedurally along the platform.
                 stripGeneratedPlatformParts(entity)
                 adjustGeneratedStationHeights(entity)
                 entity.name = "generated-station-\(placement.stationId)-\(placement.trackCount)track-\(placement.platformCount)platform"
@@ -2852,7 +2863,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 || name.hasPrefix("end_fence_")
                 || name.hasPrefix("trackbed_")
                 || name.hasPrefix("rail_")
-                || name.hasPrefix("sleeper_") {
+                || name.hasPrefix("sleeper_")
+                || name.hasPrefix("bench_")
+                || name.hasPrefix("vending_")
+                || name.hasPrefix("bin_") {
                 child.removeFromParent()
             } else {
                 stripGeneratedPlatformParts(child)
@@ -2875,11 +2889,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// canopy columns span Y 0.20–3.20 and are stretched so their
     /// tops meet the raised underside (3.16 + 1.85 = 5.01 =
     /// 3.20 × 1.566) while their bases stay buried below the new
-    /// platform top. Benches, vending machines and bins are rooted
-    /// at the old platform top (from Y 0.22) and were sunk 1.19 m
-    /// under the new platform; they rise by that difference. The
-    /// footbridge deck (Y 5.84–6.16) and the station building are
-    /// already correct and untouched. The 5-track major station
+    /// platform top. (Benches, vending machines and bins used to be
+    /// raised here too; since quality29 they are stripped from the
+    /// GLB and placed procedurally — see buildStationFurniture.)
+    /// The footbridge deck (Y 5.84–6.16) and the station building
+    /// are already correct and untouched. The 5-track major station
     /// GLB is a single merged node named "station", so nothing
     /// matches there — the same known limitation as
     /// stripGeneratedPlatformParts.
@@ -2893,10 +2907,6 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 child.position.y += 1.85
             } else if name.hasPrefix("canopy_column_") {
                 child.scale.y *= 1.566
-            } else if name.hasPrefix("bench_")
-                || name.hasPrefix("vending_")
-                || name.hasPrefix("bin_") {
-                child.position.y += 1.19
             }
             adjustGeneratedStationHeights(child)
         }
@@ -3547,6 +3557,25 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// existed, the showcase layer put equipment boxes and fence
     /// lines straight through Matsubaracho's platforms, and the
     /// lineside noise walls ran through every station on the line.
+    /// True when a building footprint stays clear of every station
+    /// platform (quality29). Towers and houses used to be placed
+    /// with no station check at all: a mid-rise tower's face could
+    /// land inside the platform box (Matsubaracho, Codemagic
+    /// photos: the apartment wall flush with the platform back,
+    /// its ground floor sliced by the platform). The widest
+    /// platform back reaches 2.1 + 1.52 + 6.0 = 9.62 m from the
+    /// route centre, so a face at 10 m or beyond is always clear;
+    /// inside that, the footprint must not overlap the platform's
+    /// chainage range either.
+    private func buildingClearOfPlatforms(chainage: Double, halfLength: Double, lateral: Float, halfDepth: Float) -> Bool {
+        if abs(lateral) - halfDepth >= 10 { return true }
+        for placement in stationModelPlacements {
+            let platformHalf = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2 + 10
+            if abs(chainage - placement.chainageM) < platformHalf + halfLength { return false }
+        }
+        return true
+    }
+
     private func inStationZone(_ chainage: Double, extraMargin: Double = 0) -> Bool {
         for placement in stationModelPlacements {
             let half = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2 + 20 + extraMargin
@@ -3597,6 +3626,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         start: start, end: end,
                         trackLateral: trackLateral, sideSign: sideSign, width: width,
                         whiteLineMaterial: whiteLineMaterial
+                    )
+                    buildStationFurniture(
+                        name: "furniture-\(placement.stationId)-\(trackLateral)-\(sideSign)",
+                        centerChainage: placement.chainageM,
+                        start: start, end: end,
+                        trackLateral: trackLateral, sideSign: sideSign
                     )
                 }
             }
@@ -3712,6 +3747,156 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         topStrip(name: "\(name)-tactile", innerU: tactileInner, outerU: tactileInner + 0.30, lift: 0.012, material: tactileMaterial)
         topStrip(name: "\(name)-whiteline", innerU: edgeOffset + 0.08, outerU: edgeOffset + 0.18, lift: 0.006, material: whiteLineMaterial)
+    }
+
+    // MARK: quality29 procedural station furniture
+
+    private var stationBenchWoodMesh: MeshResource?
+    private var stationBenchFrameMesh: MeshResource?
+
+    /// Appends an axis-aligned box to mesh buffers, in the furniture
+    /// local frame: X = lateral (a bench's front faces -X), Y = up
+    /// from the platform top, Z = along the track. 24 vertices with
+    /// per-face normals and 0..1 UVs so textured materials work.
+    private func appendFurnitureBox(
+        positions: inout [SIMD3<Float>], normals: inout [SIMD3<Float>],
+        uvs: inout [SIMD2<Float>], indices: inout [UInt32],
+        center: SIMD3<Float>, size: SIMD3<Float>
+    ) {
+        let hx = size.x / 2
+        let hy = size.y / 2
+        let hz = size.z / 2
+        let faces: [(SIMD3<Float>, [SIMD3<Float>])] = [
+            (SIMD3<Float>(0, 0, 1), [SIMD3<Float>(-hx, -hy, hz), SIMD3<Float>(hx, -hy, hz), SIMD3<Float>(hx, hy, hz), SIMD3<Float>(-hx, hy, hz)]),
+            (SIMD3<Float>(0, 0, -1), [SIMD3<Float>(hx, -hy, -hz), SIMD3<Float>(-hx, -hy, -hz), SIMD3<Float>(-hx, hy, -hz), SIMD3<Float>(hx, hy, -hz)]),
+            (SIMD3<Float>(1, 0, 0), [SIMD3<Float>(hx, -hy, hz), SIMD3<Float>(hx, -hy, -hz), SIMD3<Float>(hx, hy, -hz), SIMD3<Float>(hx, hy, hz)]),
+            (SIMD3<Float>(-1, 0, 0), [SIMD3<Float>(-hx, -hy, -hz), SIMD3<Float>(-hx, -hy, hz), SIMD3<Float>(-hx, hy, hz), SIMD3<Float>(-hx, hy, -hz)]),
+            (SIMD3<Float>(0, 1, 0), [SIMD3<Float>(-hx, hy, hz), SIMD3<Float>(hx, hy, hz), SIMD3<Float>(hx, hy, -hz), SIMD3<Float>(-hx, hy, -hz)]),
+            (SIMD3<Float>(0, -1, 0), [SIMD3<Float>(-hx, -hy, -hz), SIMD3<Float>(hx, -hy, -hz), SIMD3<Float>(hx, -hy, hz), SIMD3<Float>(-hx, -hy, hz)]),
+        ]
+        let faceUV: [SIMD2<Float>] = [SIMD2<Float>(0, 0), SIMD2<Float>(1, 0), SIMD2<Float>(1, 1), SIMD2<Float>(0, 1)]
+        for (normal, corners) in faces {
+            let base = UInt32(positions.count)
+            for (cornerIndex, corner) in corners.enumerated() {
+                positions.append(center + corner)
+                normals.append(normal)
+                uvs.append(faceUV[cornerIndex])
+            }
+            indices.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
+        }
+    }
+
+    /// The shared bench meshes: timber seat/back slats (wood) and
+    /// the steel frame (panel legs + back posts). Real dimensions:
+    /// 1.8 m long, seat top 0.45 m, back top 0.97 m. The GLB bench
+    /// this replaces had the same nominal size but read as a solid
+    /// timber wall in photos because its back was one slab wearing
+    /// a stretched plank texture; slats with gaps fix that.
+    private func makeStationBenchMeshes() -> (wood: MeshResource, frame: MeshResource)? {
+        if let wood = stationBenchWoodMesh, let frame = stationBenchFrameMesh {
+            return (wood, frame)
+        }
+        var wp: [SIMD3<Float>] = []
+        var wn: [SIMD3<Float>] = []
+        var wuv: [SIMD2<Float>] = []
+        var wi: [UInt32] = []
+        for sx: Float in [-0.17, 0, 0.17] {
+            appendFurnitureBox(positions: &wp, normals: &wn, uvs: &wuv, indices: &wi,
+                               center: SIMD3<Float>(sx, 0.4275, 0), size: SIMD3<Float>(0.13, 0.045, 1.8))
+        }
+        for sy: Float in [0.72, 0.90] {
+            appendFurnitureBox(positions: &wp, normals: &wn, uvs: &wuv, indices: &wi,
+                               center: SIMD3<Float>(0.26, sy, 0), size: SIMD3<Float>(0.04, 0.13, 1.8))
+        }
+        var woodDescriptor = MeshDescriptor(name: "station-bench-wood")
+        woodDescriptor.positions = MeshBuffers.Positions(wp)
+        woodDescriptor.normals = MeshBuffers.Normals(wn)
+        woodDescriptor.textureCoordinates = MeshBuffers.TextureCoordinates(wuv)
+        woodDescriptor.primitives = .triangles(wi)
+        var fp: [SIMD3<Float>] = []
+        var fn: [SIMD3<Float>] = []
+        var fuv: [SIMD2<Float>] = []
+        var fi: [UInt32] = []
+        for sz: Float in [-0.72, 0.72] {
+            appendFurnitureBox(positions: &fp, normals: &fn, uvs: &fuv, indices: &fi,
+                               center: SIMD3<Float>(0, 0.225, sz), size: SIMD3<Float>(0.5, 0.45, 0.06))
+            appendFurnitureBox(positions: &fp, normals: &fn, uvs: &fuv, indices: &fi,
+                               center: SIMD3<Float>(0.26, 0.66, sz), size: SIMD3<Float>(0.04, 0.48, 0.05))
+        }
+        var frameDescriptor = MeshDescriptor(name: "station-bench-frame")
+        frameDescriptor.positions = MeshBuffers.Positions(fp)
+        frameDescriptor.normals = MeshBuffers.Normals(fn)
+        frameDescriptor.textureCoordinates = MeshBuffers.TextureCoordinates(fuv)
+        frameDescriptor.primitives = .triangles(fi)
+        guard let wood = try? MeshResource.generate(from: [woodDescriptor]),
+              let frame = try? MeshResource.generate(from: [frameDescriptor]) else { return nil }
+        stationBenchWoodMesh = wood
+        stationBenchFrameMesh = frame
+        return (wood, frame)
+    }
+
+    /// Benches, a vending machine and a bin for one platform,
+    /// placed in the same canted profile frame the platform itself
+    /// is built in, so every item sits exactly on the platform top
+    /// and follows its curve and grade (quality29; the rigid GLB
+    /// items they replace sank into the platform on grades). The
+    /// station core stays clear: footbridge stairs land within
+    /// +/-2.5 m of the centre and the GLB station building spans
+    /// local X -19...-9 on one side, so no bench goes at -17 m.
+    private func buildStationFurniture(name: String, centerChainage: Double, start: Double, end: Double, trackLateral: Float, sideSign: Float) {
+        let topV: Float = 0.3065 + 1.10
+        func topPoint(at chainage: Double, u: Float, v: Float) -> SIMD3<Float> {
+            let station = profileStation(at: chainage, trackLateral: trackLateral)
+            return station.center + station.xAxis * u + station.yAxis * v
+        }
+        func orientation(at chainage: Double) -> simd_quatf {
+            let s = sample(at: chainage)
+            var q = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0)) * simd_quatf(angle: -s.bankRadians, axis: SIMD3<Float>(0, 0, 1))
+            if sideSign < 0 {
+                q = q * simd_quatf(angle: Float.pi, axis: SIMD3<Float>(0, 1, 0))
+            }
+            return q
+        }
+        if let meshes = makeStationBenchMeshes() {
+            var woodMaterial = sleeperMaterial
+            woodMaterial.faceCulling = .none
+            var frameMaterial = Self.pbr(UIColor(red: 0.16, green: 0.17, blue: 0.18, alpha: 1), metallic: 0.55, roughness: 0.5)
+            frameMaterial.faceCulling = .none
+            for offset: Double in [-51, -34, 17, 34, 51] {
+                let chainage = centerChainage + offset
+                guard chainage >= start + 9, chainage <= end - 9 else { continue }
+                let q = orientation(at: chainage)
+                let position = topPoint(at: chainage, u: sideSign * 5.35, v: topV)
+                let wood = ModelEntity(mesh: meshes.wood, materials: [woodMaterial])
+                wood.name = "\(name)-bench-wood-\(Int(offset))"
+                wood.position = position
+                wood.orientation = q
+                world.addChild(wood)
+                let frame = ModelEntity(mesh: meshes.frame, materials: [frameMaterial])
+                frame.name = "\(name)-bench-frame-\(Int(offset))"
+                frame.position = position
+                frame.orientation = q
+                world.addChild(frame)
+            }
+        }
+        let vendingBodyMaterial = Self.pbr(UIColor(red: 0.84, green: 0.85, blue: 0.86, alpha: 1), metallic: 0.15, roughness: 0.45)
+        let binMaterial = Self.pbr(UIColor(red: 0.20, green: 0.28, blue: 0.22, alpha: 1), roughness: 0.8)
+        let vendingChainage = centerChainage + 12.5
+        if vendingChainage <= end - 9 {
+            let q = orientation(at: vendingChainage)
+            _ = addBox(parent: world, name: "\(name)-vending", size: SIMD3<Float>(0.62, 1.9, 1.05),
+                       position: topPoint(at: vendingChainage, u: sideSign * 5.45, v: topV + 0.95),
+                       material: vendingBodyMaterial, orientation: q)
+            _ = addBox(parent: world, name: "\(name)-vending-front", size: SIMD3<Float>(0.04, 1.35, 0.88),
+                       position: topPoint(at: vendingChainage, u: sideSign * 5.45 - sideSign * 0.32, v: topV + 1.02),
+                       material: glassMaterial, orientation: q)
+        }
+        let binChainage = centerChainage + 14.3
+        if binChainage <= end - 9 {
+            _ = addBox(parent: world, name: "\(name)-bin", size: SIMD3<Float>(0.45, 0.6, 0.45),
+                       position: topPoint(at: binChainage, u: sideSign * 5.45, v: topV + 0.3),
+                       material: binMaterial, orientation: orientation(at: binChainage))
+        }
     }
 
     private func sceneFidelityCorridor(for route: RailwayRouteProfile) -> SceneCorridorSpecification {
