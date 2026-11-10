@@ -642,6 +642,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             buildSceneFidelityRegion(route: route, chainageM: 0, useLiveCamera: false)
         } else {
             sceneFidelityRoute = nil
+            computeCrossingCenters(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildTrack(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildTunnels(route: route)
             buildSignals(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
@@ -1273,10 +1274,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // off the track (measured), so the wall is a vertical strip
         // following the samples instead, pulled in inside tight
         // curves so it can never fold through the track.
-        var backdropMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_mountains")
+        // quality38 (photoreal batch 3): aerial perspective baked
+        // into the backdrop textures. The 680 m wall now uses
+        // variants mixed 40-45 % toward the horizon colour so the
+        // silhouettes soften and the wall's top edge stops fighting
+        // the photo sky dome; the 300 m city layer gets a lighter
+        // 18 % mix of the same skyline (citylineMaterial below).
+        var backdropMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_mountains_haze")
         backdropMaterial.faceCulling = .none
-        var skylineMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_skyline")
+        var skylineMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_skyline_haze")
         skylineMaterial.faceCulling = .none
+        var citylineMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "backdrop_skyline_haze300")
+        citylineMaterial.faceCulling = .none
         let backdropLaterals: [Float] = samples.map { clampedWallLateral(side: 1, standoff: 680, route: route, sample: $0) }
         let backdropBottoms: [Float] = samples.map { groundLevelM(at: $0) - 15 }
         // Top at +45 m, not +95 m: with the old height the upper,
@@ -1348,7 +1357,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         // skyline panorama at 300 m (see cityTops).
                         if let city = verticalRibbonEntity(name: "cityline-mid-\(sideSign > 0 ? "r" : "l")-\(runStart)",
                                                            lateralOffsets: laterals, bottomYs: forestBottoms, topYs: cityTops,
-                                                           tileLength: 900, material: skylineMaterial,
+                                                           tileLength: 900, material: citylineMaterial,
                                                            range: runStart..<runEnd) {
                             world.addChild(city)
                         }
@@ -1668,7 +1677,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // quality25 (B): station zones are excluded too — the
             // wall at ±5.6 m used to run straight through the
             // platform slabs of every station on the line.
-            if sample.distanceM >= nextWallChainage, hasPassingTrack, !corridorReserved(at: sample.distanceM, landmarks: wallLandmarks), !inStationZone(sample.distanceM), !nearThroatFan(sample.distanceM) {
+            if sample.distanceM >= nextWallChainage, hasPassingTrack, !corridorReserved(at: sample.distanceM, landmarks: wallLandmarks), !inStationZone(sample.distanceM), !nearThroatFan(sample.distanceM), !nearCrossing(sample.distanceM, margin: 10) {
                 var spanEnd = index
                 while spanEnd + 1 < samples.count, samples[spanEnd].distanceM - sample.distanceM < 12.75 {
                     spanEnd += 1
@@ -2349,6 +2358,41 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let offset = sign * lateral
             let x = sample.x + offset * cos(sample.heading)
             let z = sample.z + offset * sin(sample.heading)
+            // quality38 (photoreal batch 2): break the metronome.
+            // Houses keep off the new level-crossing roads, and the
+            // suburban density follows the surveyed waveform: a peak
+            // near stations, thinning between them where low-use
+            // land (monthly parking, vacant lots) takes whole plots.
+            if nearCrossing(distance, margin: 9) {
+                index += 1
+                distance += buildingStep
+                continue
+            }
+            let nearestStation = stationModelPlacements.map { abs($0.chainageM - distance) }.min() ?? .infinity
+            if nearestStation <= 260, !shed, index % 3 == 0 {
+                // Station-front apartment slab instead of a house:
+                // flat-roofed, facade-textured, 3-5 floors.
+                let aptHeight = 9.5 + Float(index % 4) * 2.6
+                let apt = addBox(parent: world, name: "station-apartment-\(index)", size: SIMD3<Float>(11.5, aptHeight, 7.6), position: SIMD3<Float>(x, groundY + aptHeight / 2, z), material: officeMaterials[index % officeMaterials.count])
+                apt.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                _ = addBox(parent: world, name: "station-apartment-roof-\(index)", size: SIMD3<Float>(11.9, 0.3, 8.0), position: SIMD3<Float>(x, groundY + aptHeight + 0.15, z), material: roofMaterials[index % roofMaterials.count], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                index += 1
+                distance += buildingStep
+                continue
+            }
+            if nearestStation > 700, !shed, index % 10 == 3 || index % 10 == 7 {
+                // Low-use plot: asphalt pad, and a signpost on the
+                // parking variant. No house, no roof, no windows.
+                _ = addBox(parent: world, name: "lowuse-lot-\(index)", size: SIMD3<Float>(width + 3.4, 0.07, depth + 3.2), position: SIMD3<Float>(x, groundY + 0.035, z), material: roadMaterial, orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                if index % 10 == 3 {
+                    let postPoint = groundOffsetPoint(sample, lateral: offset - sign * (width / 2))
+                    _ = addBox(parent: world, name: "lowuse-sign-\(index)", size: SIMD3<Float>(0.09, 1.7, 0.09), position: SIMD3<Float>(postPoint.x, postPoint.y + 0.85, postPoint.z), material: poleMaterial)
+                    _ = addBox(parent: world, name: "lowuse-board-\(index)", size: SIMD3<Float>(0.06, 0.5, 0.9), position: SIMD3<Float>(postPoint.x, postPoint.y + 1.55, postPoint.z), material: roofMaterials[2], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                }
+                index += 1
+                distance += buildingStep
+                continue
+            }
             // Every third house wears the full photo facade; its windows
             // and door are painted in, so the separate boxes are skipped.
             let useFacadeTexture = !shed && index % 3 == 2
@@ -2490,20 +2534,162 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
-    private func buildLevelCrossings(route: RailwayRouteProfile) {
-        for (index, distance) in [route.distanceM * 0.31, route.distanceM * 0.69].enumerated() {
-            let sample = sample(at: distance)
-            let roadYaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
-            addBox(parent: world, name: "crossing-road-\(index)", size: SIMD3<Float>(18, 0.1, 5.5), position: SIMD3<Float>(sample.x, sample.elevationM + 0.19, sample.z), material: roadMaterial, orientation: roadYaw)
-            for side in [-1.0, 1.0] {
-                let lateral = Float(side) * 2.4
-                let x = sample.x + lateral * cos(sample.heading)
-                let z = sample.z + lateral * sin(sample.heading)
-                addBox(parent: world, name: "crossing-warning-post-\(index)-\(Int(side))", size: SIMD3<Float>(0.14, 1.4, 0.14), position: SIMD3<Float>(x, sample.elevationM + 0.9, z), material: roofMaterials[0])
-                let arm = addBox(parent: world, name: "crossing-arm-\(index)-\(Int(side))", size: SIMD3<Float>(0.12, 0.1, 3.0), position: SIMD3<Float>(x, sample.elevationM + 1.48, z), material: railMaterial)
-                arm.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+    // quality38: level crossings rebuilt to the surveyed spec
+    // (cat07). The old version was two token crossings (a road slab,
+    // a 1.4 m post and a floating bar each) at 31 %/69 % of the
+    // route. Crossings now sit wherever the line is genuinely at
+    // grade: terrain within 1 m of rail level sustained over
+    // +/-30 m, clear of station zones, throat fans, the tunnel
+    // stretch and the coastal sea sections, spaced roughly
+    // 600-1,400 m apart with a seeded jitter so the rhythm is not
+    // metronomic. Each crossing is the full roadside set: a road
+    // strip across the apron, stepped ramps up to deck panels laid
+    // flush with the rail head, stop lines, four warning-pole units
+    // (pole, crossbuck, twin red lamps with backboard, direction
+    // indicator, speaker, name plate, emergency button box), two
+    // barrier machines with striped arms lowered across the road,
+    // and short fences tying the corners back into the lineside.
+    private var crossingCenters: [Double] = []
+
+    private func computeCrossingCenters(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        var centers: [Double] = []
+        var cursor = 2_400.0
+        while cursor < route.distanceM - 1_200 {
+            let jitter = Double(stableIndex("crossing-\(Int(cursor))", count: 5)) * 55.0
+            var probe = cursor + jitter
+            var placed: Double? = nil
+            while probe < cursor + jitter + 520 {
+                let liftHere = sample(at: probe).elevationM - groundLevelM(at: probe)
+                let liftA = sample(at: probe - 30).elevationM - groundLevelM(at: probe - 30)
+                let liftB = sample(at: probe + 30).elevationM - groundLevelM(at: probe + 30)
+                if liftHere < 1.0, liftA < 1.3, liftB < 1.3,
+                   !inStationZone(probe, extraMargin: 45), !nearThroatFan(probe),
+                   !(probe > 41_500 && probe < 44_300),
+                   !isCoastal(distanceM: probe, route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
+                    placed = probe
+                    break
+                }
+                probe += 25
+            }
+            if let found = placed {
+                centers.append(found)
+                cursor = found + 600
+            } else {
+                cursor += 850
             }
         }
+        crossingCenters = centers
+    }
+
+    private func nearCrossing(_ chainage: Double, margin: Double) -> Bool {
+        for center in crossingCenters where abs(chainage - center) < margin {
+            return true
+        }
+        return false
+    }
+
+    private func buildLevelCrossings(route: RailwayRouteProfile) {
+        guard !crossingCenters.isEmpty else { return }
+        print("RM crossings at: \(crossingCenters.map { Int($0) })")
+        for (index, center) in crossingCenters.enumerated() {
+            buildOneCrossing(index: index, center: center)
+        }
+    }
+
+    private func buildOneCrossing(index: Int, center: Double) {
+        let s = sample(at: center)
+        let heading = s.heading
+        let ax = SIMD3<Float>(cos(heading), 0, sin(heading))
+        let ay = SIMD3<Float>(0, 1, 0)
+        let az = SIMD3<Float>(-sin(heading), 0, cos(heading))
+        let origin = SIMD3<Float>(s.x, s.elevationM, s.z)
+        func pt(_ lat: Float, _ up: Float, _ along: Float) -> SIMD3<Float> {
+            origin + ax * lat + ay * up + az * along
+        }
+        let roadYaw = simd_quatf(angle: -heading, axis: SIMD3<Float>(0, 1, 0))
+
+        // Road strip across the whole apron, deck panels flush with
+        // the rail head over the tracks, and two terrace steps each
+        // side so the road climbs from apron level to deck level.
+        addBox(parent: world, name: "crossing-road-\(index)", size: SIMD3<Float>(150, 0.07, 5.6), position: pt(0, -0.005, 0), material: roadMaterial, orientation: roadYaw)
+        addBox(parent: world, name: "crossing-deck-\(index)", size: SIMD3<Float>(10.4, 0.1, 5.6), position: pt(0, 0.237, 0), material: roadMaterial, orientation: roadYaw)
+        for sideSign: Float in [-1, 1] {
+            addBox(parent: world, name: "crossing-ramp1-\(index)-\(Int(sideSign))", size: SIMD3<Float>(3.2, 0.09, 5.6), position: pt(sideSign * 6.8, 0.145, 0), material: roadMaterial, orientation: roadYaw)
+            addBox(parent: world, name: "crossing-ramp2-\(index)-\(Int(sideSign))", size: SIMD3<Float>(3.2, 0.09, 5.6), position: pt(sideSign * 10.0, 0.055, 0), material: roadMaterial, orientation: roadYaw)
+        }
+
+        var darkBatch = MeshBatchBuilder()
+        var yellowBatch = MeshBatchBuilder()
+        var whiteBatch = MeshBatchBuilder()
+        var redBatch = MeshBatchBuilder()
+
+        // Stop lines 1.8 m before the outer rail on every approach
+        // half, plus short centre dashes leading into the crossing.
+        for latSign: Float in [-1, 1] {
+            for alongSign: Float in [-1, 1] {
+                whiteBatch.addBoxAxes(center: pt(latSign * 4.83, 0.045, alongSign * 1.4), size: SIMD3<Float>(0.35, 0.02, 2.7), ax: ax, ay: ay, az: az)
+            }
+            whiteBatch.addBoxAxes(center: pt(latSign * 13.5, 0.042, 0), size: SIMD3<Float>(13, 0.015, 0.14), ax: ax, ay: ay, az: az)
+        }
+
+        let bladeCos = Float(cos(0.73))
+        let bladeSin = Float(sin(0.73))
+        for latSign: Float in [-1, 1] {
+            for alongSign: Float in [-1, 1] {
+                let poleLat = latSign * 4.35
+                let poleAlong = alongSign * 3.55
+                // Warning pole unit (spec: 3.6 m pole at the road
+                // corners, about 4 m from the track centre).
+                darkBatch.addBoxAxes(center: pt(poleLat, 1.8, poleAlong), size: SIMD3<Float>(0.16, 3.6, 0.16), ax: ax, ay: ay, az: az)
+                darkBatch.addBoxAxes(center: pt(poleLat, 3.48, poleAlong), size: SIMD3<Float>(0.3, 0.16, 0.3), ax: ax, ay: ay, az: az)
+                // Crossbuck: two blades crossed at about 42 degrees,
+                // facing the road traffic.
+                for flip: Float in [1, -1] {
+                    let bladeUp = ay * bladeCos + az * (bladeSin * flip)
+                    let bladeAlong = ay * (-bladeSin * flip) + az * bladeCos
+                    yellowBatch.addBoxAxes(center: pt(poleLat + latSign * 0.06, 3.02, poleAlong), size: SIMD3<Float>(0.04, 1.25, 0.24), ax: ax, ay: bladeUp, az: bladeAlong)
+                }
+                // Twin red warning lamps in a housing with a back
+                // disc, and the direction indicator beside them.
+                darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.1, 2.32, poleAlong), size: SIMD3<Float>(0.18, 0.66, 0.36), ax: ax, ay: ay, az: az)
+                darkBatch.addBoxAxes(center: pt(poleLat - latSign * 0.02, 2.32, poleAlong), size: SIMD3<Float>(0.03, 0.42, 0.42), ax: ax, ay: ay, az: az)
+                for lampDy: Float in [0.16, -0.16] {
+                    redBatch.addBoxAxes(center: pt(poleLat + latSign * 0.21, 2.32 + lampDy, poleAlong), size: SIMD3<Float>(0.06, 0.19, 0.19), ax: ax, ay: ay, az: az)
+                }
+                darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.08, 2.32, poleAlong + alongSign * 0.34), size: SIMD3<Float>(0.1, 0.55, 0.2), ax: ax, ay: ay, az: az)
+                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.14, 2.32, poleAlong + alongSign * 0.34), size: SIMD3<Float>(0.03, 0.3, 0.1), ax: ax, ay: ay, az: az)
+                // Name plate and emergency button box on the pole's
+                // road face at eye height.
+                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.1, 1.72, poleAlong), size: SIMD3<Float>(0.03, 0.48, 0.68), ax: ax, ay: ay, az: az)
+                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.13, 1.22, poleAlong), size: SIMD3<Float>(0.15, 0.4, 0.3), ax: ax, ay: ay, az: az)
+                redBatch.addBoxAxes(center: pt(poleLat + latSign * 0.22, 1.3, poleAlong), size: SIMD3<Float>(0.04, 0.1, 0.1), ax: ax, ay: ay, az: az)
+                // Corner fence running back along the line.
+                darkBatch.addBoxAxes(center: pt(latSign * 4.8, 0.55, poleAlong + alongSign * 8.6), size: SIMD3<Float>(0.05, 1.1, 10), ax: ax, ay: ay, az: az)
+
+                // Barrier machines on the two diagonal corners;
+                // the arm lies across the road at 1 m, striped.
+                if latSign == alongSign {
+                    darkBatch.addBoxAxes(center: pt(poleLat, 0.11, poleAlong), size: SIMD3<Float>(0.5, 0.22, 0.56), ax: ax, ay: ay, az: az)
+                    yellowBatch.addBoxAxes(center: pt(poleLat, 0.72, poleAlong), size: SIMD3<Float>(0.42, 1.0, 0.48), ax: ax, ay: ay, az: az)
+                    darkBatch.addBoxAxes(center: pt(poleLat, 1.26, poleAlong), size: SIMD3<Float>(0.46, 0.08, 0.52), ax: ax, ay: ay, az: az)
+                    let armCenter = poleAlong - alongSign * 2.3
+                    yellowBatch.addBoxAxes(center: pt(poleLat, 1.0, armCenter), size: SIMD3<Float>(0.09, 0.2, 5.2), ax: ax, ay: ay, az: az)
+                    for bandIndex in 0..<4 {
+                        let bandAlong = poleAlong - alongSign * (0.9 + Float(bandIndex) * 1.15)
+                        darkBatch.addBoxAxes(center: pt(poleLat, 1.0, bandAlong), size: SIMD3<Float>(0.11, 0.22, 0.5), ax: ax, ay: ay, az: az)
+                    }
+                }
+            }
+        }
+
+        if let dark = darkBatch.build(name: "crossing-dark-\(index)", material: poleMaterial) { world.addChild(dark) }
+        if let yellow = yellowBatch.build(name: "crossing-yellow-\(index)", material: Self.pbr(UIColor(red: 0.93, green: 0.72, blue: 0.1, alpha: 1), roughness: 0.55)) { world.addChild(yellow) }
+        if let white = whiteBatch.build(name: "crossing-white-\(index)", material: roofMaterials[2]) { world.addChild(white) }
+        var lensMaterial = PhysicallyBasedMaterial()
+        lensMaterial.baseColor = .init(tint: UIColor(red: 0.4, green: 0.04, blue: 0.04, alpha: 1))
+        lensMaterial.emissiveColor = .init(color: UIColor(red: 1, green: 0.12, blue: 0.08, alpha: 1))
+        lensMaterial.emissiveIntensity = 1.6
+        if let red = redBatch.build(name: "crossing-red-\(index)", material: lensMaterial) { world.addChild(red) }
     }
 
     /// quality24 phase 1 — the showcase section, Kankumo-Chuo (0 m)
