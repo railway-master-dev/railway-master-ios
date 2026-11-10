@@ -215,8 +215,8 @@ private enum RailwaySkyPalette {
             (0, SIMD3(0.025, 0.040, 0.085)),
             (5, SIMD3(0.075, 0.105, 0.190)),
             (6.5, SIMD3(0.43, 0.27, 0.32)),
-            (8, SIMD3(0.45, 0.62, 0.78)),
-            (12, SIMD3(0.58, 0.73, 0.85)),
+            (8, SIMD3(0.56, 0.66, 0.77)),
+            (12, SIMD3(0.68, 0.76, 0.83)),
             (17, SIMD3(0.86, 0.48, 0.31)),
             (19, SIMD3(0.34, 0.23, 0.37)),
             (21, SIMD3(0.035, 0.055, 0.115)),
@@ -394,7 +394,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var currentCabDesk = FictionalCabAndSoundCatalog.fieldChopper
     private var lastSceneFidelityBuildChainage = Double.nan
 
-    private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.84, green: 0.84, blue: 0.84, alpha: 1), roughness: 0.96, textureName: "scenery_ballast", normalName: "normal_ballast")
+    private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.74, green: 0.68, blue: 0.62, alpha: 1), roughness: 0.96, textureName: "scenery_ballast", normalName: "normal_ballast")
     private let sleeperMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.72, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.88, textureName: "scenery_timber")
     private let railMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
     private let concreteMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.87, textureName: "scenery_concrete", normalName: "normal_concrete")
@@ -573,7 +573,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // balance had been tuned when the sun pointed up and only
         // fill + environment lit the scene. apply() scales this per
         // environment; the fill base rises 1,200 → 1,800 to compensate.
-        sunlight.light.intensity = 7_200
+        sunlight.light.intensity = 6_600
         sunlight.light.color = UIColor(red: 1.0, green: 0.91, blue: 0.77, alpha: 1)
         // Cast shadows: without a shadow configuration RealityKit
         // renders no shadows at all, which left every building, pole
@@ -607,7 +607,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         root.addChild(sunlight)
 
         fillLight = PointLight()
-        fillLight.light.intensity = 2_800
+        fillLight.light.intensity = 3_100
         fillLight.light.attenuationRadius = 500
         fillLight.light.color = UIColor(red: 0.70, green: 0.79, blue: 0.88, alpha: 1)
         fillLight.position = SIMD3<Float>(0, 16, -30)
@@ -920,12 +920,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         fillLight.position = position + SIMD3<Float>(0, 16, 0)
 
         let tint = environment.warmCoolTint
-        sunlight.light.intensity = 7_200 * Float(environment.sunLightScale)
+        sunlight.light.intensity = 6_600 * Float(environment.sunLightScale)
         sunlight.light.color = UIColor(
             red: CGFloat(min(max(tint.x, 0), 1.2)), green: CGFloat(min(max(tint.y, 0), 1.2)),
             blue: CGFloat(min(max(tint.z, 0), 1.2)), alpha: 1
         )
-        fillLight.light.intensity = 2_800 * Float(environment.ambientLightScale * (1 - environment.fogStrength * 0.35))
+        fillLight.light.intensity = 3_100 * Float(environment.ambientLightScale * (1 - environment.fogStrength * 0.35))
         fillLight.light.color = UIColor(
             red: CGFloat(min(max(tint.x * 0.70, 0), 1)), green: CGFloat(min(max(tint.y * 0.79, 0), 1)),
             blue: CGFloat(min(max(tint.z * 0.88, 0), 1)), alpha: 1
@@ -1860,33 +1860,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// ~0.22 m sideways at 5 m height on the line's maximum cant,
     /// which alone would eat the ±0.25 m stagger tolerance.
     private func buildCatenary(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, showcaseSection: Bool = false) {
-        let supportBudget = max(40, renderQualitySettings.sceneryInstanceLimit / 8)
-        let interval = max(120.0, route.distanceM / Double(supportBudget))
-        // Support chainages: the line-wide pitch derived from the
-        // support budget (340 m at the balanced limit of 200), plus —
-        // quality24 showcase section only — a 45 m pitch inside
-        // 0...1,856 m, the spacing SceneCorridorSpecification already
-        // declares (catenarySpacingM = 45) and the spacing BVE city
-        // routes actually use. The extra ~35 supports are spent only
-        // inside the section (line-wide total ~235 against the
-        // nominal 200 budget); the pitch everywhere else is
-        // unchanged. Each wire span reaches back to the previous
-        // support, so spans tile exactly at any pitch mix.
+        // quality35: line-wide support pitch of about 50 m
+        // (46-54 m, varying deterministically). The 2026-11-10
+        // front-view reference study measured real railways at
+        // 40-55 m in every scene type, while the old budget-derived
+        // pitch was 340 m outside the showcase section — the single
+        // largest measured gap to reality. The masts and beams are
+        // batched below (not individual entities), which is what
+        // makes ~1,360 supports affordable; the showcase section's
+        // separate 45 m insertion is no longer needed.
+        _ = showcaseSection
         var chainages: [Double] = []
         var cursor = 12.0
+        var stepIndex = 0
         while cursor < route.distanceM {
             chainages.append(cursor)
-            cursor += interval
-        }
-        if showcaseSection {
-            var sectionCursor = 24.0
-            while sectionCursor <= 1_848 {
-                if !chainages.contains(where: { abs($0 - sectionCursor) < 15 }) {
-                    chainages.append(sectionCursor)
-                }
-                sectionCursor += 45
-            }
-            chainages.sort()
+            cursor += 50 + Double((stepIndex * 37) % 9) - 4
+            stepIndex += 1
         }
         // quality25 (B): no support inside a station zone — the
         // portal masts at ±4.0 m would stand on the new platforms
@@ -1929,11 +1919,21 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             wireBatch = MeshBatchBuilder()
         }
+        // quality35: supports are batched on the same 2,400 m
+        // cadence as the wires (see buildCatenary's pitch note).
+        var supportBatch = MeshBatchBuilder()
+        var supportBatchIndex = 0
+        func flushSupportBatch() {
+            if let mesh = supportBatch.build(name: "catenary-supports-\(supportBatchIndex)", material: poleMaterial) {
+                world.addChild(mesh)
+                supportBatchIndex += 1
+            }
+            supportBatch = MeshBatchBuilder()
+        }
         var previousChainage: Double? = nil
         for (index, distance) in chainages.enumerated() {
             let sample = sample(at: distance)
             let heading = sample.heading
-            let yaw = simd_quatf(angle: -heading, axis: SIMD3<Float>(0, 1, 0))
             // Portal masts at ±4.0 m: clear of the trackbed (2.3 m)
             // and the deck cable trough (3.85 m), and just inside
             // the deck edge (4.2 m) where the line is on viaduct;
@@ -1945,18 +1945,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // the wires hang just under the beam.
             let beamY = sample.elevationM + 0.3065 + 6.45
             let mastHeight = beamY + 0.1 - mastBase
-            for (poleIndex, lateral) in [Float(-4), Float(4)].enumerated() {
+            for lateral in [Float(-4), Float(4)] {
                 let x = sample.x + lateral * cos(heading)
                 let z = sample.z + lateral * sin(heading)
-                addBox(parent: world, name: "catenary-mast-\(index)-\(poleIndex)", size: SIMD3<Float>(0.18, mastHeight, 0.2), position: SIMD3<Float>(x, mastBase + mastHeight / 2, z), material: poleMaterial, orientation: yaw)
+                supportBatch.addBox(center: SIMD3<Float>(x, mastBase + mastHeight / 2, z), size: SIMD3<Float>(0.18, mastHeight, 0.2), yaw: -heading)
             }
-            addBox(parent: world, name: "double-track-crossbeam-\(index)", size: SIMD3<Float>(8.6, 0.12, 0.16), position: SIMD3<Float>(sample.x, beamY, sample.z), material: poleMaterial, orientation: yaw)
+            supportBatch.addBox(center: SIMD3<Float>(sample.x, beamY, sample.z), size: SIMD3<Float>(8.6, 0.12, 0.16), yaw: -heading)
             // Wires reach back to the previous support. Stagger
             // alternates ±0.25 m support by support, interpolated
             // linearly between them — the classic zig-zag.
             if let previous = previousChainage {
                 if previous - wireBatchStartChainage >= 2_400 {
                     flushWireBatch()
+                    flushSupportBatch()
                     wireBatchStartChainage = previous
                 }
                 let staggerHere: Float = index.isMultiple(of: 2) ? 0.25 : -0.25
@@ -1993,6 +1994,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             previousChainage = distance
         }
         flushWireBatch()
+        flushSupportBatch()
     }
 
     /// One city tower built from stacked facade segments (each segment
@@ -2014,6 +2016,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let c = chainageFromCenter(distanceM: distance, route: route, travelDirection: travelDirection)
             height *= Float(1.05 - (c / 4_200) * 0.45)
             height = max(15, height)
+            // quality35: every sixth downtown tower is a tall one
+            // (about 1.5x), so the front row has the 2-4x height
+            // jumps between neighbours that real front views show
+            // (reference study, 2026-11-10).
+            if seed % 6 == 0 {
+                height *= 1.5
+            }
         }
         height *= heightScale
         // quality32: beside an elevated section the towers rise
@@ -2083,12 +2092,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// single box with a facade texture carries the mass; the rows
     /// give the city depth behind the detailed front rows, which
     /// used to stand alone against flat empty apron.
-    private func addDistantTower(at distance: Double, side: Float, seed: Int, lateral: Float, band: Int) {
+    private func addDistantTower(at distance: Double, side: Float, seed: Int, lateral: Float, band: Int, heightOverride: Float? = nil) {
         let sample = sample(at: distance)
         let groundY = groundLevelM(at: sample)
         let width: Float = 17 + Float((seed / 3) % 4) * 2.2
         let depth: Float = 15 + Float((seed / 7) % 4) * 2.4
         var height: Float = band == 2 ? 26 + Float((seed * 31) % 30) : 19 + Float((seed * 31) % 20)
+        // quality35: the deep rows carry the city's real height
+        // range — about one in five is a high-rise of 60-120 m and
+        // a few are landmarks above that (heightOverride). Until
+        // now nothing in the scene exceeded 56 m, while the
+        // reference study found 150 m-class towers in ordinary
+        // downtown front views.
+        if seed % 5 == 0 {
+            height *= 2.2
+        } else if seed % 5 == 1 {
+            height *= 1.5
+        }
+        if let heightOverride = heightOverride {
+            height = max(height, heightOverride)
+        }
         // Beside an elevated section the deep rows also rise from
         // the valley floor; keep their tops above rail level so
         // they register over the nearer rows' bases.
@@ -2099,11 +2122,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let offset = side * lateral
         let x = sample.x + offset * cos(sample.heading)
         let z = sample.z + offset * sin(sample.heading)
-        let body = addBox(parent: world, name: "distant-tower-\(seed)",
-                          size: SIMD3<Float>(width, height, depth),
-                          position: SIMD3<Float>(x, groundY + height / 2, z),
-                          material: officeMaterials[abs(seed) % officeMaterials.count])
-        body.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+        let material = officeMaterials[abs(seed) % officeMaterials.count]
+        let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+        // Stacked in up-to-30 m segments so the facade texture
+        // repeats instead of stretching over the full height.
+        let segments = max(1, Int((height / 30).rounded()))
+        let segmentHeight = height / Float(segments)
+        for segment in 0..<segments {
+            let body = addBox(parent: world, name: "distant-tower-\(seed)-\(segment)",
+                              size: SIMD3<Float>(width, segmentHeight, depth),
+                              position: SIMD3<Float>(x, groundY + segmentHeight * (Float(segment) + 0.5), z),
+                              material: material)
+            body.orientation = orientation
+        }
     }
 
     /// quality34: a plain second-row house for the suburbs, about
@@ -2171,6 +2202,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     if urbanIndex.isMultiple(of: 3) {
                         addDistantTower(at: distance + 3, side: -1, seed: urbanIndex * 19 + 11, lateral: 102 + Float((urbanIndex / 3) % 3) * 10, band: band)
                         addDistantTower(at: distance + 19, side: 1, seed: urbanIndex * 19 + 12, lateral: 112 + Float((urbanIndex / 3) % 3) * 10, band: band)
+                    }
+                    // quality35: a downtown landmark tower every
+                    // eighth step (about every 175 m), 105-135 m at
+                    // roughly 120 m out, alternating sides.
+                    if band == 2, urbanIndex % 8 == 4 {
+                        addDistantTower(at: distance + 10, side: urbanIndex % 16 == 4 ? 1 : -1, seed: urbanIndex * 23 + 15, lateral: 118 + Float((urbanIndex / 8) % 3) * 9, band: band, heightOverride: 105 + Float((urbanIndex * 7) % 30))
                     }
                 }
                 urbanIndex += 1
