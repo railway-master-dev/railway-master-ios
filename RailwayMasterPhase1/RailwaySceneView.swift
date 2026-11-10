@@ -419,10 +419,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     ]
     private let officeMaterials = [
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.62, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.88, blue: 0.84, alpha: 1), roughness: 0.66, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
+        // quality33: derived facade variants (different window
+        // pitch/proportions, tints, lit windows, weathering
+        // streaks) so neighbouring towers no longer share one
+        // identical skin. The first four entries are the tall
+        // towers' pool, so they lead the list.
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.64, textureName: "scenery_office_facade_2", normalName: "normal_office_facade"),
         RailwaySceneWorld.texturedPBR(.white, metallic: 0.06, roughness: 0.52, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(.white, metallic: 0.06, roughness: 0.54, textureName: "scenery_glass_facade_2", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.88, blue: 0.84, alpha: 1), roughness: 0.66, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.92, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.56, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.6, textureName: "scenery_office_facade_3", normalName: "normal_office_facade"),
+        RailwaySceneWorld.texturedPBR(.white, metallic: 0.06, roughness: 0.55, textureName: "scenery_glass_facade_3", normalName: "normal_glass_facade"),
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade_2", normalName: "normal_apartment_facade"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.94, green: 0.90, blue: 0.84, alpha: 1), roughness: 0.9, textureName: "scenery_house_facade"),
         // quality32: tint variants of the same facades. Adjacent
         // towers used to cycle only three textures at one tone, so
