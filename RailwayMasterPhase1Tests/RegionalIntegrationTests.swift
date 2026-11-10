@@ -335,6 +335,43 @@ final class RegionalIntegrationTests: XCTestCase {
         XCTAssertEqual(combinations, RegionalRouteVariant.allCases.count * ServiceCategory.allCases.count * RegionalTravelDirection.allCases.count)
     }
 
+    func testZooAndParkShuttlesAreShortRoutesWithTheirOwnTerminals() throws {
+        let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
+        let zoo = try RegionalRouteFactory.make(plan: plan, variant: .zooLine, direction: .up)
+        XCTAssertEqual(zoo.profile.distanceM, 2_500, accuracy: 0.001)
+        XCTAssertEqual(zoo.stops.map(\.name), ["大野", "動物園"])
+        // The enclosure stretch (450-1,900 m) is a hard 30 km/h zone.
+        XCTAssertEqual(zoo.profile.condition(at: 1_000).speedLimitKmh, 30, accuracy: 0.001)
+        XCTAssertLessThanOrEqual(zoo.profile.condition(at: 100).speedLimitKmh, 45)
+        let zooDown = try RegionalRouteFactory.make(plan: plan, variant: .zooLine, direction: .down)
+        XCTAssertEqual(zooDown.stops.map(\.name), ["動物園", "大野"])
+        XCTAssertEqual(zooDown.profile.condition(at: 1_500).speedLimitKmh, 30, accuracy: 0.001)
+
+        let park = try RegionalRouteFactory.make(plan: plan, variant: .parkLine, direction: .up)
+        XCTAssertEqual(park.profile.distanceM, 2_000, accuracy: 0.001)
+        XCTAssertEqual(park.stops.map(\.name), ["館川", "テーマパーク"])
+        XCTAssertLessThanOrEqual(park.profile.condition(at: 1_000).speedLimitKmh, 45)
+    }
+
+    func testFiveAspectBlockReadingsFollowOccupiedDistance() throws {
+        let blocks = try (0..<6).map { try RailwayBlock(identifier: "B\($0)", startM: Double($0) * 500, endM: Double($0 + 1) * 500, trackID: "T") }
+        let system = try ThreeAspectBlockSystem(blocks: blocks)
+        func occupant(inBlock index: Int) throws -> [BlockOccupant] {
+            [try BlockOccupant(trainID: "X", frontPositionM: Double(index) * 500 + 100, trainLengthM: 50, trackID: "T")]
+        }
+        XCTAssertEqual(system.reading(for: "B0", occupants: try occupant(inBlock: 0))?.aspect, .red)
+        XCTAssertEqual(system.reading(for: "B0", occupants: try occupant(inBlock: 1))?.aspect, .doubleYellow)
+        XCTAssertEqual(system.reading(for: "B0", occupants: try occupant(inBlock: 2))?.aspect, .yellow)
+        XCTAssertEqual(system.reading(for: "B0", occupants: try occupant(inBlock: 3))?.aspect, .yellowGreen)
+        XCTAssertEqual(system.reading(for: "B0", occupants: try occupant(inBlock: 5))?.aspect, .green)
+        // TOO RAILWAY aspect speed table (quality41, user-confirmed).
+        XCTAssertEqual(ThreeAspectSignal.yellowGreen.speedLimitKmh ?? -1, 75, accuracy: 0.001)
+        XCTAssertEqual(ThreeAspectSignal.yellow.speedLimitKmh ?? -1, 55, accuracy: 0.001)
+        XCTAssertEqual(ThreeAspectSignal.doubleYellow.speedLimitKmh ?? -1, 25, accuracy: 0.001)
+        XCTAssertEqual(ThreeAspectSignal.red.speedLimitKmh ?? -1, 0, accuracy: 0.001)
+        XCTAssertNil(ThreeAspectSignal.green.speedLimitKmh)
+    }
+
     func testTrafficRuntimeStateRoundTripsAndContinuesDeterministically() throws {
         let scenario = try TrafficScenarioLibrary.loadBundledRegionalNetwork()
         var original = try TrafficSimulationEngine(scenario: scenario)
