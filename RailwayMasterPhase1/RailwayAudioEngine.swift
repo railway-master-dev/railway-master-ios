@@ -18,9 +18,19 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     /// Apparently deadlocked. Aborting now."）。同じ iOS 26.2 でも発生し、
     /// quality25 でも再現したため、アプリの変更ではなく CI 環境側の問題。
     /// 実機・通常利用では環境変数も引数も無いので常に false。
+    ///
+    /// quality30: テストホスト（xcodebuild test）へは SIMCTL_CHILD_ 経由
+    /// でも共有スキームの TestAction 環境変数経由でもフラグが届かず、
+    /// ios-verify が起動時 abort し続けた（quality28 で実測）。そのため
+    /// XCTest がテストホストの環境に必ず入れる
+    /// XCTestConfigurationFilePath の有無でも判定する。単体テストは
+    /// 音響を検証しないので、テスト実行時に音響が無効でも意味は変わ
+    /// らない。通常起動ではこの変数は存在しない。
     public nonisolated static let ciAudioDisabled: Bool = {
         let info = ProcessInfo.processInfo
-        return info.environment["RM_DISABLE_AUDIO"] == "1" || info.arguments.contains("-RMNoAudio")
+        return info.environment["RM_DISABLE_AUDIO"] == "1"
+            || info.arguments.contains("-RMNoAudio")
+            || info.environment["XCTestConfigurationFilePath"] != nil
     }()
 
     public private(set) var settings = RailwayAudioSettings(masterVolume: 0.65)
