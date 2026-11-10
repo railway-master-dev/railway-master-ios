@@ -172,17 +172,18 @@ def main() -> None:
     # mountain forest, sea, house facade added as photographic textures),
     # and to eighteen with quality24 (chain-link fence alpha cutout),
     # and to twenty-three with quality33 (derived facade variants:
-    # glass x2, office x2, apartment x1, for less repetition).
+    # glass x2, office x2, apartment x1, for less repetition), and
+    # to twenty-four with quality37 (photographic sky dome).
     # (IHDR width/height are big-endian uint32 at bytes 16..24).
     texture_root = ROOT / "Packages/RailwaySceneFidelity/Sources/RailwaySceneFidelity/Resources"
     textures = sorted(texture_root.glob("scenery_*.png"))
-    require(len(textures) == 23, f"expected 23 scenery textures, found {len(textures)}")
+    require(len(textures) == 24, f"expected 24 scenery textures, found {len(textures)}")
     for texture in textures:
         header = texture.read_bytes()[:24]
         require(header[:8] == b"\x89PNG\r\n\x1a\n", f"not a PNG: {texture.name}")
         width, height = struct.unpack(">II", header[16:24])
         require((width, height) == (512, 512), f"scenery texture is {width}x{height}, expected 512x512: {texture.name}")
-    print("PASS: 23 scenery textures are 512x512 PNGs")
+    print("PASS: 24 scenery textures are 512x512 PNGs")
 
     # (b) Enhancement meshes must exist in all six enhance-target GLBs.
     station_prefixes = ("bench_", "platform_sign_", "canopy_fixture_", "vending_", "bin_", "white_line_", "end_fence_")
