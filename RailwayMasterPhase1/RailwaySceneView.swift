@@ -468,6 +468,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// signboards — no real brands, safe for the paid release).
     private let konbiniFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.85, textureName: "scenery_konbini_facade")
     private let supermarketFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.85, textureName: "scenery_supermarket_facade")
+    /// quality41 final: public buildings — school and hospital
+    /// facades (generated elevations, license-clean like the rest).
+    private let schoolFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.9, textureName: "scenery_school_facade")
+    private let hospitalFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.85, textureName: "scenery_hospital_facade")
     /// quality41 (mega-batch): more Ema-generated elevations —
     /// two apartment variants, a danchi slab, an office curtain
     /// wall, and a drink vending machine front.
@@ -518,6 +522,31 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     }
     private var zooAnimalRigs: [ZooAnimalRig] = []
     private var zooLastAnimTime: Double = 0
+    // quality41 final: people. Static/animated figures placed by the
+    // world builders (platforms, crossings, zoo and park), separate
+    // from the traffic simulation's platform passengers, whose crude
+    // two-box dummy is upgraded to the same figure builder below.
+    private struct PersonRig {
+        var root: Entity
+        var legL: Entity
+        var legR: Entity
+        var armL: Entity
+        var armR: Entity
+        var mode: Int // 0 stand, 1 walk
+        var routeDistanceM: Double
+        var home: SIMD3<Float>
+        var walkAxis: SIMD3<Float>
+        var range: Float
+        var offset: Float = 0
+        var dirSign: Float = 1
+        var speed: Float
+        var phase: Float
+        var armBaseR: Float = 0
+    }
+    private var personRigs: [PersonRig] = []
+    private var peopleLastTime: Double = 0
+    private var pantographSpark: ModelEntity?
+    private var platformPeopleLegs: [String: (Entity, Entity)] = [:]
     private var dynamicSignalDistance: Double?
     private var dynamicSignalAspect: ThreeAspectSignal?
 
@@ -557,6 +586,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         previousTrafficSnapshot = nil
         roadCarEntities.removeAll()
         platformPeople.removeAll()
+        platformPeopleLegs.removeAll()
+        personRigs.removeAll()
+        zooAnimalRigs.removeAll()
+        pantographSpark = nil
         signalLampHeads.removeAll()
         skyDome = nil
         dynamicSignalDistance = nil
@@ -703,6 +736,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             buildCatenary(route: route, routeVariant: routeVariant, travelDirection: travelDirection, showcaseSection: travelDirection == .up && (routeVariant == .mainline || routeVariant == .throughBranch))
             if routeVariant != .zooLine && routeVariant != .parkLine {
                 buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                buildPublicBuildings(route: route, routeVariant: routeVariant)
             }
             buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             if routeVariant != .zooLine && routeVariant != .parkLine {
@@ -774,6 +808,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         if routeVariant == .zooLine {
             updateZooAnimals(trainPositionM: positionM, time: simulationTime)
         }
+        updatePeople(trainPositionM: positionM, time: simulationTime)
+        updatePantographSpark(speedKmh: speedKmh, time: simulationTime, inTunnel: route.condition(at: positionM).tunnelResistanceMultiplier > 1.01)
         updateGeneratedStationModel(positionM: positionM)
         let centerSample = sample(at: positionM)
         let playerLateral: Float = travelDirection == .up ? -2.1 : 2.1
@@ -1830,10 +1866,25 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // band); until now the signals stood alone in empty grass.
         let relayMaterial = Self.pbr(UIColor(red: 0.76, green: 0.72, blue: 0.62, alpha: 1), metallic: 0.05, roughness: 0.8)
         var targets: [Double] = stride(from: 0.0, to: (routeVariant == .zooLine || routeVariant == .parkLine) ? route.distanceM : 60_000.0, by: 1_500.0).map { $0 }
+        // quality41 final: signal roles — the 1,500 m grid signals
+        // are block signals （閉そく）, the station-approach signals
+        // are home signals （場内）, and every station also gets a
+        // departure signal （出発） just past its far end; until now
+        // stations had no departure signals at all. The role of each
+        // built signal is kept in its entity name.
+        var approachPoints: [Double] = []
+        var departurePoints: [Double] = []
         for placement in stationModelPlacements {
             let center = chainageFromCenter(distanceM: placement.chainageM, route: route, travelDirection: travelDirection)
             guard center > 600, center < 59_400 else { continue }
-            targets.append(center + (travelDirection == .up ? -400 : 400))
+            let approach = center + (travelDirection == .up ? -400 : 400)
+            targets.append(approach)
+            approachPoints.append(approach)
+            let departure = center + (travelDirection == .up ? 170 : -170)
+            if departure > 600, departure < 59_400 {
+                targets.append(departure)
+                departurePoints.append(departure)
+            }
         }
         targets.sort()
         var dedupedTargets: [Double] = []
@@ -1889,7 +1940,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let footY = base.y - (lift >= 2 ? Float(0.49) : Float(0.10))
             let postTop = base.y + 5.62
             let forward = SIMD3<Float>(sin(sample.heading), 0, -cos(sample.heading))
-            addBox(parent: world, name: "signal-post-\(Int(target))", size: SIMD3<Float>(0.16, postTop - footY, 0.16),
+            let signalRole = approachPoints.contains(where: { abs($0 - target) < 60 }) ? "home" : (departurePoints.contains(where: { abs($0 - target) < 60 }) ? "departure" : "block")
+            addBox(parent: world, name: "signal-\(signalRole)-\(Int(target))", size: SIMD3<Float>(0.16, postTop - footY, 0.16),
                    position: SIMD3<Float>(base.x, (footY + postTop) / 2, base.z), material: poleMaterial, orientation: yaw)
             // quality41: the head is now the TOO RAILWAY standard
             // 4-aspect A unit at catalogue size (maker data in
@@ -2138,6 +2190,45 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             if let buffers = bufferBatch.build(name: "\(name)-buffer", material: poleMaterial) { world.addChild(buffers) }
         }
         return stations
+    }
+
+    /// Schools and hospitals (quality41 final): the public
+    /// buildings the gap analyses kept flagging as missing. Schools
+    /// sit in the suburbs with a sandy yard and a gymnasium block;
+    /// hospitals stand taller with a red-cross sign board proud of
+    /// the track-side face and an entrance canopy.
+    private func buildPublicBuildings(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let schoolSites: [(Double, Float)] = [(7_400, 1), (16_200, -1), (33_800, 1), (47_300, -1), (63_500, 1)]
+        let hospitalSites: [(Double, Float)] = [(11_300, -1), (25_600, 1), (42_900, -1)]
+        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0)) }
+        let gymMaterial = Self.pbr(UIColor(red: 0.78, green: 0.76, blue: 0.72, alpha: 1), roughness: 0.9)
+        let sandMaterial = Self.pbr(UIColor(red: 0.80, green: 0.72, blue: 0.55, alpha: 1), roughness: 1.0)
+        for (d, side) in schoolSites where d < route.distanceM - 300 {
+            let gy = groundLevelM(at: d)
+            let yaw = yawAt(d)
+            for half in [-1, 1] {
+                let p = groundOffsetPoint(sample(at: d + Double(half) * 6.7), lateral: side * 27)
+                _ = addBox(parent: world, name: "school-a-\(Int(d))", size: SIMD3<Float>(13, 9, 12.6), position: SIMD3<Float>(p.x, gy + 4.5, p.z), material: schoolFacadeMaterial, orientation: yaw)
+            }
+            let yard = groundOffsetPoint(sample(at: d), lateral: side * 47)
+            _ = addBox(parent: world, name: "school-b-\(Int(d))", size: SIMD3<Float>(19, 0.08, 26), position: SIMD3<Float>(yard.x, gy + 0.04, yard.z), material: sandMaterial, orientation: yaw)
+            let gym = groundOffsetPoint(sample(at: d + 19), lateral: side * 28)
+            _ = addBox(parent: world, name: "school-yard-\(Int(d))", size: SIMD3<Float>(11, 7.5, 16), position: SIMD3<Float>(gym.x, gy + 3.75, gym.z), material: gymMaterial, orientation: yaw)
+        }
+        for (d, side) in hospitalSites where d < route.distanceM - 300 {
+            let gy = groundLevelM(at: d)
+            let yaw = yawAt(d)
+            let p = groundOffsetPoint(sample(at: d), lateral: side * 30)
+            _ = addBox(parent: world, name: "school-gym-\(Int(d))", size: SIMD3<Float>(15, 25, 19), position: SIMD3<Float>(p.x, gy + 12.5, p.z), material: hospitalFacadeMaterial, orientation: yaw)
+            let signP = groundOffsetPoint(sample(at: d), lateral: side * 22.2)
+            _ = addBox(parent: world, name: "hospital-main-\(Int(d))", size: SIMD3<Float>(0.3, 3.2, 3.2), position: SIMD3<Float>(signP.x, gy + 21.5, signP.z), material: Self.pbr(.white, roughness: 0.6), orientation: yaw)
+            let crossMat = Self.pbr(UIColor(red: 0.81, green: 0.15, blue: 0.13, alpha: 1), roughness: 0.6)
+            _ = addBox(parent: world, name: "hospital-sign-\(Int(d))", size: SIMD3<Float>(0.34, 1.9, 0.55), position: SIMD3<Float>(signP.x, gy + 21.5, signP.z), material: crossMat, orientation: yaw)
+            _ = addBox(parent: world, name: "hospital-cross-v-\(Int(d))", size: SIMD3<Float>(0.34, 0.55, 1.9), position: SIMD3<Float>(signP.x, gy + 21.5, signP.z), material: crossMat, orientation: yaw)
+            let canopy = groundOffsetPoint(sample(at: d), lateral: side * 21.5)
+            _ = addBox(parent: world, name: "hospital-cross-h-\(Int(d))", size: SIMD3<Float>(3.2, 0.22, 8.5), position: SIMD3<Float>(canopy.x, gy + 3.1, canopy.z), material: Self.pbr(UIColor(red: 0.69, green: 0.71, blue: 0.73, alpha: 1), metallic: 0.3, roughness: 0.5), orientation: yaw)
+        }
     }
 
     /// quality41: the two future branch lines from the user's
@@ -2621,6 +2712,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let panel = gp(centerM, sideSign * 9.4)
         _ = addBox(parent: world, name: "zoo-panel-\(Int(centerM))", size: SIMD3<Float>(1.3, 0.85, 0.05), position: SIMD3<Float>(panel.x, panel.y + 1.05, panel.z), material: Self.pbr(UIColor(red: 0.94, green: 0.93, blue: 0.88, alpha: 1), roughness: 0.6), orientation: yaw)
         _ = addBox(parent: world, name: "zoo-panel-stripe-\(Int(centerM))", size: SIMD3<Float>(1.3, 0.22, 0.055), position: SIMD3<Float>(panel.x, panel.y + 1.36, panel.z), material: Self.pbr(UIColor(red: 0.85, green: 0.45, blue: 0.15, alpha: 1), roughness: 0.6), orientation: yaw)
+        // Visitors watching from behind the far fence (people).
+        for v in 0..<2 {
+            let vp = gp(centerM - 6 + Double(v) * 13, sideSign * 44.5)
+            let axis = SIMD3<Float>(sin(mid.heading), 0, -cos(mid.heading))
+            if v == 0 {
+                let face = SIMD3<Float>(cos(mid.heading), 0, sin(mid.heading)) * -sideSign
+                addPerson(position: vp, yaw: atan2(face.x, -face.z), role: 3, mode: 0, routeDistanceM: centerM, walkAxis: axis, range: 0, seedKey: "zoovis-\(Int(centerM))-0")
+            } else {
+                addPerson(position: vp, yaw: atan2(axis.x, -axis.z), role: 3, mode: 1, routeDistanceM: centerM, walkAxis: axis, range: 7, seedKey: "zoovis-\(Int(centerM))-1")
+            }
+        }
         // Animals.
         let spots: [(along: Double, lat: Float)] = [(-9, 20), (6, 29), (-2, 24), (11, 33)]
         let axisX = SIMD3<Float>(cos(mid.heading), 0, sin(mid.heading))
@@ -2759,6 +2861,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         _ = addBox(parent: world, name: "zoo-departure-pole", size: SIMD3<Float>(0.09, 2.6, 0.09), position: SIMD3<Float>(boardBase.x, boardBase.y + 1.3, boardBase.z), material: postMat, orientation: yawAt(2_430))
         _ = addBox(parent: world, name: "zoo-departure-board", size: SIMD3<Float>(1.7, 0.55, 0.07), position: SIMD3<Float>(boardBase.x, boardBase.y + 2.45, boardBase.z), material: Self.pbr(UIColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1), roughness: 0.4), orientation: yawAt(2_430))
         _ = addBox(parent: world, name: "zoo-departure-band", size: SIMD3<Float>(1.55, 0.30, 0.075), position: SIMD3<Float>(boardBase.x, boardBase.y + 2.45, boardBase.z), material: Self.pbr(UIColor(red: 0.95, green: 0.90, blue: 0.70, alpha: 1), roughness: 0.35), orientation: yawAt(2_430))
+        // People: entrance-path walkers and passengers (plus one
+        // staff member) on the terminal platform.
+        for w in 0..<2 {
+            let s0 = sample(at: 240 + Double(w) * 90)
+            let home = gp(240 + Double(w) * 90, sideSign * 14)
+            let axis = SIMD3<Float>(sin(s0.heading), 0, -cos(s0.heading))
+            addPerson(position: home, yaw: atan2(axis.x, -axis.z), role: 3, mode: 1, routeDistanceM: 240 + Double(w) * 90, walkAxis: axis, range: 42, seedKey: "zooentrance-\(w)")
+        }
+        let topVZ: Float = 0.3065 + 1.10
+        for p in 0..<3 {
+            let c = 2_400 + Double(p) * 22
+            let station = profileStation(at: c, trackLateral: trackLat)
+            let pos = station.center + station.xAxis * (sideSign * 2.6) + station.yAxis * topVZ
+            let h = sample(at: c).heading
+            let face = SIMD3<Float>(cos(h), 0, sin(h)) * -sideSign
+            addPerson(position: pos, yaw: atan2(face.x, -face.z), role: p == 1 ? 1 : 0, mode: 0, routeDistanceM: c, walkAxis: SIMD3<Float>(1, 0, 0), range: 0, seedKey: "zoostation-\(p)")
+        }
         // Buffer stop on a short stub past the terminal.
         let endSample = sample(at: 2_500)
         let endPoint = routeOffsetPoint(endSample, lateral: trackLat)
@@ -3025,11 +3144,29 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let castleRoof = addBox(parent: world, name: "parkline-castle-roof", size: SIMD3<Float>(8.6, 8.6, 11.4), position: SIMD3<Float>(castleBase.x, parkGroundY + 19 + 2.1, castleBase.z), material: Self.pbr(pastels[3], roughness: 0.7), orientation: parkYaw)
         castleRoof.orientation = castleRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
 
+        // Visitors strolling the plaza (people).
+        for v in 0..<5 {
+            let along = Float(stableIndex("parkvis-\(v)", count: 60)) - 30
+            let lat = Float(stableIndex("parkvislat-\(v)", count: 50)) - 25
+            let home = parkCenter + tangent * along + xAxis * lat
+            let axis = v % 2 == 0 ? tangent : xAxis
+            addPerson(position: SIMD3<Float>(home.x, parkGroundY, home.z), yaw: atan2(axis.x, -axis.z), role: 3, mode: 1, routeDistanceM: 1_280, walkAxis: axis, range: 11, seedKey: "parkvis-\(v)")
+        }
+
         // テーマパーク terminal: platform, furniture, pastel
         // station house and a buffer stop past the end.
         let whiteLine = Self.pbr(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.85)
         buildOneStationPlatform(name: "platform-PARK", start: 1_790, end: 2_000, trackLateral: trackLat, sideSign: sideSign, width: 5.0, whiteLineMaterial: whiteLine)
         buildStationFurniture(name: "furniture-PARK", centerChainage: 1_920, start: 1_790, end: 2_000, trackLateral: trackLat, sideSign: sideSign)
+        let topVP: Float = 0.3065 + 1.10
+        for p in 0..<3 {
+            let c = 1_900 + Double(p) * 22
+            let station = profileStation(at: c, trackLateral: trackLat)
+            let pos = station.center + station.xAxis * (sideSign * 2.6) + station.yAxis * topVP
+            let h = sample(at: c).heading
+            let face = SIMD3<Float>(cos(h), 0, sin(h)) * -sideSign
+            addPerson(position: pos, yaw: atan2(face.x, -face.z), role: p == 1 ? 1 : 3, mode: 0, routeDistanceM: c, walkAxis: SIMD3<Float>(1, 0, 0), range: 0, seedKey: "parkstation-\(p)")
+        }
         let house = gp(1_940, sideSign * 13.5)
         _ = addBox(parent: world, name: "park-station-house", size: SIMD3<Float>(12, 4.6, 6.5), position: SIMD3<Float>(house.x, house.y + 2.3, house.z), material: Self.pbr(pastels[0], roughness: 0.85), orientation: yawAt(1_940))
         let houseRoof = addBox(parent: world, name: "park-station-roof", size: SIMD3<Float>(9.4, 9.4, 7.3), position: SIMD3<Float>(house.x, house.y + 4.6 + 2.2, house.z), material: Self.pbr(pastels[2], roughness: 0.7), orientation: yawAt(1_940))
@@ -3043,6 +3180,210 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let legPoint = routeOffsetPoint(endSample, lateral: trackLat + legSide)
             let lp = SIMD3<Float>(legPoint.x, legPoint.y, legPoint.z) + forward * 9
             _ = addBox(parent: world, name: "park-buffer-leg", size: SIMD3<Float>(0.22, 0.95, 0.22), position: SIMD3<Float>(lp.x, lp.y + 0.45, lp.z), material: postMat, orientation: yawAt(2_000))
+        }
+    }
+
+    // MARK: - People (quality41 final)
+
+    /// One articulated human figure (legs, torso, arms, head, hair)
+    /// at real proportions. role: 0 passenger, 1 station staff
+    /// (uniform + cap + red armband), 2 child, 3 visitor.
+    private func makePersonFigure(role: Int, seedKey: String) -> (root: Entity, legL: Entity, legR: Entity, armL: Entity, armR: Entity) {
+        let hash = stableIndex(seedKey, count: 1_000)
+        let s: Float = role == 2 ? 0.68 : (0.94 + Float(hash % 11) * 0.012)
+        let jackets: [UIColor] = [
+            UIColor(red: 0.20, green: 0.32, blue: 0.52, alpha: 1),
+            UIColor(red: 0.55, green: 0.28, blue: 0.24, alpha: 1),
+            UIColor(red: 0.30, green: 0.44, blue: 0.32, alpha: 1),
+            UIColor(red: 0.45, green: 0.46, blue: 0.48, alpha: 1),
+            UIColor(red: 0.72, green: 0.66, blue: 0.55, alpha: 1),
+            UIColor(red: 0.16, green: 0.16, blue: 0.18, alpha: 1),
+            UIColor(red: 0.55, green: 0.68, blue: 0.78, alpha: 1),
+            UIColor(red: 0.78, green: 0.55, blue: 0.62, alpha: 1),
+        ]
+        let trousersPalette: [UIColor] = [
+            UIColor(red: 0.16, green: 0.19, blue: 0.27, alpha: 1),
+            UIColor(red: 0.32, green: 0.32, blue: 0.34, alpha: 1),
+            UIColor(red: 0.36, green: 0.28, blue: 0.20, alpha: 1),
+            UIColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1),
+        ]
+        let skins: [UIColor] = [
+            UIColor(red: 0.87, green: 0.66, blue: 0.52, alpha: 1),
+            UIColor(red: 0.76, green: 0.55, blue: 0.42, alpha: 1),
+            UIColor(red: 0.62, green: 0.44, blue: 0.33, alpha: 1),
+        ]
+        let hairs: [UIColor] = [
+            UIColor(red: 0.08, green: 0.07, blue: 0.07, alpha: 1),
+            UIColor(red: 0.25, green: 0.16, blue: 0.10, alpha: 1),
+            UIColor(red: 0.55, green: 0.55, blue: 0.55, alpha: 1),
+        ]
+        let jacketMat = Self.pbr(role == 1 ? UIColor(red: 0.13, green: 0.20, blue: 0.38, alpha: 1) : jackets[hash % jackets.count], roughness: 0.92)
+        let trousersMat = Self.pbr(role == 1 ? UIColor(red: 0.10, green: 0.14, blue: 0.26, alpha: 1) : trousersPalette[hash / 7 % trousersPalette.count], roughness: 0.92)
+        let skinMat = Self.pbr(skins[hash / 13 % skins.count], roughness: 0.75)
+        let hairMat = Self.pbr(hairs[hash / 17 % hairs.count], roughness: 0.95)
+
+        let legLen: Float = 0.84 * s
+        let torsoH: Float = 0.60 * s
+        let armLen: Float = 0.60 * s
+        let root = Entity()
+        root.name = "person-\(role)"
+        var legs: [Entity] = []
+        for side: Float in [-1, 1] {
+            let hip = Entity()
+            hip.position = SIMD3<Float>(side * 0.105 * s, legLen, 0)
+            let mesh = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.145 * s, legLen, 0.175 * s), cornerRadius: 0.03 * s), trousersMat, SIMD3<Float>(0, -legLen / 2 + 0.01, 0), name: "person-leg")
+            hip.addChild(mesh)
+            root.addChild(hip)
+            legs.append(hip)
+        }
+        let torso = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.41 * s, torsoH, 0.24 * s), cornerRadius: 0.05 * s), jacketMat, SIMD3<Float>(0, legLen + torsoH / 2 - 0.03 * s, 0), name: "person-torso")
+        root.addChild(torso)
+        var arms: [Entity] = []
+        for side: Float in [-1, 1] {
+            let shoulder = Entity()
+            shoulder.position = SIMD3<Float>(side * 0.255 * s, legLen + torsoH - 0.09 * s, 0)
+            let mesh = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.095 * s, armLen, 0.11 * s), cornerRadius: 0.03 * s), jacketMat, SIMD3<Float>(0, -armLen / 2, 0), name: "person-arm")
+            shoulder.addChild(mesh)
+            root.addChild(shoulder)
+            arms.append(shoulder)
+        }
+        let head = zooPart(MeshResource.generateSphere(radius: 0.115 * s), skinMat, SIMD3<Float>(0, legLen + torsoH + 0.075 * s, 0), name: "person-head")
+        root.addChild(head)
+        if role == 1 {
+            let cap = zooPart(FallbackCylinderMesh.make(height: 0.05 * s, radius: 0.128 * s), Self.pbr(UIColor(red: 0.13, green: 0.20, blue: 0.38, alpha: 1), roughness: 0.8), SIMD3<Float>(0, legLen + torsoH + 0.165 * s, 0), name: "staff-cap")
+            root.addChild(cap)
+            let band = zooPart(FallbackCylinderMesh.make(height: 0.028 * s, radius: 0.130 * s), Self.pbr(.white, roughness: 0.8), SIMD3<Float>(0, legLen + torsoH + 0.132 * s, 0), name: "staff-cap-band")
+            root.addChild(band)
+            let armband = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.115 * s, 0.07 * s, 0.13 * s), cornerRadius: 0.01), Self.pbr(UIColor(red: 0.80, green: 0.16, blue: 0.14, alpha: 1), roughness: 0.8), SIMD3<Float>(0, -0.20 * s, 0), name: "staff-armband")
+            arms[0].addChild(armband)
+        } else {
+            let hair = zooPart(MeshResource.generateSphere(radius: 0.120 * s), hairMat, SIMD3<Float>(0, legLen + torsoH + 0.103 * s, 0.010 * s), name: "person-hair")
+            hair.scale = SIMD3<Float>(1, 0.78, 1)
+            root.addChild(hair)
+        }
+        if hash % 4 == 1 && role != 1 {
+            let bag = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.13 * s, 0.34 * s, 0.30 * s), cornerRadius: 0.02), Self.pbr(UIColor(red: 0.30, green: 0.22, blue: 0.16, alpha: 1), roughness: 0.85), SIMD3<Float>(0.31 * s, legLen + 0.16 * s, 0.02), name: "person-bag")
+            root.addChild(bag)
+        }
+        return (root, legs[0], legs[1], arms[0], arms[1])
+    }
+
+    private func addPerson(position: SIMD3<Float>, yaw: Float, role: Int, mode: Int, routeDistanceM: Double, walkAxis: SIMD3<Float>, range: Float, seedKey: String) {
+        let figure = makePersonFigure(role: role, seedKey: seedKey)
+        figure.root.position = position
+        figure.root.orientation = simd_quatf(angle: -yaw, axis: SIMD3<Float>(0, 1, 0))
+        var rig = PersonRig(root: figure.root, legL: figure.legL, legR: figure.legR, armL: figure.armL, armR: figure.armR,
+                            mode: mode, routeDistanceM: routeDistanceM, home: position, walkAxis: walkAxis, range: range,
+                            speed: 0.45 + Float(stableIndex(seedKey + "spd", count: 40)) * 0.01,
+                            phase: Float(stableIndex(seedKey + "ph", count: 628)) / 100)
+        if mode == 0 && stableIndex(seedKey + "phone", count: 5) == 2 && role != 1 {
+            rig.armBaseR = -0.95
+            rig.armR.orientation = simd_quatf(angle: -0.95, axis: SIMD3<Float>(1, 0, 0))
+        }
+        world.addChild(figure.root)
+        personRigs.append(rig)
+    }
+
+    /// Waiting and walking figures for one platform side: a mix of
+    /// standers facing the track and walkers pacing the platform,
+    /// plus one uniformed staff member at the larger stations.
+    private func addPlatformPeople(stationID: String, archetype: String, start: Double, end: Double, trackLateral: Float, sideSign: Float) {
+        let topV: Float = 0.3065 + 1.10
+        let major = archetype.contains("terminal") || archetype.contains("major") || archetype.contains("junction")
+        let count = major ? 9 : (archetype.contains("branch") ? 3 : 5)
+        let span = end - start
+        guard span > 34 else { return }
+        for i in 0..<count {
+            let key = "people-\(stationID)-\(Int(trackLateral * 10))-\(Int(sideSign))-\(i)"
+            let frac = 0.08 + Double(stableIndex(key, count: 84)) / 100
+            let c = start + span * frac
+            let station = profileStation(at: c, trackLateral: trackLateral)
+            let isStaff = major && i == 0
+            let u = sideSign * (isStaff ? 2.25 : 2.35 + Float(stableIndex(key + "u", count: 13)) * 0.12)
+            let pos = station.center + station.xAxis * u + station.yAxis * topV
+            let h = sample(at: c).heading
+            let xAxis = SIMD3<Float>(cos(h), 0, sin(h))
+            let faceTrack = -xAxis * sideSign
+            let faceYaw = atan2(faceTrack.x, -faceTrack.z)
+            let walker = !isStaff && stableIndex(key + "walk", count: 3) == 0
+            if walker {
+                let tangent = -simd_cross(station.xAxis, station.yAxis)
+                let axis = simd_normalize(SIMD3<Float>(tangent.x, 0, tangent.z))
+                addPerson(position: pos, yaw: atan2(axis.x, -axis.z), role: stableIndex(key + "role", count: 7) == 0 ? 2 : 0,
+                          mode: 1, routeDistanceM: c, walkAxis: axis, range: Float(min(16, span / 2 - 14)), seedKey: key)
+            } else {
+                addPerson(position: pos, yaw: faceYaw, role: isStaff ? 1 : (stableIndex(key + "role", count: 7) == 0 ? 2 : 0),
+                          mode: 0, routeDistanceM: c, walkAxis: xAxis, range: 0, seedKey: key)
+            }
+        }
+    }
+
+    /// Per-frame people animation: walkers pace their platform or
+    /// path with swinging legs and arms, standers sway almost
+    /// imperceptibly, and everyone beyond 320 m of the train rests.
+    private func updatePeople(trainPositionM: Double, time: Double) {
+        guard !personRigs.isEmpty else { return }
+        let dt = min(max(time - peopleLastTime, 0.001), 0.1)
+        peopleLastTime = time
+        for index in personRigs.indices {
+            var rig = personRigs[index]
+            if abs(trainPositionM - rig.routeDistanceM) > 320 {
+                continue
+            }
+            if rig.mode == 1 {
+                rig.offset += rig.dirSign * rig.speed * Float(dt)
+                if rig.offset > rig.range { rig.offset = rig.range; rig.dirSign = -1 }
+                if rig.offset < -rig.range { rig.offset = -rig.range; rig.dirSign = 1 }
+                rig.phase += Float(dt) * 6.2 * rig.speed
+                rig.root.position = rig.home + rig.walkAxis * rig.offset
+                let dir = rig.walkAxis * rig.dirSign
+                rig.root.orientation = simd_quatf(angle: -atan2(dir.x, -dir.z), axis: SIMD3<Float>(0, 1, 0))
+                let swing = sin(rig.phase) * 0.48
+                rig.legL.orientation = simd_quatf(angle: swing, axis: SIMD3<Float>(1, 0, 0))
+                rig.legR.orientation = simd_quatf(angle: -swing, axis: SIMD3<Float>(1, 0, 0))
+                rig.armL.orientation = simd_quatf(angle: -swing * 0.55, axis: SIMD3<Float>(1, 0, 0))
+                rig.armR.orientation = simd_quatf(angle: swing * 0.55 + rig.armBaseR, axis: SIMD3<Float>(1, 0, 0))
+            } else {
+                let sway = sin(Float(time) * 0.85 + rig.phase) * 0.045
+                rig.armL.orientation = simd_quatf(angle: sway, axis: SIMD3<Float>(1, 0, 0))
+                rig.armR.orientation = simd_quatf(angle: -sway + rig.armBaseR, axis: SIMD3<Float>(1, 0, 0))
+            }
+            personRigs[index] = rig
+        }
+    }
+
+    /// Pantograph arc flashes (quality41 final): brief blue-white
+    /// bursts at the second car's pantograph — likelier in tunnels
+    /// and at speed. Cosmetic only; the flash pattern is a fast
+    /// time hash so bursts look random without any state machine.
+    private func updatePantographSpark(speedKmh: Double, time: Double, inTunnel: Bool) {
+        guard speedKmh > 35, vehicleModels.count > 0 else {
+            pantographSpark?.isEnabled = false
+            return
+        }
+        let spark: ModelEntity
+        if let existing = pantographSpark {
+            spark = existing
+        } else {
+            var material = PhysicallyBasedMaterial()
+            material.baseColor = .init(color: UIColor(red: 0.75, green: 0.85, blue: 1.0, alpha: 1))
+            material.emissiveColor = .init(color: UIColor(red: 0.65, green: 0.78, blue: 1.0, alpha: 1))
+            material.emissiveIntensity = 6
+            let made = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.15), materials: [material])
+            made.name = "pantograph-spark"
+            world.addChild(made)
+            pantographSpark = made
+            spark = made
+        }
+        let quanta = Int(time * 24)
+        let hash = stableIndex("spark-\(quanta)", count: 100)
+        let threshold = inTunnel ? 15 : 4
+        spark.isEnabled = hash < threshold
+        if spark.isEnabled {
+            let car = vehicleModels[min(1, vehicleModels.count - 1)]
+            spark.position = car.root.position + SIMD3<Float>(0, 4.0, 0)
+            let pulse = 0.8 + Float(hash % 7) * 0.22
+            spark.scale = SIMD3<Float>(pulse, pulse * 0.7, pulse)
         }
     }
 
@@ -4043,6 +4384,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             roadBatch.addBoxAxes(center: pt(sideSign * 50.25, -lift + 0.015, 0), size: SIMD3<Float>(49.5, 0.07, 5.6), ax: ax, ay: ay, az: az)
         }
         if let road = roadBatch.build(name: "crossing-road-\(index)", material: roadMaterial) { world.addChild(road) }
+        // Waiting pedestrians at every third crossing, standing at
+        // the road edge facing the track (quality41 final: people).
+        if index % 3 == 0 {
+            for sideSign: Float in [-1, 1] {
+                let stand = groundOffsetPoint(sample(at: center + 3.6), lateral: sideSign * 5.4)
+                let face = -ax * sideSign
+                addPerson(position: stand, yaw: atan2(face.x, -face.z), role: sideSign < 0 ? 0 : 2, mode: 0,
+                          routeDistanceM: center, walkAxis: ax, range: 0, seedKey: "crossing-\(index)-\(Int(sideSign))")
+            }
+        }
         // Deck panels flush with the rail head over the tracks, and
         // two terrace steps each side so the road climbs from apron
         // level to deck level.
@@ -5050,6 +5401,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let lateral = Float(platform.lateralOffsetM + actor.lateralOffsetM)
             entity.position = SIMD3<Float>(sample.x + lateral * cos(sample.heading), sample.elevationM + 0.48, sample.z + lateral * sin(sample.heading))
             entity.orientation = simd_quatf(angle: -(sample.heading + Float(actor.headingRadians)), axis: SIMD3<Float>(0, 1, 0))
+            if let legs = platformPeopleLegs[actor.id] {
+                if actor.phase == .walking {
+                    let swing = sin(Float(simulationTime) * 7 + Float(stableIndex(actor.id, count: 628)) / 100) * 0.45
+                    legs.0.orientation = simd_quatf(angle: swing, axis: SIMD3<Float>(1, 0, 0))
+                    legs.1.orientation = simd_quatf(angle: -swing, axis: SIMD3<Float>(1, 0, 0))
+                } else {
+                    legs.0.orientation = simd_quatf(angle: 0, axis: SIMD3<Float>(1, 0, 0))
+                    legs.1.orientation = simd_quatf(angle: 0, axis: SIMD3<Float>(1, 0, 0))
+                }
+            }
         }
     }
 
@@ -5155,20 +5516,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     }
 
     private func makePlatformPerson(id: String) -> Entity {
-        let person = Entity()
-        person.name = "traffic-platform-passenger-\(id)"
-        let clothes = [
-            Self.pbr(UIColor(red: 0.24, green: 0.39, blue: 0.53, alpha: 1), roughness: 0.87),
-            Self.pbr(UIColor(red: 0.53, green: 0.28, blue: 0.25, alpha: 1), roughness: 0.89),
-            Self.pbr(UIColor(red: 0.31, green: 0.43, blue: 0.34, alpha: 1), roughness: 0.92)
-        ]
-        let shirt = ModelEntity(mesh: .generateBox(size: SIMD3<Float>(0.38, 0.72, 0.24)), materials: [clothes[stableIndex(id, count: clothes.count)]])
-        shirt.position = SIMD3<Float>(0, 0.82, 0)
-        person.addChild(shirt)
-        let head = ModelEntity(mesh: .generateSphere(radius: 0.16), materials: [concreteMaterial])
-        head.position = SIMD3<Float>(0, 1.30, 0)
-        person.addChild(head)
-        return person
+        // quality41 final: the traffic passengers use the same
+        // articulated figure as the placed people (the old two-box
+        // dummy with a concrete head is gone). Legs are registered
+        // so updateTrafficActors can swing them while walking.
+        let figure = makePersonFigure(role: stableIndex(id + "role", count: 9) == 0 ? 2 : 0, seedKey: id)
+        platformPeopleLegs[id] = (figure.legL, figure.legR)
+        return figure.root
     }
 
     /// Uses package-provided cosmetic blend hints to select procedural material variants.
@@ -5553,6 +5907,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         start: start, end: end,
                         trackLateral: trackLateral, sideSign: sideSign
                     )
+                    addPlatformPeople(stationID: placement.stationId, archetype: placement.archetype, start: start, end: end, trackLateral: trackLateral, sideSign: sideSign)
                 }
             }
         }
@@ -5817,6 +6172,29 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                        position: topPoint(at: binChainage, u: sideSign * 5.45, v: topV + 0.3),
                        material: binMaterial, orientation: orientation(at: binChainage))
         }
+        // Departure board (quality41 final): a pole-mounted board
+        // near the platform centre — dark panel with two lit rows,
+        // read from the platform. The zoo and park terminals carry
+        // their own boards, so they are skipped here.
+        if !name.contains("ZOO") && !name.contains("PARK") {
+            let boardChainage = centerChainage - 6
+            if boardChainage >= start + 9 {
+                let q = orientation(at: boardChainage)
+                let poleMaterial = Self.pbr(UIColor(red: 0.25, green: 0.26, blue: 0.28, alpha: 1), metallic: 0.5, roughness: 0.5)
+                _ = addBox(parent: world, name: "\(name)-departure-pole", size: SIMD3<Float>(0.09, 2.5, 0.09),
+                           position: topPoint(at: boardChainage, u: sideSign * 5.5, v: topV + 1.25),
+                           material: poleMaterial, orientation: q)
+                _ = addBox(parent: world, name: "\(name)-departure-board", size: SIMD3<Float>(0.08, 0.62, 1.9),
+                           position: topPoint(at: boardChainage, u: sideSign * 5.5, v: topV + 2.62),
+                           material: Self.pbr(UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1), roughness: 0.4), orientation: q)
+                let bandMaterial = Self.pbr(UIColor(red: 0.96, green: 0.89, blue: 0.62, alpha: 1), roughness: 0.35)
+                for bandV: Float in [2.74, 2.50] {
+                    _ = addBox(parent: world, name: "\(name)-departure-band", size: SIMD3<Float>(0.02, 0.15, 1.7),
+                               position: topPoint(at: boardChainage, u: sideSign * 5.5 - sideSign * 0.05, v: topV + bandV),
+                               material: bandMaterial, orientation: q)
+                }
+            }
+        }
     }
 
     private func sceneFidelityCorridor(for route: RailwayRouteProfile) -> SceneCorridorSpecification {
@@ -5918,6 +6296,35 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                             previousTop = postTop
                             previousMid = base + station.yAxis * 0.55
                             fd += 4.25
+                        }
+                    }
+
+                    // -- Ticket gates (quality41 final) at the wide
+                    // stations: a row of three gate units under a
+                    // canopy on the forecourt walk, in the centre gap
+                    // the platform-back fence leaves for the station
+                    // core. Flap panels, a coloured top lamp per unit.
+                    if wide {
+                        let gateFrame = profileStation(at: placement.chainageM, trackLateral: trackLateral)
+                        let gateAxisZ = simd_cross(gateFrame.xAxis, gateFrame.yAxis)
+                        let gateBasis = simd_quatf(simd_float3x3(gateFrame.xAxis, gateFrame.yAxis, gateAxisZ))
+                        let gateCenter = gateFrame.center + gateFrame.xAxis * (sideSign * (backU + 1.25)) + gateFrame.yAxis * 0.03
+                        let gateBodyMat = Self.pbr(UIColor(red: 0.62, green: 0.64, blue: 0.66, alpha: 1), metallic: 0.45, roughness: 0.4)
+                        let gateFlapMat = Self.pbr(UIColor(red: 0.85, green: 0.55, blue: 0.20, alpha: 1), roughness: 0.5)
+                        for gateIndex in -1...1 {
+                            let unitCenter = gateCenter + gateAxisZ * (Float(gateIndex) * 1.10)
+                            _ = addBox(parent: world, name: "gates-\(placement.stationId)-\(gateIndex)", size: SIMD3<Float>(1.7, 0.95, 0.72),
+                                       position: unitCenter + gateFrame.yAxis * 0.475, material: gateBodyMat, orientation: gateBasis)
+                            _ = addBox(parent: world, name: "gates-flap-\(placement.stationId)-\(gateIndex)", size: SIMD3<Float>(0.55, 0.62, 0.05),
+                                       position: unitCenter + gateFrame.yAxis * 0.55 - gateFrame.xAxis * (sideSign * 0.2), material: gateFlapMat, orientation: gateBasis)
+                            _ = addBox(parent: world, name: "gates-lamp-\(placement.stationId)-\(gateIndex)", size: SIMD3<Float>(0.34, 0.06, 0.20),
+                                       position: unitCenter + gateFrame.yAxis * 0.99, material: Self.pbr(gateIndex == 0 ? UIColor(red: 0.85, green: 0.20, blue: 0.16, alpha: 1) : UIColor(red: 0.25, green: 0.75, blue: 0.35, alpha: 1), roughness: 0.35), orientation: gateBasis)
+                        }
+                        _ = addBox(parent: world, name: "gates-canopy-\(placement.stationId)", size: SIMD3<Float>(3.4, 0.12, 4.1),
+                                   position: gateCenter + gateFrame.yAxis * 2.62, material: Self.pbr(UIColor(red: 0.30, green: 0.31, blue: 0.33, alpha: 1), metallic: 0.4, roughness: 0.5), orientation: gateBasis)
+                        for postOffset: Float in [-1.8, 1.8] {
+                            _ = addBox(parent: world, name: "gates-post-\(placement.stationId)", size: SIMD3<Float>(0.09, 2.6, 0.09),
+                                       position: gateCenter + gateAxisZ * postOffset + gateFrame.yAxis * 1.3, material: gateBodyMat, orientation: gateBasis)
                         }
                     }
 
