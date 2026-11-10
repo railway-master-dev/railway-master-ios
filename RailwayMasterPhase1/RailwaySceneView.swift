@@ -412,7 +412,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.86, textureName: "scenery_brick_cool"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.82, blue: 0.76, alpha: 1), roughness: 0.91, textureName: "scenery_brick_warm"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.95, green: 0.90, blue: 0.82, alpha: 1), roughness: 0.88, textureName: "scenery_concrete"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.95, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.7, textureName: "scenery_brick_cool")
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.95, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.7, textureName: "scenery_brick_cool"),
+        // quality32: two more tones so neighbouring houses differ.
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.82, green: 0.78, blue: 0.72, alpha: 1), roughness: 0.9, textureName: "scenery_brick_warm"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.84, green: 0.86, blue: 0.88, alpha: 1), roughness: 0.88, textureName: "scenery_concrete")
     ]
     private let officeMaterials = [
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.62, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
@@ -420,7 +423,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         RailwaySceneWorld.texturedPBR(.white, metallic: 0.06, roughness: 0.52, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.92, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.56, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.94, green: 0.90, blue: 0.84, alpha: 1), roughness: 0.9, textureName: "scenery_house_facade")
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.94, green: 0.90, blue: 0.84, alpha: 1), roughness: 0.9, textureName: "scenery_house_facade"),
+        // quality32: tint variants of the same facades. Adjacent
+        // towers used to cycle only three textures at one tone, so
+        // the same building visibly repeated down the street;
+        // per-tone variation breaks the repetition without new
+        // assets.
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.80, green: 0.79, blue: 0.77, alpha: 1), roughness: 0.68, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.84, green: 0.80, blue: 0.74, alpha: 1), roughness: 0.94, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.78, green: 0.83, blue: 0.90, alpha: 1), metallic: 0.06, roughness: 0.58, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.86, green: 0.84, blue: 0.80, alpha: 1), roughness: 0.9, textureName: "scenery_brick_warm")
     ]
     private let foliageMaterials = [
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.75, green: 0.90, blue: 0.75, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
@@ -1968,7 +1980,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let groundY = groundLevelM(at: sample)
         let lateral: Float = lateralOverride ?? ((band == 2 ? 12.5 : 13.5) + Float(seed % 3) * 1.4)
         let width: Float = 11 + Float((seed / 3) % 4) * 1.4
-        let depth: Float = 10 + Float((seed / 7) % 3) * 1.6
+        // quality32: depth is the along-track extent of the box, so
+        // a longer depth closes the gaps in the downtown frontage
+        // (was 10-13.2 m of facade per 27 m step).
+        let depth: Float = 12 + Float((seed / 7) % 4) * 1.8
         var height: Float = 15 + Float((seed * 29) % 100) / 100 * (band == 2 ? 30 : 15)
         if band == 2 {
             let c = chainageFromCenter(distanceM: distance, route: route, travelDirection: travelDirection)
@@ -1976,6 +1991,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             height = max(15, height)
         }
         height *= heightScale
+        // quality32: beside an elevated section the towers rise
+        // from the valley floor far below the rails, so at their
+        // old heights most of them never reached the driver's eye
+        // and the downtown climb read as nearly building-free.
+        // Full-height towers beside a structure now rise well
+        // above rail level, the way real buildings flank an urban
+        // elevated line; low podium blocks (heightScale < 0.9)
+        // keep their street-level height.
+        if heightScale >= 0.9 {
+            let structureHeight = sample.elevationM - groundY
+            if structureHeight > 3 {
+                let aboveRail: Float = band == 2
+                    ? 14 + Float((seed * 37) % 12)
+                    : 10 + Float((seed * 37) % 8)
+                height = max(height, Float(structureHeight) + aboveRail)
+            }
+        }
         // quality29: no station check used to exist here, so a
         // tower face could land inside a station platform (the
         // Matsubaracho apartment sliced by the platform back).
@@ -2039,12 +2071,21 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // Second row of towers behind the first, so the
                     // skyline has depth instead of a single line of
                     // facades with gaps of empty sky between them.
-                    if urbanIndex.isMultiple(of: 2) {
-                        addTower(at: distance + 4.5, side: urbanIndex % 4 == 0 ? 1 : -1, seed: urbanIndex * 7 + 3, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection, lateralOverride: 30 + Float(urbanIndex % 3) * 2.5, heightScale: 1.2)
+                    // quality32: every step now (was every other), so
+                    // the second row reads as a continuous skyline.
+                    addTower(at: distance + 4.5, side: urbanIndex % 4 == 0 ? 1 : -1, seed: urbanIndex * 7 + 3, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection, lateralOverride: 30 + Float(urbanIndex % 3) * 2.5, heightScale: 1.2)
+                    // quality32: a low commercial podium on one side
+                    // of each downtown step closes the street wall at
+                    // eye level between the towers.
+                    if band == 2 {
+                        addTower(at: distance + 13, side: urbanIndex.isMultiple(of: 2) ? 1 : -1, seed: urbanIndex * 11 + 5, band: band, route: route, routeVariant: routeVariant, travelDirection: travelDirection, lateralOverride: 11.8, heightScale: 0.34)
                     }
                 }
                 urbanIndex += 1
-                distance += band == 2 ? 27 : 36
+                // quality32: tighter downtown frontage (was 27/36 m
+                // steps with 11-15 m towers, about half the frontage
+                // left as empty gaps).
+                distance += band == 2 ? 22 : 30
                 continue
             }
             if corridorReserved(at: distance, landmarks: landmarks) {
