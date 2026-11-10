@@ -146,7 +146,7 @@ enum RegionalNetworkIntegration {
         let depotStationID = "DEPOT_END"
         stations.append(try RailwaySignalling.FictionalRailwayStation(
             id: depotStationID,
-            name: "環雲車両基地（架空）"
+            name: "東央車両基地（架空）"
         ))
 
         var segments: [RailwaySignalling.FictionalRailwaySegment] = []
