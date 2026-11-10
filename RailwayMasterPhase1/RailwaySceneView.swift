@@ -437,7 +437,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.80, green: 0.79, blue: 0.77, alpha: 1), roughness: 0.68, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.84, green: 0.80, blue: 0.74, alpha: 1), roughness: 0.94, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.78, green: 0.83, blue: 0.90, alpha: 1), metallic: 0.06, roughness: 0.58, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.86, green: 0.84, blue: 0.80, alpha: 1), roughness: 0.9, textureName: "scenery_brick_warm")
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.86, green: 0.84, blue: 0.80, alpha: 1), roughness: 0.9, textureName: "scenery_brick_warm"),
+        // quality41 final (photoreal pass): weathered skins in the
+        // shared pool so a share of towers and blocks line-wide
+        // carry streaks and grime instead of the clean CG look.
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.7, textureName: "scenery_office_facade_grimed", normalName: "normal_office_facade"),
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.95, textureName: "scenery_apartment_facade_grimed", normalName: "normal_apartment_facade"),
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.95, textureName: "scenery_danchi_facade_grimed")
     ]
     private let foliageMaterials = [
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.75, green: 0.90, blue: 0.75, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
@@ -472,6 +478,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// facades (generated elevations, license-clean like the rest).
     private let schoolFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.9, textureName: "scenery_school_facade")
     private let hospitalFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.85, textureName: "scenery_hospital_facade")
+    /// quality41 final (photoreal pass): weathered variants of the
+    /// main facades — rain streaks, a dark splash zone at the base,
+    /// mottling and a slight desaturation, derived in-house from
+    /// the clean facades. The user's core complaint was that every
+    /// surface reads too clean and CG-like; these join the shared
+    /// pools, so the weathering applies along the whole line, not
+    /// just in the showcase section.
+    private let houseFacadeMaterialGrimed = RailwaySceneWorld.texturedPBR(.white, roughness: 0.95, textureName: "scenery_house_facade_grimed")
     /// quality41 (mega-batch): more Ema-generated elevations —
     /// two apartment variants, a danchi slab, an office curtain
     /// wall, and a drink vending machine front.
@@ -4131,7 +4145,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // Every third house wears the full photo facade; its windows
             // and door are painted in, so the separate boxes are skipped.
             let useFacadeTexture = !shed && index % 3 == 2
-            let facadeVariants = [houseFacadeMaterial, houseFacadeMaterial2, houseFacadeMaterial3, houseFacadeMaterial4, houseFacadeMaterial5]
+            let facadeVariants = [houseFacadeMaterial, houseFacadeMaterial2, houseFacadeMaterial3, houseFacadeMaterial4, houseFacadeMaterial5, houseFacadeMaterialGrimed]
             let bodyMaterial = useFacadeTexture ? facadeVariants[(index / 3) % facadeVariants.count] : sceneryMaterials[index % sceneryMaterials.count]
             let building = addBox(parent: world, name: shed ? "fictional-shed-\(index)" : "fictional-home-\(index)", size: SIMD3<Float>(width, height, depth), position: SIMD3<Float>(x, groundY + height / 2, z), material: bodyMaterial)
             building.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
