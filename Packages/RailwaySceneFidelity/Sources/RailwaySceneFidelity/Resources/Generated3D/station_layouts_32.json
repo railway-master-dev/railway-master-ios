@@ -8,7 +8,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S01",
-      "name": "環雲中央",
+      "name": "海袋",
       "lineId": "MAIN",
       "chainageM": 0.0,
       "archetype": "terminal_3platform",
@@ -78,7 +78,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S02",
-      "name": "松原町",
+      "name": "阿佐沼",
       "lineId": "MAIN",
       "chainageM": 1839.0,
       "archetype": "side_platforms",
@@ -134,7 +134,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S03",
-      "name": "川端町",
+      "name": "荻沼",
       "lineId": "MAIN",
       "chainageM": 3871.0,
       "archetype": "island_platform",
@@ -182,7 +182,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S04",
-      "name": "新田",
+      "name": "小原",
       "lineId": "MAIN",
       "chainageM": 6000.0,
       "archetype": "side_platforms",
@@ -238,7 +238,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S05",
-      "name": "桜台",
+      "name": "石神池",
       "lineId": "MAIN",
       "chainageM": 8226.0,
       "archetype": "island_platform",
@@ -286,7 +286,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S06",
-      "name": "港南町",
+      "name": "ひばりヶ岡",
       "lineId": "MAIN",
       "chainageM": 10355.0,
       "archetype": "side_platforms",
@@ -342,7 +342,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S07",
-      "name": "東野",
+      "name": "秋水",
       "lineId": "MAIN",
       "chainageM": 12387.0,
       "archetype": "island_platform",
@@ -390,7 +390,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S08",
-      "name": "若葉台",
+      "name": "若草台",
       "lineId": "MAIN",
       "chainageM": 14613.0,
       "archetype": "side_platforms",
@@ -446,7 +446,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S09",
-      "name": "北原",
+      "name": "東村川",
       "lineId": "MAIN",
       "chainageM": 16935.0,
       "archetype": "island_platform",
@@ -494,7 +494,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S10",
-      "name": "高砂町",
+      "name": "西立河",
       "lineId": "MAIN",
       "chainageM": 19161.0,
       "archetype": "side_platforms",
@@ -550,7 +550,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S11",
-      "name": "山手町",
+      "name": "日原",
       "lineId": "MAIN",
       "chainageM": 21290.0,
       "archetype": "island_platform",
@@ -598,7 +598,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S12",
-      "name": "環雲市",
+      "name": "東央千原",
       "lineId": "MAIN",
       "chainageM": 24194.0,
       "archetype": "major_5track_4platform",
@@ -682,7 +682,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S13",
-      "name": "南町",
+      "name": "幕布",
       "lineId": "MAIN",
       "chainageM": 26323.0,
       "archetype": "side_platforms",
@@ -738,7 +738,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S14",
-      "name": "旭ヶ丘",
+      "name": "津田池",
       "lineId": "MAIN",
       "chainageM": 28452.0,
       "archetype": "island_platform",
@@ -786,7 +786,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S15",
-      "name": "西原町",
+      "name": "三街道",
       "lineId": "MAIN",
       "chainageM": 30677.0,
       "archetype": "side_platforms",
@@ -842,7 +842,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S16",
-      "name": "緑町",
+      "name": "三鷲",
       "lineId": "MAIN",
       "chainageM": 32903.0,
       "archetype": "island_platform",
@@ -890,7 +890,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S17",
-      "name": "桜川",
+      "name": "東央佐原",
       "lineId": "MAIN",
       "chainageM": 35129.0,
       "archetype": "passing_3track_2platform",
@@ -949,7 +949,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S18",
-      "name": "大森町",
+      "name": "茂野",
       "lineId": "MAIN",
       "chainageM": 37355.0,
       "archetype": "side_platforms",
@@ -1005,7 +1005,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S19",
-      "name": "海岸通",
+      "name": "上総二ノ宮",
       "lineId": "MAIN",
       "chainageM": 39581.0,
       "archetype": "island_platform",
@@ -1053,7 +1053,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S20",
-      "name": "清水町",
+      "name": "東銀",
       "lineId": "MAIN",
       "chainageM": 41806.0,
       "archetype": "side_platforms",
@@ -1109,7 +1109,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S21",
-      "name": "中央市場前",
+      "name": "勝沼",
       "lineId": "MAIN",
       "chainageM": 44032.0,
       "archetype": "island_platform",
@@ -1157,7 +1157,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S22",
-      "name": "千代田町",
+      "name": "木更川",
       "lineId": "MAIN",
       "chainageM": 46258.0,
       "archetype": "passing_3track_2platform",
@@ -1216,7 +1216,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S23",
-      "name": "岩倉町",
+      "name": "波花",
       "lineId": "MAIN",
       "chainageM": 48484.0,
       "archetype": "side_platforms",
@@ -1272,7 +1272,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S24",
-      "name": "川西町",
+      "name": "大野",
       "lineId": "MAIN",
       "chainageM": 50710.0,
       "archetype": "island_platform",
@@ -1320,7 +1320,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S25",
-      "name": "白浜町",
+      "name": "御浜",
       "lineId": "MAIN",
       "chainageM": 52935.0,
       "archetype": "side_platforms",
@@ -1376,7 +1376,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S26",
-      "name": "新港町",
+      "name": "館川",
       "lineId": "MAIN",
       "chainageM": 55161.0,
       "archetype": "island_platform",
@@ -1424,7 +1424,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S27",
-      "name": "岬町",
+      "name": "千蔵",
       "lineId": "MAIN",
       "chainageM": 57387.0,
       "archetype": "side_platforms",
@@ -1480,7 +1480,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "S28",
-      "name": "東浜",
+      "name": "鴨河",
       "lineId": "MAIN",
       "chainageM": 60000.0,
       "archetype": "junction_3platform",
@@ -1550,7 +1550,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "B01",
-      "name": "枝川町",
+      "name": "久留野",
       "lineId": "BRANCH",
       "chainageM": 2000.0,
       "archetype": "side_platforms",
@@ -1606,7 +1606,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "B02",
-      "name": "深沢",
+      "name": "大櫃",
       "lineId": "BRANCH",
       "chainageM": 4000.0,
       "archetype": "island_platform",
@@ -1654,7 +1654,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "B03",
-      "name": "水沢町",
+      "name": "平川",
       "lineId": "BRANCH",
       "chainageM": 6000.0,
       "archetype": "side_platforms",
@@ -1710,7 +1710,7 @@
     {
       "dataStatus": "PLACEHOLDER",
       "stationId": "B04",
-      "name": "山里",
+      "name": "上総竜山",
       "lineId": "BRANCH",
       "chainageM": 8000.0,
       "archetype": "branch_terminal",
