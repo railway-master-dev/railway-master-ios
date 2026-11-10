@@ -186,17 +186,18 @@ PYEOF
     # / 500 m viaduct start / 1,000 m catenary rhythm / 1,300 m
     # transition curve / 1,654 m curve apex R450 / 1,800 m station
     # approach / 1,856 m stop position — then the line-wide tour:
-    # 58,150 m level-crossing approach (quality38) / 4,466 m
-    # R324 sharpest / 5,545 m Shinden station approach
-    # (quality36) / 6,522 m R902 / 35,050 m Sahara throat-fan
-    # middle (quality38) / 17,650 m tunnel portal / 23,980 m
-    # Chihara throat fan (quality38) / 45,327 m sea R1326 /
-    # 59,955 m Kamogawa junction and buffers (quality38).
+    # 17,560 m level-crossing candidate, suburb (quality39) /
+    # 4,466 m R324 sharpest / 7,850 m Sakuradai house wave
+    # (quality39) / 6,522 m R902 / 35,050 m Sahara throat-fan
+    # middle (quality38) / 38,900 m level-crossing candidate,
+    # rural (quality39) / 23,980 m Chihara throat fan
+    # (quality38) / 45,327 m sea R1326 / 59,955 m Kamogawa
+    # junction and buffers (quality38).
     TOUR_LOG=""
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
       TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
     fi
-    TOUR_SHOTS="04-tour-p1-departure 05-tour-p2-viaduct-start 06-tour-p3-catenary-rhythm 07-tour-p4-transition 08-tour-p5-apex 09-tour-p6-station-approach 10-tour-p7-stop-position 11-tour-58150-crossing 12-tour-4466-sharpest 13-tour-5545-shinden-approach 14-tour-6522 15-tour-35050-sahara-fan-mid 16-tour-17650-tunnel-portal 17-tour-23980-chihara-fan 18-tour-45327-sea 19-tour-59955-kamogawa-junction"
+    TOUR_SHOTS="04-tour-p1-departure 05-tour-p2-viaduct-start 06-tour-p3-catenary-rhythm 07-tour-p4-transition 08-tour-p5-apex 09-tour-p6-station-approach 10-tour-p7-stop-position 11-tour-17560-crossing-suburb 12-tour-4466-sharpest 13-tour-7850-sakuradai-houses 14-tour-6522 15-tour-35050-sahara-fan-mid 16-tour-38900-crossing-rural 17-tour-23980-chihara-fan 18-tour-45327-sea 19-tour-59955-kamogawa-junction"
     TOUR_START=$SECONDS
     TOUR_STALLED=0
     TOUR_INDEX=0
@@ -338,6 +339,11 @@ PYEOF
     # CI #199: the cab relaunch now writes its own log file; keep it too.
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log-cab.txt" ]; then
       cp "$APP_DATA/Documents/demo-drive-log-cab.txt" screenshots/ || true
+    fi
+    # quality39: the world writes the level-crossing chainages it
+    # placed; keep the list so tour spots can be aimed exactly.
+    if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/rm-crossings.txt" ]; then
+      cp "$APP_DATA/Documents/rm-crossings.txt" screenshots/ || true
     fi
     sleep 3
     xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/22-home.png 2>/dev/null || true
