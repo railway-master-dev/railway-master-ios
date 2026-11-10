@@ -3637,7 +3637,7 @@
       {
         "trackID": "depot_spur",
         "name": {
-          "value": "環雲車庫引込線（架空）",
+          "value": "東央車庫引込線（架空）",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
@@ -4021,14 +4021,14 @@
       {
         "stationID": "S01",
         "name": {
-          "value": "環雲中央",
+          "value": "海袋",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "環雲中央は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "海袋は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 0.0,
@@ -4038,7 +4038,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "環雲中央の線路ローカルキロ程（架空値）。"
+          "note": "海袋の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 0.0,
@@ -4048,7 +4048,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "環雲中央の停止位置（架空値）。"
+          "note": "海袋の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -4083,7 +4083,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "環雲中央ホーム起点（架空値）。"
+              "note": "海袋ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 200.0,
@@ -4093,7 +4093,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "環雲中央ホーム終点（架空値）。"
+              "note": "海袋ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -4199,14 +4199,14 @@
       {
         "stationID": "S02",
         "name": {
-          "value": "松原町",
+          "value": "阿佐沼",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "松原町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "阿佐沼は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 1839.0,
@@ -4216,7 +4216,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "松原町の線路ローカルキロ程（架空値）。"
+          "note": "阿佐沼の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 1839.0,
@@ -4226,7 +4226,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "松原町の停止位置（架空値）。"
+          "note": "阿佐沼の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -4261,7 +4261,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "松原町ホーム起点（架空値）。"
+              "note": "阿佐沼ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 1939.0,
@@ -4271,7 +4271,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "松原町ホーム終点（架空値）。"
+              "note": "阿佐沼ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -4377,14 +4377,14 @@
       {
         "stationID": "S03",
         "name": {
-          "value": "川端町",
+          "value": "荻沼",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "川端町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "荻沼は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 3871.0,
@@ -4394,7 +4394,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "川端町の線路ローカルキロ程（架空値）。"
+          "note": "荻沼の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 3871.0,
@@ -4404,7 +4404,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "川端町の停止位置（架空値）。"
+          "note": "荻沼の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -4439,7 +4439,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "川端町ホーム起点（架空値）。"
+              "note": "荻沼ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 3971.0,
@@ -4449,7 +4449,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "川端町ホーム終点（架空値）。"
+              "note": "荻沼ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -4555,14 +4555,14 @@
       {
         "stationID": "S04",
         "name": {
-          "value": "新田",
+          "value": "小原",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "新田は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "小原は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 6000.0,
@@ -4572,7 +4572,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "新田の線路ローカルキロ程（架空値）。"
+          "note": "小原の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 6000.0,
@@ -4582,7 +4582,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "新田の停止位置（架空値）。"
+          "note": "小原の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -4617,7 +4617,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "新田ホーム起点（架空値）。"
+              "note": "小原ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 6100.0,
@@ -4627,7 +4627,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "新田ホーム終点（架空値）。"
+              "note": "小原ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -4733,14 +4733,14 @@
       {
         "stationID": "S05",
         "name": {
-          "value": "桜台",
+          "value": "石神池",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "桜台は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "石神池は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 8226.0,
@@ -4750,7 +4750,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "桜台の線路ローカルキロ程（架空値）。"
+          "note": "石神池の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 8226.0,
@@ -4760,7 +4760,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "桜台の停止位置（架空値）。"
+          "note": "石神池の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -4795,7 +4795,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "桜台ホーム起点（架空値）。"
+              "note": "石神池ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 8326.0,
@@ -4805,7 +4805,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "桜台ホーム終点（架空値）。"
+              "note": "石神池ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -4911,14 +4911,14 @@
       {
         "stationID": "S06",
         "name": {
-          "value": "港南町",
+          "value": "ひばりヶ岡",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "港南町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "ひばりヶ岡は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 10355.0,
@@ -4928,7 +4928,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "港南町の線路ローカルキロ程（架空値）。"
+          "note": "ひばりヶ岡の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 10355.0,
@@ -4938,7 +4938,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "港南町の停止位置（架空値）。"
+          "note": "ひばりヶ岡の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -4973,7 +4973,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "港南町ホーム起点（架空値）。"
+              "note": "ひばりヶ岡ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 10455.0,
@@ -4983,7 +4983,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "港南町ホーム終点（架空値）。"
+              "note": "ひばりヶ岡ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -5089,14 +5089,14 @@
       {
         "stationID": "S07",
         "name": {
-          "value": "東野",
+          "value": "秋水",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "東野は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "秋水は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 12387.0,
@@ -5106,7 +5106,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "東野の線路ローカルキロ程（架空値）。"
+          "note": "秋水の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 12387.0,
@@ -5116,7 +5116,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "東野の停止位置（架空値）。"
+          "note": "秋水の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -5151,7 +5151,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "東野ホーム起点（架空値）。"
+              "note": "秋水ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 12487.0,
@@ -5161,7 +5161,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "東野ホーム終点（架空値）。"
+              "note": "秋水ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -5267,14 +5267,14 @@
       {
         "stationID": "S08",
         "name": {
-          "value": "若葉台",
+          "value": "若草台",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "若葉台は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "若草台は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 14613.0,
@@ -5284,7 +5284,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "若葉台の線路ローカルキロ程（架空値）。"
+          "note": "若草台の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 14613.0,
@@ -5294,7 +5294,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "若葉台の停止位置（架空値）。"
+          "note": "若草台の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -5329,7 +5329,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "若葉台ホーム起点（架空値）。"
+              "note": "若草台ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 14713.0,
@@ -5339,7 +5339,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "若葉台ホーム終点（架空値）。"
+              "note": "若草台ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -5445,14 +5445,14 @@
       {
         "stationID": "S09",
         "name": {
-          "value": "北原",
+          "value": "東村川",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "北原は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "東村川は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 16935.0,
@@ -5462,7 +5462,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "北原の線路ローカルキロ程（架空値）。"
+          "note": "東村川の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 16935.0,
@@ -5472,7 +5472,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "北原の停止位置（架空値）。"
+          "note": "東村川の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -5507,7 +5507,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "北原ホーム起点（架空値）。"
+              "note": "東村川ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 17035.0,
@@ -5517,7 +5517,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "北原ホーム終点（架空値）。"
+              "note": "東村川ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -5623,14 +5623,14 @@
       {
         "stationID": "S10",
         "name": {
-          "value": "高砂町",
+          "value": "西立河",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "高砂町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "西立河は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 19161.0,
@@ -5640,7 +5640,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "高砂町の線路ローカルキロ程（架空値）。"
+          "note": "西立河の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 19161.0,
@@ -5650,7 +5650,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "高砂町の停止位置（架空値）。"
+          "note": "西立河の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -5685,7 +5685,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "高砂町ホーム起点（架空値）。"
+              "note": "西立河ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 19261.0,
@@ -5695,7 +5695,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "高砂町ホーム終点（架空値）。"
+              "note": "西立河ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -5801,14 +5801,14 @@
       {
         "stationID": "S11",
         "name": {
-          "value": "山手町",
+          "value": "日原",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "山手町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "日原は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 21290.0,
@@ -5818,7 +5818,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "山手町の線路ローカルキロ程（架空値）。"
+          "note": "日原の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 21290.0,
@@ -5828,7 +5828,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "山手町の停止位置（架空値）。"
+          "note": "日原の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -5863,7 +5863,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "山手町ホーム起点（架空値）。"
+              "note": "日原ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 21390.0,
@@ -5873,7 +5873,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "山手町ホーム終点（架空値）。"
+              "note": "日原ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -5979,14 +5979,14 @@
       {
         "stationID": "S12",
         "name": {
-          "value": "環雲市",
+          "value": "東央千原",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "環雲市は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "東央千原は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 24194.0,
@@ -5996,7 +5996,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "環雲市の線路ローカルキロ程（架空値）。"
+          "note": "東央千原の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 24194.0,
@@ -6006,7 +6006,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "環雲市の停止位置（架空値）。"
+          "note": "東央千原の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -6041,7 +6041,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "環雲市ホーム起点（架空値）。"
+              "note": "東央千原ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 24294.0,
@@ -6051,7 +6051,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "環雲市ホーム終点（架空値）。"
+              "note": "東央千原ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -6157,14 +6157,14 @@
       {
         "stationID": "S13",
         "name": {
-          "value": "南町",
+          "value": "幕布",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "南町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "幕布は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 26323.0,
@@ -6174,7 +6174,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "南町の線路ローカルキロ程（架空値）。"
+          "note": "幕布の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 26323.0,
@@ -6184,7 +6184,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "南町の停止位置（架空値）。"
+          "note": "幕布の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -6219,7 +6219,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "南町ホーム起点（架空値）。"
+              "note": "幕布ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 26423.0,
@@ -6229,7 +6229,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "南町ホーム終点（架空値）。"
+              "note": "幕布ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -6335,14 +6335,14 @@
       {
         "stationID": "S14",
         "name": {
-          "value": "旭ヶ丘",
+          "value": "津田池",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "旭ヶ丘は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "津田池は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 28452.0,
@@ -6352,7 +6352,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "旭ヶ丘の線路ローカルキロ程（架空値）。"
+          "note": "津田池の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 28452.0,
@@ -6362,7 +6362,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "旭ヶ丘の停止位置（架空値）。"
+          "note": "津田池の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -6397,7 +6397,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "旭ヶ丘ホーム起点（架空値）。"
+              "note": "津田池ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 28552.0,
@@ -6407,7 +6407,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "旭ヶ丘ホーム終点（架空値）。"
+              "note": "津田池ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -6513,14 +6513,14 @@
       {
         "stationID": "S15",
         "name": {
-          "value": "西原町",
+          "value": "三街道",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "西原町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "三街道は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 30677.0,
@@ -6530,7 +6530,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "西原町の線路ローカルキロ程（架空値）。"
+          "note": "三街道の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 30677.0,
@@ -6540,7 +6540,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "西原町の停止位置（架空値）。"
+          "note": "三街道の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -6575,7 +6575,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "西原町ホーム起点（架空値）。"
+              "note": "三街道ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 30777.0,
@@ -6585,7 +6585,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "西原町ホーム終点（架空値）。"
+              "note": "三街道ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -6691,14 +6691,14 @@
       {
         "stationID": "S16",
         "name": {
-          "value": "緑町",
+          "value": "三鷲",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "緑町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "三鷲は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 32903.0,
@@ -6708,7 +6708,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "緑町の線路ローカルキロ程（架空値）。"
+          "note": "三鷲の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 32903.0,
@@ -6718,7 +6718,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "緑町の停止位置（架空値）。"
+          "note": "三鷲の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -6753,7 +6753,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "緑町ホーム起点（架空値）。"
+              "note": "三鷲ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 33003.0,
@@ -6763,7 +6763,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "緑町ホーム終点（架空値）。"
+              "note": "三鷲ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -6869,14 +6869,14 @@
       {
         "stationID": "S17",
         "name": {
-          "value": "桜川",
+          "value": "東央佐原",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "桜川は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "東央佐原は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 35129.0,
@@ -6886,7 +6886,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "桜川の線路ローカルキロ程（架空値）。"
+          "note": "東央佐原の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 35129.0,
@@ -6896,7 +6896,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "桜川の停止位置（架空値）。"
+          "note": "東央佐原の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -6931,7 +6931,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "桜川ホーム起点（架空値）。"
+              "note": "東央佐原ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 35229.0,
@@ -6941,7 +6941,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "桜川ホーム終点（架空値）。"
+              "note": "東央佐原ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -7047,14 +7047,14 @@
       {
         "stationID": "S18",
         "name": {
-          "value": "大森町",
+          "value": "茂野",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "大森町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "茂野は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 37355.0,
@@ -7064,7 +7064,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "大森町の線路ローカルキロ程（架空値）。"
+          "note": "茂野の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 37355.0,
@@ -7074,7 +7074,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "大森町の停止位置（架空値）。"
+          "note": "茂野の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -7109,7 +7109,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "大森町ホーム起点（架空値）。"
+              "note": "茂野ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 37455.0,
@@ -7119,7 +7119,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "大森町ホーム終点（架空値）。"
+              "note": "茂野ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -7225,14 +7225,14 @@
       {
         "stationID": "S19",
         "name": {
-          "value": "海岸通",
+          "value": "上総二ノ宮",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "海岸通は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "上総二ノ宮は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 39581.0,
@@ -7242,7 +7242,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "海岸通の線路ローカルキロ程（架空値）。"
+          "note": "上総二ノ宮の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 39581.0,
@@ -7252,7 +7252,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "海岸通の停止位置（架空値）。"
+          "note": "上総二ノ宮の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -7287,7 +7287,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "海岸通ホーム起点（架空値）。"
+              "note": "上総二ノ宮ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 39681.0,
@@ -7297,7 +7297,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "海岸通ホーム終点（架空値）。"
+              "note": "上総二ノ宮ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -7403,14 +7403,14 @@
       {
         "stationID": "S20",
         "name": {
-          "value": "清水町",
+          "value": "東銀",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "清水町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "東銀は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 41806.0,
@@ -7420,7 +7420,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "清水町の線路ローカルキロ程（架空値）。"
+          "note": "東銀の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 41806.0,
@@ -7430,7 +7430,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "清水町の停止位置（架空値）。"
+          "note": "東銀の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -7465,7 +7465,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "清水町ホーム起点（架空値）。"
+              "note": "東銀ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 41906.0,
@@ -7475,7 +7475,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "清水町ホーム終点（架空値）。"
+              "note": "東銀ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -7581,14 +7581,14 @@
       {
         "stationID": "S21",
         "name": {
-          "value": "中央市場前",
+          "value": "勝沼",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "中央市場前は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "勝沼は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 44032.0,
@@ -7598,7 +7598,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "中央市場前の線路ローカルキロ程（架空値）。"
+          "note": "勝沼の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 44032.0,
@@ -7608,7 +7608,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "中央市場前の停止位置（架空値）。"
+          "note": "勝沼の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -7643,7 +7643,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "中央市場前ホーム起点（架空値）。"
+              "note": "勝沼ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 44132.0,
@@ -7653,7 +7653,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "中央市場前ホーム終点（架空値）。"
+              "note": "勝沼ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -7759,14 +7759,14 @@
       {
         "stationID": "S22",
         "name": {
-          "value": "千代田町",
+          "value": "木更川",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "千代田町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "木更川は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 46258.0,
@@ -7776,7 +7776,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "千代田町の線路ローカルキロ程（架空値）。"
+          "note": "木更川の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 46258.0,
@@ -7786,7 +7786,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "千代田町の停止位置（架空値）。"
+          "note": "木更川の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -7821,7 +7821,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "千代田町ホーム起点（架空値）。"
+              "note": "木更川ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 46358.0,
@@ -7831,7 +7831,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "千代田町ホーム終点（架空値）。"
+              "note": "木更川ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -7937,14 +7937,14 @@
       {
         "stationID": "S23",
         "name": {
-          "value": "岩倉町",
+          "value": "波花",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "岩倉町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "波花は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 48484.0,
@@ -7954,7 +7954,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "岩倉町の線路ローカルキロ程（架空値）。"
+          "note": "波花の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 48484.0,
@@ -7964,7 +7964,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "岩倉町の停止位置（架空値）。"
+          "note": "波花の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -7999,7 +7999,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "岩倉町ホーム起点（架空値）。"
+              "note": "波花ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 48584.0,
@@ -8009,7 +8009,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "岩倉町ホーム終点（架空値）。"
+              "note": "波花ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -8115,14 +8115,14 @@
       {
         "stationID": "S24",
         "name": {
-          "value": "川西町",
+          "value": "大野",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "川西町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "大野は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 50710.0,
@@ -8132,7 +8132,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "川西町の線路ローカルキロ程（架空値）。"
+          "note": "大野の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 50710.0,
@@ -8142,7 +8142,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "川西町の停止位置（架空値）。"
+          "note": "大野の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -8177,7 +8177,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "川西町ホーム起点（架空値）。"
+              "note": "大野ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 50810.0,
@@ -8187,7 +8187,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "川西町ホーム終点（架空値）。"
+              "note": "大野ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -8293,14 +8293,14 @@
       {
         "stationID": "S25",
         "name": {
-          "value": "白浜町",
+          "value": "御浜",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "白浜町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "御浜は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 52935.0,
@@ -8310,7 +8310,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "白浜町の線路ローカルキロ程（架空値）。"
+          "note": "御浜の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 52935.0,
@@ -8320,7 +8320,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "白浜町の停止位置（架空値）。"
+          "note": "御浜の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -8355,7 +8355,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "白浜町ホーム起点（架空値）。"
+              "note": "御浜ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 53035.0,
@@ -8365,7 +8365,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "白浜町ホーム終点（架空値）。"
+              "note": "御浜ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -8471,14 +8471,14 @@
       {
         "stationID": "S26",
         "name": {
-          "value": "新港町",
+          "value": "館川",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "新港町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "館川は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 55161.0,
@@ -8488,7 +8488,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "新港町の線路ローカルキロ程（架空値）。"
+          "note": "館川の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 55161.0,
@@ -8498,7 +8498,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "新港町の停止位置（架空値）。"
+          "note": "館川の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -8533,7 +8533,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "新港町ホーム起点（架空値）。"
+              "note": "館川ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 55261.0,
@@ -8543,7 +8543,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "新港町ホーム終点（架空値）。"
+              "note": "館川ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -8649,14 +8649,14 @@
       {
         "stationID": "S27",
         "name": {
-          "value": "岬町",
+          "value": "千蔵",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "岬町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "千蔵は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 57387.0,
@@ -8666,7 +8666,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "岬町の線路ローカルキロ程（架空値）。"
+          "note": "千蔵の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 57387.0,
@@ -8676,7 +8676,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "岬町の停止位置（架空値）。"
+          "note": "千蔵の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -8711,7 +8711,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "岬町ホーム起点（架空値）。"
+              "note": "千蔵ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 57487.0,
@@ -8721,7 +8721,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "岬町ホーム終点（架空値）。"
+              "note": "千蔵ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -8827,14 +8827,14 @@
       {
         "stationID": "S28",
         "name": {
-          "value": "東浜",
+          "value": "鴨河",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "東浜は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "鴨河は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 60000.0,
@@ -8844,7 +8844,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "東浜の線路ローカルキロ程（架空値）。"
+          "note": "鴨河の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 60000.0,
@@ -8854,7 +8854,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "東浜の停止位置（架空値）。"
+          "note": "鴨河の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -8889,7 +8889,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "東浜ホーム起点（架空値）。"
+              "note": "鴨河ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 60000.0,
@@ -8899,7 +8899,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "東浜ホーム終点（架空値）。"
+              "note": "鴨河ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -9005,14 +9005,14 @@
       {
         "stationID": "B01",
         "name": {
-          "value": "枝川町",
+          "value": "久留野",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "枝川町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "久留野は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 2000.0,
@@ -9022,7 +9022,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "枝川町の線路ローカルキロ程（架空値）。"
+          "note": "久留野の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 2000.0,
@@ -9032,7 +9032,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "枝川町の停止位置（架空値）。"
+          "note": "久留野の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -9067,7 +9067,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "枝川町ホーム起点（架空値）。"
+              "note": "久留野ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 2100.0,
@@ -9077,7 +9077,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "枝川町ホーム終点（架空値）。"
+              "note": "久留野ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -9183,14 +9183,14 @@
       {
         "stationID": "B02",
         "name": {
-          "value": "深沢",
+          "value": "大櫃",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "深沢は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "大櫃は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 4000.0,
@@ -9200,7 +9200,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "深沢の線路ローカルキロ程（架空値）。"
+          "note": "大櫃の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 4000.0,
@@ -9210,7 +9210,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "深沢の停止位置（架空値）。"
+          "note": "大櫃の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -9245,7 +9245,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "深沢ホーム起点（架空値）。"
+              "note": "大櫃ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 4100.0,
@@ -9255,7 +9255,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "深沢ホーム終点（架空値）。"
+              "note": "大櫃ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -9361,14 +9361,14 @@
       {
         "stationID": "B03",
         "name": {
-          "value": "水沢町",
+          "value": "平川",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "水沢町は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "平川は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 6000.0,
@@ -9378,7 +9378,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "水沢町の線路ローカルキロ程（架空値）。"
+          "note": "平川の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 6000.0,
@@ -9388,7 +9388,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "水沢町の停止位置（架空値）。"
+          "note": "平川の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -9423,7 +9423,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "水沢町ホーム起点（架空値）。"
+              "note": "平川ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 6100.0,
@@ -9433,7 +9433,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "水沢町ホーム終点（架空値）。"
+              "note": "平川ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -9539,14 +9539,14 @@
       {
         "stationID": "B04",
         "name": {
-          "value": "山里",
+          "value": "上総竜山",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "山里は架空名称。運行計画と共通のPLACEHOLDER。"
+          "note": "上総竜山は架空名称。運行計画と共通のPLACEHOLDER。"
         },
         "chainageM": {
           "value": 8000.0,
@@ -9556,7 +9556,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "山里の線路ローカルキロ程（架空値）。"
+          "note": "上総竜山の線路ローカルキロ程（架空値）。"
         },
         "stopPositionChainageM": {
           "value": 8000.0,
@@ -9566,7 +9566,7 @@
           ],
           "uncertainty": null,
           "confidence": "MEDIUM",
-          "note": "山里の停止位置（架空値）。"
+          "note": "上総竜山の停止位置（架空値）。"
         },
         "location": {
           "value": null,
@@ -9601,7 +9601,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "山里ホーム起点（架空値）。"
+              "note": "上総竜山ホーム起点（架空値）。"
             },
             "endChainageM": {
               "value": 8000.0,
@@ -9611,7 +9611,7 @@
               ],
               "uncertainty": null,
               "confidence": "MEDIUM",
-              "note": "山里ホーム終点（架空値）。"
+              "note": "上総竜山ホーム終点（架空値）。"
             },
             "lengthM": {
               "value": 200.0,
@@ -15023,7 +15023,7 @@
       {
         "depotID": "main_depot",
         "name": {
-          "value": "環雲車両基地（架空）",
+          "value": "東央車両基地（架空）",
           "status": "PLACEHOLDER",
           "sourceIDs": [
             "fictional_60_8_2_design_v2"
