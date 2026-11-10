@@ -118,7 +118,7 @@ struct ContentView: View {
                             Text("MR \(Int(model.telemetry.mainReservoirPressureKPa.rounded())) · BP \(Int(model.telemetry.brakePipePressureKPa.rounded())) · BC \(Int(model.telemetry.brakeCylinderPressureKPa.rounded())) kPa")
                             Text("引張 \(Int(model.telemetry.tractionForceN / 1_000)) kN · 制動 \(Int(model.telemetry.brakingForceN / 1_000)) kN")
                             if model.telemetry.isWheelSlipActive || model.telemetry.isBrakeSlipActive {
-                                Text("滑走")
+                                Text(model.telemetry.isWheelSlipActive && model.telemetry.isBrakeSlipActive ? "空転・滑走" : (model.telemetry.isWheelSlipActive ? "空転" : "滑走"))
                                     .foregroundStyle(.orange)
                             }
                         }
@@ -662,7 +662,9 @@ struct ContentView: View {
     private func signalName(_ aspect: ThreeAspectSignal) -> String {
         switch aspect {
         case .red: "停止"
+        case .doubleYellow: "警戒"
         case .yellow: "注意"
+        case .yellowGreen: "減速"
         case .green: "進行"
         }
     }
@@ -670,7 +672,9 @@ struct ContentView: View {
     private func signalTint(_ aspect: ThreeAspectSignal) -> Color {
         switch aspect {
         case .red: .red
+        case .doubleYellow: .orange
         case .yellow: .yellow
+        case .yellowGreen: Color(red: 0.62, green: 0.78, blue: 0.25)
         case .green: .green
         }
     }
@@ -855,7 +859,7 @@ struct ContentView: View {
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                 Spacer(minLength: 3)
                 if model.telemetry.isWheelSlipActive || model.telemetry.isBrakeSlipActive {
-                    Label("滑走", systemImage: "exclamationmark.triangle.fill")
+                    Label(model.telemetry.isWheelSlipActive && model.telemetry.isBrakeSlipActive ? "空転・滑走" : (model.telemetry.isWheelSlipActive ? "空転" : "滑走"), systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 8, weight: .black, design: .rounded))
                         .foregroundStyle(.orange)
                 } else {
