@@ -286,6 +286,50 @@ PYEOF
       fi
     done
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+    # Short-line tours (quality41): the zoo and theme park lines are
+    # separate routes the main tour never visits, so each gets its
+    # own launch with its own argument and spot list, using the same
+    # READY/ACK handshake. Stale ACK files and the previous demo log
+    # are cleared first so the handshake starts clean.
+    run_short_tour() {
+      local EXTRA_ARG="$1"; shift
+      local SHOTS="$*"
+      rm -f "$APP_DATA/Documents"/tour-ack-*.txt 2>/dev/null || true
+      rm -f "$APP_DATA/Documents/demo-drive-log.txt" 2>/dev/null || true
+      xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour "$EXTRA_ARG" || true
+      local SLOG=""
+      local WAITLOG=0
+      while [ "$WAITLOG" -lt 90 ]; do
+        if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then SLOG="$APP_DATA/Documents/demo-drive-log.txt"; break; fi
+        sleep 3; WAITLOG=$((WAITLOG + 3))
+      done
+      local IDX=0
+      for SHOT in $SHOTS; do
+        if [ -n "$SLOG" ]; then
+          local WAITED=0
+          while [ "$WAITED" -lt 240 ]; do
+            local MAXREADY="$(grep -o 'READY spot=[0-9]*' "$SLOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
+            if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$IDX" ]; then break; fi
+            sleep 5; WAITED=$((WAITED + 5))
+          done
+          sleep 5
+        else
+          sleep 35
+        fi
+        xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$SHOT.png" 2>/dev/null || true
+        echo "tour-progress: short $EXTRA_ARG spot $IDX $SHOT" >> screenshots/tour-progress.txt
+        if [ -n "$APP_DATA" ]; then
+          printf 'ack %s\n' "$IDX" > "$APP_DATA/Documents/tour-ack-$IDX.txt" 2>/dev/null || true
+        fi
+        IDX=$((IDX + 1))
+      done
+      xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+      sleep 3
+    }
+    if [ -n "$APP_DATA" ]; then
+      run_short_tour -RMZooTour 40-zoo-approach 41-zoo-penguins 42-zoo-lion 43-zoo-tiger 44-zoo-elephant 45-zoo-terminal
+      run_short_tour -RMParkTour 46-park-entrance 47-park-grounds 48-park-wheel 49-park-terminal
+    fi
     # Cab check: relaunch in the cab view and let the demo drive the
     # showcase section (origin to Matsubaracho, 1,856 m) so the
     # rebuilt cab is photographed running and standing at the
