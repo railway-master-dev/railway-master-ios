@@ -395,32 +395,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var lastSceneFidelityBuildChainage = Double.nan
 
     private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.92, green: 0.92, blue: 0.92, alpha: 1), roughness: 0.96, textureName: "scenery_ballast", normalName: "normal_ballast")
-    private let sleeperMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.72, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.88, textureName: "scenery_timber")
+    private let sleeperMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.2, green: 1.0, blue: 0.2, alpha: 1), roughness: 0.88, textureName: "scenery_timber")
     private let railMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
-    private let concreteMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.45, blue: 0.0, alpha: 1), roughness: 0.87, textureName: "scenery_concrete", normalName: "normal_concrete")
+    private let concreteMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.87, textureName: "scenery_concrete", normalName: "normal_concrete")
     private let poleMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.58, blue: 0.58, alpha: 1), metallic: 0.62, roughness: 0.42, textureName: "scenery_steel")
     private let wireMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.66, blue: 0.57, alpha: 1), metallic: 0.84, roughness: 0.24)
-    private let roadMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.1, green: 0.2, blue: 1.0, alpha: 1), roughness: 0.78, textureName: "scenery_asphalt", normalName: "normal_asphalt")
-    private let glassMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.0, green: 0.9, blue: 1.0, alpha: 1), metallic: 0.18, roughness: 0.20)
+    private let roadMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.78, textureName: "scenery_asphalt", normalName: "normal_asphalt")
+    private let glassMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.12, green: 0.26, blue: 0.31, alpha: 1), metallic: 0.18, roughness: 0.20)
     private let roofMaterials = [
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.45, green: 0.38, blue: 0.33, alpha: 1), roughness: 0.84, textureName: "scenery_steel"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.50, blue: 0.44, alpha: 1), roughness: 0.82, textureName: "scenery_steel"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.40, green: 0.46, blue: 0.50, alpha: 1), metallic: 0.12, roughness: 0.71, textureName: "scenery_steel")
     ]
     private let buildingMaterials = [
-        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), roughness: 0.89, textureName: "scenery_brick_warm"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), roughness: 0.86, textureName: "scenery_brick_cool"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), roughness: 0.91, textureName: "scenery_brick_warm"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), roughness: 0.88, textureName: "scenery_concrete"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.7, textureName: "scenery_brick_cool")
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.89, textureName: "scenery_brick_warm"),
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.86, textureName: "scenery_brick_cool"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.82, blue: 0.76, alpha: 1), roughness: 0.91, textureName: "scenery_brick_warm"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.95, green: 0.90, blue: 0.82, alpha: 1), roughness: 0.88, textureName: "scenery_concrete"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.95, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.7, textureName: "scenery_brick_cool")
     ]
     private let officeMaterials = [
-        RailwaySceneWorld.texturedPBR(.white, roughness: 0.62, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.88, blue: 0.84, alpha: 1), roughness: 0.66, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
-        RailwaySceneWorld.texturedPBR(.white, metallic: 0.25, roughness: 0.34, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.92, blue: 1.0, alpha: 1), metallic: 0.25, roughness: 0.38, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
-        RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.94, green: 0.90, blue: 0.84, alpha: 1), roughness: 0.9, textureName: "scenery_house_facade")
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), roughness: 0.62, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), roughness: 0.66, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), metallic: 0.25, roughness: 0.34, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), metallic: 0.25, roughness: 0.38, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), roughness: 0.92, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1), roughness: 0.9, textureName: "scenery_house_facade")
     ]
     private let foliageMaterials = [
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.75, green: 0.90, blue: 0.75, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
@@ -2807,6 +2807,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     }
 
     private func updateGeneratedStationModel(positionM: Double) {
+        // DIAG3 (throwaway): station GLB loading disabled for bisection.
+        if true { return }
         guard let placement = stationModelPlacements.min(by: {
             abs($0.chainageM - positionM) < abs($1.chainageM - positionM)
         }), abs(placement.chainageM - positionM) <= 350 else {
@@ -4034,8 +4036,6 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         chainageM: Double,
         useLiveCamera: Bool
     ) {
-        // DIAG2 (throwaway): fidelity region disabled for system bisection.
-        if true { return }
         guard let sceneRoute = sceneFidelityRoute else { return }
         let cameraState = sceneCameraState(at: chainageM, useLiveCamera: useLiveCamera)
         let plan = RailwaySceneFidelityBuilder.build(
