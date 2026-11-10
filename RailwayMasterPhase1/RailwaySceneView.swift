@@ -2303,7 +2303,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let pad = groundOffsetPoint(sample, lateral: sign * 9.7)
         _ = addBox(parent: world, name: "konbini-pad-\(seed)", size: SIMD3<Float>(7, 0.07, 11), position: SIMD3<Float>(pad.x, groundY + 0.035, pad.z), material: roadMaterial, orientation: orientation)
         for stripe in 0..<4 {
-            let sp = groundOffsetPoint(sample(at: distance + Double(stripe) * 2.6 - 3.9), lateral: sign * 7.6)
+            let sp = groundOffsetPoint(self.sample(at: distance + Double(stripe) * 2.6 - 3.9), lateral: sign * 7.6)
             _ = addBox(parent: world, name: "konbini-stripe-\(seed)-\(stripe)", size: SIMD3<Float>(2.4, 0.015, 0.14), position: SIMD3<Float>(sp.x, groundY + 0.075, sp.z), material: roofMaterials[2], orientation: orientation)
         }
         let body = groundOffsetPoint(sample, lateral: sign * 17.7)
@@ -2313,10 +2313,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         _ = addBox(parent: world, name: "konbini-glow-\(seed)", size: SIMD3<Float>(0.06, 0.45, 14.6), position: SIMD3<Float>(face.x, groundY + 2.75, face.z), material: glow, orientation: orientation)
         _ = addBox(parent: world, name: "konbini-band-\(seed)", size: SIMD3<Float>(9.25, 0.55, 16.25), position: SIMD3<Float>(body.x, groundY + 3.5, body.z), material: accent, orientation: orientation)
         _ = addBox(parent: world, name: "konbini-roof-\(seed)", size: SIMD3<Float>(9.7, 0.22, 16.7), position: SIMD3<Float>(body.x, groundY + 4.0, body.z), material: roofMaterials[0], orientation: orientation)
-        let pole = groundOffsetPoint(sample(at: distance + 6.5), lateral: sign * 7.3)
+        let pole = groundOffsetPoint(self.sample(at: distance + 6.5), lateral: sign * 7.3)
         _ = addBox(parent: world, name: "konbini-pole-\(seed)", size: SIMD3<Float>(0.14, 6.2, 0.14), position: SIMD3<Float>(pole.x, groundY + 3.1, pole.z), material: poleMaterial)
         _ = addBox(parent: world, name: "konbini-sign-\(seed)", size: SIMD3<Float>(0.3, 1.15, 1.15), position: SIMD3<Float>(pole.x, groundY + 5.5, pole.z), material: accent, orientation: orientation)
-        let signFace = groundOffsetPoint(sample(at: distance + 6.5), lateral: sign * 7.08)
+        let signFace = groundOffsetPoint(self.sample(at: distance + 6.5), lateral: sign * 7.08)
         _ = addBox(parent: world, name: "konbini-signface-\(seed)", size: SIMD3<Float>(0.08, 0.9, 0.9), position: SIMD3<Float>(signFace.x, groundY + 5.5, signFace.z), material: roofMaterials[2], orientation: orientation)
     }
 
@@ -2331,7 +2331,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let pad = groundOffsetPoint(sample, lateral: sign * 9.8)
         _ = addBox(parent: world, name: "super-pad-\(seed)", size: SIMD3<Float>(7.2, 0.07, 30), position: SIMD3<Float>(pad.x, groundY + 0.035, pad.z), material: roadMaterial, orientation: orientation)
         for stripe in 0..<6 {
-            let sp = groundOffsetPoint(sample(at: distance + Double(stripe) * 5 - 12.5), lateral: sign * 7.6)
+            let sp = groundOffsetPoint(self.sample(at: distance + Double(stripe) * 5 - 12.5), lateral: sign * 7.6)
             _ = addBox(parent: world, name: "super-stripe-\(seed)-\(stripe)", size: SIMD3<Float>(2.4, 0.015, 0.14), position: SIMD3<Float>(sp.x, groundY + 0.075, sp.z), material: roofMaterials[2], orientation: orientation)
         }
         let body = groundOffsetPoint(sample, lateral: sign * 21)
@@ -2341,13 +2341,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         _ = addBox(parent: world, name: "super-glass-\(seed)", size: SIMD3<Float>(0.12, 3.2, 11), position: SIMD3<Float>(face.x, groundY + 1.6, face.z), material: glassMaterial, orientation: orientation)
         _ = addBox(parent: world, name: "super-roof-\(seed)", size: SIMD3<Float>(16.7, 0.3, 34.7), position: SIMD3<Float>(body.x, groundY + 7.15, body.z), material: roofMaterials[1], orientation: orientation)
         for plant in 0..<2 {
-            let pp = groundOffsetPoint(sample(at: distance + (plant == 0 ? -8.0 : 8.0)), lateral: sign * (plant == 0 ? 19 : 23))
+            let pp = groundOffsetPoint(self.sample(at: distance + (plant == 0 ? -8.0 : 8.0)), lateral: sign * (plant == 0 ? 19 : 23))
             _ = addBox(parent: world, name: "super-plant-\(seed)-\(plant)", size: SIMD3<Float>(4.5, 1.3, 3.2), position: SIMD3<Float>(pp.x, groundY + 7.9, pp.z), material: concreteMaterial, orientation: orientation)
         }
-        let pole = groundOffsetPoint(sample(at: distance + 13), lateral: sign * 7.4)
+        let pole = groundOffsetPoint(self.sample(at: distance + 13), lateral: sign * 7.4)
         _ = addBox(parent: world, name: "super-pole-\(seed)", size: SIMD3<Float>(0.18, 9.5, 0.18), position: SIMD3<Float>(pole.x, groundY + 4.75, pole.z), material: poleMaterial)
         _ = addBox(parent: world, name: "super-sign-\(seed)", size: SIMD3<Float>(0.35, 1.9, 2.4), position: SIMD3<Float>(pole.x, groundY + 8.4, pole.z), material: accent, orientation: orientation)
-        let signFace = groundOffsetPoint(sample(at: distance + 13), lateral: sign * 7.12)
+        let signFace = groundOffsetPoint(self.sample(at: distance + 13), lateral: sign * 7.12)
         _ = addBox(parent: world, name: "super-signface-\(seed)", size: SIMD3<Float>(0.08, 1.5, 2.0), position: SIMD3<Float>(signFace.x, groundY + 8.4, signFace.z), material: roofMaterials[2], orientation: orientation)
     }
 
