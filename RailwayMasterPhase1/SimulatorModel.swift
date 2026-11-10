@@ -1358,7 +1358,7 @@ final class SimulatorModel: ObservableObject {
     // position) lead the list, ascending, ahead of the same ten
     // line-wide spots; the screenshot script maps indices to file
     // names, so this order is part of that contract.
-    private static let tourSpotsM: [Double] = [100, 500, 1_000, 1_300, 1_654, 1_800, 1_856, 3_006, 4_466, 6_522, 9_081, 12_986, 17_650, 23_475, 45_327, 58_557]
+    private static let tourSpotsM: [Double] = [100, 500, 1_000, 1_300, 1_654, 1_800, 1_856, 3_006, 4_466, 5_545, 6_522, 9_081, 17_650, 23_739, 45_327, 58_557]
     private var tourSpotIndex = -1
     private var firstTourWallTime: TimeInterval = -1
     // quality24: after a teleport, the world rebuild can outlast the
