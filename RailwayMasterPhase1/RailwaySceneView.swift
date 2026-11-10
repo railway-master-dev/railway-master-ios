@@ -2537,9 +2537,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     // quality38: level crossings rebuilt to the surveyed spec
     // (cat07). The old version was two token crossings (a road slab,
     // a 1.4 m post and a floating bar each) at 31 %/69 % of the
-    // route. Crossings now sit wherever the line is genuinely at
-    // grade: terrain within 1 m of rail level sustained over
-    // +/-30 m, clear of station zones, throat fans, the tunnel
+    // route. Crossings now sit wherever the line is at grade or
+    // on a low embankment: terrain within 1.6 m of rail level
+    // sustained over +/-30 m (the road slopes down the shoulder),
+    // clear of station zones, throat fans, the tunnel
     // stretch and the coastal sea sections, spaced roughly
     // 600-1,400 m apart with a seeded jitter so the rhythm is not
     // metronomic. Each crossing is the full roadside set: a road
@@ -2562,7 +2563,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let liftHere = sample(at: probe).elevationM - groundLevelM(at: probe)
                 let liftA = sample(at: probe - 30).elevationM - groundLevelM(at: probe - 30)
                 let liftB = sample(at: probe + 30).elevationM - groundLevelM(at: probe + 30)
-                if liftHere < 1.0, liftA < 1.3, liftB < 1.3,
+                if liftHere < 1.6, liftA < 2.0, liftB < 2.0,
                    !inStationZone(probe, extraMargin: 45), !nearThroatFan(probe),
                    !(probe > 41_500 && probe < 44_300),
                    !isCoastal(distanceM: probe, route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
@@ -2591,6 +2592,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private func buildLevelCrossings(route: RailwayRouteProfile) {
         guard !crossingCenters.isEmpty else { return }
         print("RM crossings at: \(crossingCenters.map { Int($0) })")
+        // The device log capture is capped, so the crossing list
+        // also goes to a small file the CI script collects; that is
+        // how the photo tour spots get aimed at real crossings.
+        if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let text = crossingCenters.map { String(Int($0)) }.joined(separator: ",")
+            try? text.write(to: documents.appendingPathComponent("rm-crossings.txt"), atomically: true, encoding: .utf8)
+        }
         for (index, center) in crossingCenters.enumerated() {
             buildOneCrossing(index: index, center: center)
         }
@@ -2608,10 +2616,28 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         let roadYaw = simd_quatf(angle: -heading, axis: SIMD3<Float>(0, 1, 0))
 
-        // Road strip across the whole apron, deck panels flush with
-        // the rail head over the tracks, and two terrace steps each
-        // side so the road climbs from apron level to deck level.
-        addBox(parent: world, name: "crossing-road-\(index)", size: SIMD3<Float>(150, 0.07, 5.6), position: pt(0, -0.005, 0), material: roadMaterial, orientation: roadYaw)
+        // Road across the apron in three pieces per side, so low
+        // embankments (up to about 1.6 m) work too: a centre piece
+        // at rail datum, a sloped piece down the shoulder, and an
+        // outer piece at field level. On truly flat ground all
+        // three are coplanar and the joints vanish.
+        let lift = s.elevationM - groundLevelM(at: center)
+        var roadBatch = MeshBatchBuilder()
+        roadBatch.addBoxAxes(center: pt(0, -0.005, 0), size: SIMD3<Float>(26, 0.07, 5.6), ax: ax, ay: ay, az: az)
+        let run: Float = 18
+        let drop = max(lift - 0.02, 0)
+        let slopePhi = atan2(drop, run)
+        let slopeLen = (run * run + drop * drop).squareRoot()
+        for sideSign: Float in [-1, 1] {
+            let slopeAx = ax * cos(slopePhi) - ay * (sideSign * sin(slopePhi))
+            let slopeAy = ax * (sideSign * sin(slopePhi)) + ay * cos(slopePhi)
+            roadBatch.addBoxAxes(center: pt(sideSign * 17, -lift / 2 - 0.125, 0), size: SIMD3<Float>(slopeLen + 1.5, 0.3, 5.6), ax: slopeAx, ay: slopeAy, az: az)
+            roadBatch.addBoxAxes(center: pt(sideSign * 50.25, -lift + 0.015, 0), size: SIMD3<Float>(49.5, 0.07, 5.6), ax: ax, ay: ay, az: az)
+        }
+        if let road = roadBatch.build(name: "crossing-road-\(index)", material: roadMaterial) { world.addChild(road) }
+        // Deck panels flush with the rail head over the tracks, and
+        // two terrace steps each side so the road climbs from apron
+        // level to deck level.
         addBox(parent: world, name: "crossing-deck-\(index)", size: SIMD3<Float>(10.4, 0.1, 5.6), position: pt(0, 0.237, 0), material: roadMaterial, orientation: roadYaw)
         for sideSign: Float in [-1, 1] {
             addBox(parent: world, name: "crossing-ramp1-\(index)-\(Int(sideSign))", size: SIMD3<Float>(3.2, 0.09, 5.6), position: pt(sideSign * 6.8, 0.145, 0), material: roadMaterial, orientation: roadYaw)
@@ -2629,7 +2655,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             for alongSign: Float in [-1, 1] {
                 whiteBatch.addBoxAxes(center: pt(latSign * 4.83, 0.045, alongSign * 1.4), size: SIMD3<Float>(0.35, 0.02, 2.7), ax: ax, ay: ay, az: az)
             }
-            whiteBatch.addBoxAxes(center: pt(latSign * 13.5, 0.042, 0), size: SIMD3<Float>(13, 0.015, 0.14), ax: ax, ay: ay, az: az)
+            whiteBatch.addBoxAxes(center: pt(latSign * 9.75, 0.042, 0), size: SIMD3<Float>(6.5, 0.015, 0.14), ax: ax, ay: ay, az: az)
         }
 
         let bladeCos = Float(cos(0.73))
