@@ -488,6 +488,36 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// Trackside signal lamp heads by travel-frame distance [m]:
     /// the three lamp entities in red / yellow / green order.
     private var signalLampHeads: [Double: [ModelEntity]] = [:]
+    // quality41 expansion: articulated zoo animals on the zoo line.
+    // Each rig is a small hierarchy of part entities (body, head,
+    // legs, tail) posed every frame by a per-animal behaviour state
+    // machine in updateZooAnimals.
+    private struct ZooAnimalRig {
+        var root: Entity
+        var body: Entity
+        var headPivot: Entity
+        var neckPivot: Entity?
+        var trunkPivots: [Entity]
+        var legs: [Entity]
+        var tailPivot: Entity
+        var species: Int // 0 lion, 1 tiger, 2 giraffe, 3 elephant, 4 zebra, 5 penguin
+        var routeDistanceM: Double
+        var paddockCenter: SIMD3<Float>
+        var axisX: SIMD3<Float>
+        var axisZ: SIMD3<Float>
+        var heading: Float
+        var state: Int = 0 // 0 idle, 1 graze, 2 walk, 3 rest
+        var stateUntil: Double = 0
+        var walkTarget: SIMD3<Float>
+        var phase: Float = 0
+        var rngState: UInt64
+        var bodyStandY: Float
+        var bodyRestY: Float
+        var grazeAmount: Float = 0
+        var restAmount: Float = 0
+    }
+    private var zooAnimalRigs: [ZooAnimalRig] = []
+    private var zooLastAnimTime: Double = 0
     private var dynamicSignalDistance: Double?
     private var dynamicSignalAspect: ThreeAspectSignal?
 
@@ -671,12 +701,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             buildSignals(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildCableTrough(route: route, travelDirection: travelDirection)
             buildCatenary(route: route, routeVariant: routeVariant, travelDirection: travelDirection, showcaseSection: travelDirection == .up && (routeVariant == .mainline || routeVariant == .throughBranch))
-            buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            if routeVariant != .zooLine && routeVariant != .parkLine {
+                buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            }
             buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildFictionalCorridorLandmarks(route: route, quality: quality)
+            if routeVariant != .zooLine && routeVariant != .parkLine {
+                buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
+                buildFictionalCorridorLandmarks(route: route, quality: quality)
+            }
             buildDepotYard(travelDirection: travelDirection)
             buildZooAndPark(routeVariant: routeVariant, travelDirection: travelDirection)
+            buildZooLineWorld(routeVariant: routeVariant, travelDirection: travelDirection)
+            buildParkLineWorld(routeVariant: routeVariant, travelDirection: travelDirection)
             buildShowcaseSection(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             // quality29: buildDestinationPlatform is gone. It was a
             // pre-quality25 leftover that laid two rigid 115 m
@@ -735,6 +771,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         guard !samples.isEmpty else { return }
         updateSignalAspect(positionM: signalPositionM, aspect: signalAspect)
+        if routeVariant == .zooLine {
+            updateZooAnimals(trainPositionM: positionM, time: simulationTime)
+        }
         updateGeneratedStationModel(positionM: positionM)
         let centerSample = sample(at: positionM)
         let playerLateral: Float = travelDirection == .up ? -2.1 : 2.1
@@ -1783,14 +1822,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// mainline station, the way real lines mix automatic block
     /// signals with station entry signals.
     private func buildSignals(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
-        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .zooLine || routeVariant == .parkLine else { return }
         let headMaterial = Self.pbr(UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1), metallic: 0.3, roughness: 0.6)
         let plateMaterial = Self.pbr(.white, roughness: 0.6)
         // quality41: beige relay/equipment boxes cluster beside
         // real signals (survey cat05: 2-5 cabinets in the 3.5-4.5 m
         // band); until now the signals stood alone in empty grass.
         let relayMaterial = Self.pbr(UIColor(red: 0.76, green: 0.72, blue: 0.62, alpha: 1), metallic: 0.05, roughness: 0.8)
-        var targets: [Double] = stride(from: 0.0, to: 60_000.0, by: 1_500.0).map { $0 }
+        var targets: [Double] = stride(from: 0.0, to: (routeVariant == .zooLine || routeVariant == .parkLine) ? route.distanceM : 60_000.0, by: 1_500.0).map { $0 }
         for placement in stationModelPlacements {
             let center = chainageFromCenter(distanceM: placement.chainageM, route: route, travelDirection: travelDirection)
             guard center > 600, center < 59_400 else { continue }
@@ -1811,16 +1850,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let b = chainageFromCenter(distanceM: span.end, route: route, travelDirection: travelDirection)
             return (start: min(a, b), end: max(a, b))
         }
-        dedupedTargets = dedupedTargets.map { target in
-            for span in fanSpansCenter where target > span.start && target < span.end {
-                return target - span.start < span.end - target ? span.start - 12 : span.end + 12
+        if routeVariant != .zooLine && routeVariant != .parkLine {
+            dedupedTargets = dedupedTargets.map { target in
+                for span in fanSpansCenter where target > span.start && target < span.end {
+                    return target - span.start < span.end - target ? span.start - 12 : span.end + 12
+                }
+                return target
             }
-            return target
         }
         for target in dedupedTargets {
             var best: RouteSample?
             var bestDelta = Double.greatestFiniteMagnitude
-            for sample in samples where isMainlineSection(distanceM: sample.distanceM, routeVariant: routeVariant, travelDirection: travelDirection) {
+            for sample in samples where routeVariant == .zooLine || routeVariant == .parkLine || isMainlineSection(distanceM: sample.distanceM, routeVariant: routeVariant, travelDirection: travelDirection) {
                 let delta = abs(chainageFromCenter(distanceM: sample.distanceM, route: route, travelDirection: travelDirection) - target)
                 if delta < bestDelta {
                     bestDelta = delta
@@ -2295,16 +2336,726 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         castleRoof.orientation = castleRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
     }
 
+    // MARK: - Zoo line (quality41 expansion)
+
+    private func zooPart(_ mesh: MeshResource, _ material: PhysicallyBasedMaterial, _ position: SIMD3<Float>, name: String) -> Entity {
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        entity.name = name
+        entity.position = position
+        return entity
+    }
+
+    /// Builds one articulated animal under a fresh root entity. The
+    /// caller positions the root inside its paddock and fills the
+    /// rig's route/paddock fields. Local frame: forward is -Z, the
+    /// ground is y = 0. Animals are part-built volumes (body, head,
+    /// neck, legs, tail, trunk), never flat boards.
+    private func makeZooAnimal(species: Int, mane: Bool) -> ZooAnimalRig {
+        let root = Entity()
+        root.name = "zoo-animal-\(species)"
+        var legs: [Entity] = []
+        var trunk: [Entity] = []
+        var neckPivot: Entity? = nil
+        let body: Entity
+        let headPivot: Entity
+        let tailPivot: Entity
+        let standY: Float
+        let restY: Float
+
+        if species == 5 {
+            // Penguin: a single rounded body with belly, beak and
+            // flippers; it waddles instead of swinging legs.
+            let black = Self.pbr(UIColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1), roughness: 0.9)
+            let white = Self.pbr(UIColor(red: 0.93, green: 0.93, blue: 0.90, alpha: 1), roughness: 0.9)
+            let orange = Self.pbr(UIColor(red: 0.90, green: 0.55, blue: 0.15, alpha: 1), roughness: 0.8)
+            body = zooPart(MeshResource.generateSphere(radius: 1), black, SIMD3<Float>(0, 0.40, 0), name: "penguin-body")
+            body.scale = SIMD3<Float>(0.30, 0.40, 0.27)
+            root.addChild(body)
+            let belly = zooPart(MeshResource.generateSphere(radius: 1), white, SIMD3<Float>(0, 0.36, -0.155), name: "penguin-belly")
+            belly.scale = SIMD3<Float>(0.20, 0.29, 0.10)
+            root.addChild(belly)
+            let headBall = zooPart(MeshResource.generateSphere(radius: 0.155), black, SIMD3<Float>(0, 0.70, -0.02), name: "penguin-head")
+            root.addChild(headBall)
+            headPivot = Entity()
+            headPivot.position = SIMD3<Float>(0, 0.70, -0.02)
+            let beak = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.03, 0.11), cornerRadius: 0.01), orange, SIMD3<Float>(0, -0.02, -0.17), name: "penguin-beak")
+            headPivot.addChild(beak)
+            root.addChild(headPivot)
+            for side: Float in [-1.0, 1.0] {
+                let flipper = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.34, 0.15), cornerRadius: 0.02), black, SIMD3<Float>(side * 0.30, 0.42, 0.01), name: "penguin-flipper")
+                flipper.orientation = simd_quatf(angle: side * -0.28, axis: SIMD3<Float>(0, 0, 1))
+                root.addChild(flipper)
+                let foot = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.09, 0.03, 0.15), cornerRadius: 0.01), orange, SIMD3<Float>(side * 0.09, 0.02, -0.05), name: "penguin-foot")
+                root.addChild(foot)
+            }
+            tailPivot = Entity()
+            root.addChild(tailPivot)
+            standY = 0
+            restY = 0
+            return ZooAnimalRig(root: root, body: body, headPivot: headPivot, neckPivot: nil, trunkPivots: [],
+                                legs: [], tailPivot: tailPivot, species: species, routeDistanceM: 0,
+                                paddockCenter: .zero, axisX: SIMD3<Float>(1, 0, 0), axisZ: SIMD3<Float>(0, 0, 1),
+                                heading: 0, walkTarget: .zero, rngState: 0x9E37_79B9, bodyStandY: standY, bodyRestY: restY)
+        }
+
+        // Quadruped dimensions per species (metres, from real animals).
+        let legLen: Float, legR: Float, bodySize: SIMD3<Float>, headLen: Float
+        let coat: PhysicallyBasedMaterial
+        switch species {
+        case 0: // lion
+            legLen = 0.62; legR = 0.055; bodySize = SIMD3<Float>(0.55, 0.60, 1.70); headLen = 0.42
+            coat = Self.pbr(UIColor(red: 0.78, green: 0.62, blue: 0.40, alpha: 1), roughness: 0.95)
+        case 1: // tiger
+            legLen = 0.60; legR = 0.055; bodySize = SIMD3<Float>(0.52, 0.58, 1.65); headLen = 0.40
+            coat = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_zoo_coat_tiger")
+        case 2: // giraffe
+            legLen = 1.72; legR = 0.06; bodySize = SIMD3<Float>(0.60, 0.72, 1.85); headLen = 0.52
+            coat = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_zoo_coat_giraffe")
+        case 3: // elephant
+            legLen = 1.22; legR = 0.15; bodySize = SIMD3<Float>(1.55, 1.65, 2.90); headLen = 0.70
+            coat = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_zoo_coat_giraffe")
+        default: // zebra
+            legLen = 0.80; legR = 0.045; bodySize = SIMD3<Float>(0.50, 0.58, 1.75); headLen = 0.48
+            coat = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_zoo_coat_zebra")
+        }
+        let bodyY = legLen + bodySize.y / 2
+        if species == 3 {
+            // Elephant body is an ellipsoid, not a box.
+            body = zooPart(MeshResource.generateSphere(radius: 1), Self.pbr(UIColor(red: 0.52, green: 0.50, blue: 0.48, alpha: 1), roughness: 0.95), SIMD3<Float>(0, bodyY, 0), name: "elephant-body")
+            body.scale = SIMD3<Float>(bodySize.x / 2, bodySize.y / 2, bodySize.z / 2)
+        } else {
+            body = zooPart(MeshResource.generateBox(size: bodySize, cornerRadius: min(bodySize.x, bodySize.y) * 0.32), coat, SIMD3<Float>(0, bodyY, 0), name: "animal-body")
+        }
+        root.addChild(body)
+        standY = bodyY
+        restY = legLen * 0.35 + bodySize.y / 2
+
+        // Legs on hip pivots so they can swing and fold.
+        for corner in 0..<4 {
+            let sx: Float = corner % 2 == 0 ? -1 : 1
+            let sz: Float = corner < 2 ? -1 : 1
+            let hip = Entity()
+            hip.name = "leg-\(corner)"
+            hip.position = SIMD3<Float>(sx * (bodySize.x / 2 - 0.07), legLen, sz * (bodySize.z / 2 - 0.30))
+            let legMesh = zooPart(FallbackCylinderMesh.make(height: legLen, radius: legR), species == 3 ? Self.pbr(UIColor(red: 0.52, green: 0.50, blue: 0.48, alpha: 1), roughness: 0.95) : coat, SIMD3<Float>(0, -legLen / 2 + 0.02, 0), name: "leg-mesh")
+            hip.addChild(legMesh)
+            root.addChild(hip)
+            legs.append(hip)
+        }
+
+        // Neck and head.
+        let headMat = species == 3 ? Self.pbr(UIColor(red: 0.52, green: 0.50, blue: 0.48, alpha: 1), roughness: 0.95) : coat
+        if species == 2 {
+            let neck = Entity()
+            neck.name = "giraffe-neck"
+            neck.position = SIMD3<Float>(0, bodyY + 0.24, -bodySize.z / 2 + 0.10)
+            neck.orientation = simd_quatf(angle: 0.42, axis: SIMD3<Float>(1, 0, 0))
+            let neckMesh = zooPart(FallbackCylinderMesh.make(height: 1.5, radius: 0.115), coat, SIMD3<Float>(0, 0.72, -0.16), name: "giraffe-neck-mesh")
+            neck.addChild(neckMesh)
+            root.addChild(neck)
+            neckPivot = neck
+            headPivot = Entity()
+            headPivot.position = SIMD3<Float>(0, 1.44, -0.34)
+            let headMesh = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.20, 0.26, headLen), cornerRadius: 0.07), coat, SIMD3<Float>(0, 0.04, -headLen / 2), name: "giraffe-head")
+            headPivot.addChild(headMesh)
+            for side: Float in [-1.0, 1.0] {
+                let horn = zooPart(FallbackCylinderMesh.make(height: 0.16, radius: 0.025), headMat, SIMD3<Float>(side * 0.06, 0.22, -0.10), name: "giraffe-ossicone")
+                headPivot.addChild(horn)
+            }
+            neck.addChild(headPivot)
+        } else if species == 3 {
+            headPivot = Entity()
+            headPivot.position = SIMD3<Float>(0, bodyY + 0.22, -bodySize.z / 2 + 0.05)
+            let headMesh = zooPart(MeshResource.generateSphere(radius: 0.60), headMat, SIMD3<Float>(0, 0, -0.30), name: "elephant-head")
+            headPivot.addChild(headMesh)
+            for side: Float in [-1.0, 1.0] {
+                let ear = zooPart(MeshResource.generateSphere(radius: 1), headMat, SIMD3<Float>(side * 0.55, 0.08, -0.12), name: "elephant-ear")
+                ear.scale = SIMD3<Float>(0.10, 0.58, 0.48)
+                headPivot.addChild(ear)
+                let tusk = zooPart(FallbackCylinderMesh.make(height: 0.42, radius: 0.028), Self.pbr(.white, roughness: 0.5), SIMD3<Float>(side * 0.20, -0.42, -0.62), name: "elephant-tusk")
+                tusk.orientation = simd_quatf(angle: 0.5, axis: SIMD3<Float>(1, 0, 0))
+                headPivot.addChild(tusk)
+            }
+            // Trunk: three chained segments hanging from the head.
+            var parent = headPivot
+            var radius: Float = 0.105
+            for segment in 0..<3 {
+                let pivot = Entity()
+                pivot.name = "trunk-\(segment)"
+                pivot.position = segment == 0 ? SIMD3<Float>(0, -0.28, -0.78) : SIMD3<Float>(0, -0.52, -0.03)
+                let mesh = zooPart(FallbackCylinderMesh.make(height: 0.55, radius: radius), headMat, SIMD3<Float>(0, -0.26, 0), name: "trunk-mesh")
+                pivot.addChild(mesh)
+                parent.addChild(pivot)
+                trunk.append(pivot)
+                parent = pivot
+                radius -= 0.018
+            }
+            root.addChild(headPivot)
+        } else {
+            headPivot = Entity()
+            headPivot.position = SIMD3<Float>(0, bodyY + bodySize.y / 2 - 0.10, -bodySize.z / 2 - 0.02)
+            let headMesh = zooPart(MeshResource.generateBox(size: SIMD3<Float>(headLen * 0.52, headLen * 0.58, headLen), cornerRadius: headLen * 0.16), headMat, SIMD3<Float>(0, 0.02, -headLen / 2), name: "animal-head")
+            headPivot.addChild(headMesh)
+            if species == 0 && mane {
+                let maneMesh = zooPart(MeshResource.generateSphere(radius: 0.30), Self.pbr(UIColor(red: 0.45, green: 0.32, blue: 0.18, alpha: 1), roughness: 1), SIMD3<Float>(0, 0.05, -0.10), name: "lion-mane")
+                headPivot.addChild(maneMesh)
+            }
+            for side: Float in [-1.0, 1.0] {
+                let ear = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.09, 0.11, 0.03), cornerRadius: 0.01), headMat, SIMD3<Float>(side * headLen * 0.20, headLen * 0.30, -0.06), name: "animal-ear")
+                headPivot.addChild(ear)
+            }
+            if species == 4 {
+                let maneStrip = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.30, 0.95), cornerRadius: 0.01), Self.pbr(UIColor(red: 0.12, green: 0.11, blue: 0.11, alpha: 1), roughness: 1), SIMD3<Float>(0, legLen + bodySize.y + 0.06, -bodySize.z / 2 + 0.42), name: "zebra-mane")
+                maneStrip.orientation = simd_quatf(angle: 0.35, axis: SIMD3<Float>(1, 0, 0))
+                root.addChild(maneStrip)
+            }
+            root.addChild(headPivot)
+        }
+
+        // Tail on a pivot at the rear top of the body.
+        tailPivot = Entity()
+        tailPivot.position = SIMD3<Float>(0, bodyY + bodySize.y / 2 - 0.10, bodySize.z / 2 - 0.02)
+        tailPivot.orientation = simd_quatf(angle: 0.30, axis: SIMD3<Float>(1, 0, 0))
+        let tailLen: Float = species == 3 ? 1.0 : 0.78
+        let tailMesh = zooPart(FallbackCylinderMesh.make(height: tailLen, radius: species == 3 ? 0.035 : 0.028), headMat, SIMD3<Float>(0, -tailLen / 2, 0), name: "animal-tail")
+        tailPivot.addChild(tailMesh)
+        if species == 0 {
+            let tuft = zooPart(MeshResource.generateSphere(radius: 0.07), Self.pbr(UIColor(red: 0.30, green: 0.22, blue: 0.12, alpha: 1), roughness: 1), SIMD3<Float>(0, -tailLen, 0), name: "lion-tuft")
+            tailPivot.addChild(tuft)
+        }
+        root.addChild(tailPivot)
+
+        return ZooAnimalRig(root: root, body: body, headPivot: headPivot, neckPivot: neckPivot, trunkPivots: trunk,
+                            legs: legs, tailPivot: tailPivot, species: species, routeDistanceM: 0,
+                            paddockCenter: .zero, axisX: SIMD3<Float>(1, 0, 0), axisZ: SIMD3<Float>(0, 0, 1),
+                            heading: 0, walkTarget: .zero, rngState: 0x9E37_79B9, bodyStandY: standY, bodyRestY: restY)
+    }
+
+    /// One volumetric enclosure: ground pad, chain-link cage (tall
+    /// with a top rail for the big cats), visitor safety fence,
+    /// rocks, a pond and shelter where the species wants them, an
+    /// explanation panel facing the track, and the animals
+    /// themselves, registered for animation.
+    private func buildZooPaddock(centerM: Double, sideSign: Float, species: Int, count: Int, hasCage: Bool, travelDirection: RegionalTravelDirection) {
+        let mid = sample(at: centerM)
+        let yaw = simd_quatf(angle: -mid.heading, axis: SIMD3<Float>(0, 1, 0))
+        func gp(_ d: Double, _ lateral: Float) -> SIMD3<Float> { groundOffsetPoint(sample(at: d), lateral: lateral) }
+        let sandMat = Self.pbr(UIColor(red: 0.76, green: 0.68, blue: 0.52, alpha: 1), roughness: 1)
+        let savannaMat = Self.pbr(UIColor(red: 0.60, green: 0.57, blue: 0.36, alpha: 1), roughness: 1)
+        let gravelMat = Self.pbr(UIColor(red: 0.78, green: 0.78, blue: 0.76, alpha: 1), roughness: 1)
+        let padMat = species == 5 ? gravelMat : (species == 0 || species == 1 ? sandMat : savannaMat)
+        var padD = centerM - 21
+        while padD <= centerM + 21 {
+            let p = gp(padD, sideSign * 26)
+            _ = addBox(parent: world, name: "zoo-pad-\(Int(centerM))-\(Int(padD))", size: SIMD3<Float>(31, 0.09, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: padMat, orientation: yaw)
+            padD += 15
+        }
+        // Chain-link fences: track side, far side and both ends.
+        var fenceMat = Self.texturedPBR(.white, metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
+        fenceMat.blending = .transparent(opacity: .init(floatLiteral: 1))
+        fenceMat.faceCulling = .none
+        let postMat = Self.pbr(UIColor(red: 0.35, green: 0.36, blue: 0.37, alpha: 1), metallic: 0.6, roughness: 0.5)
+        let fenceH: Float = hasCage ? 3.0 : 1.7
+        func fenceRun(from: Double, to: Double, lateral: Float) {
+            var d = from
+            while d < to {
+                let seg = min(7.0, to - d)
+                let p = gp(d + seg / 2, lateral)
+                _ = addBox(parent: world, name: "zoo-fence-\(Int(centerM))", size: SIMD3<Float>(0.03, fenceH, Float(seg) + 0.05), position: SIMD3<Float>(p.x, p.y + fenceH / 2, p.z), material: fenceMat, orientation: yaw)
+                let post = gp(d, lateral)
+                _ = addBox(parent: world, name: "zoo-fence-post-\(Int(centerM))", size: SIMD3<Float>(0.09, fenceH + 0.1, 0.09), position: SIMD3<Float>(post.x, post.y + fenceH / 2, post.z), material: postMat, orientation: yaw)
+                d += seg
+            }
+        }
+        fenceRun(from: centerM - 21, to: centerM + 21, lateral: sideSign * 11)
+        fenceRun(from: centerM - 21, to: centerM + 21, lateral: sideSign * 41)
+        for endSign: Float in [-1.0, 1.0] {
+            let endD = centerM + Double(endSign) * 21
+            var lat = 11.0 as Double
+            while lat < 41 {
+                let seg = min(7.5, 41 - lat)
+                let p = gp(endD, sideSign * Float(lat + seg / 2))
+                _ = addBox(parent: world, name: "zoo-fence-end-\(Int(centerM))", size: SIMD3<Float>(Float(seg) + 0.05, fenceH, 0.03), position: SIMD3<Float>(p.x, p.y + fenceH / 2, p.z), material: fenceMat, orientation: yaw)
+                lat += seg
+            }
+        }
+        if hasCage {
+            let top = gp(centerM, sideSign * 11)
+            _ = addBox(parent: world, name: "zoo-cage-toprail-\(Int(centerM))", size: SIMD3<Float>(0.07, 0.07, 42.5), position: SIMD3<Float>(top.x, top.y + fenceH + 0.03, top.z), material: postMat, orientation: yaw)
+        }
+        // Visitor safety fence between the track and the enclosure.
+        var postD = centerM - 21
+        while postD <= centerM + 21 {
+            let p = gp(postD, sideSign * 8.2)
+            _ = addBox(parent: world, name: "zoo-guard-post-\(Int(centerM))", size: SIMD3<Float>(0.07, 1.1, 0.07), position: SIMD3<Float>(p.x, p.y + 0.55, p.z), material: postMat, orientation: yaw)
+            postD += 3.5
+        }
+        for railY: Float in [0.62, 1.04] {
+            let p = gp(centerM, sideSign * 8.2)
+            _ = addBox(parent: world, name: "zoo-guard-rail-\(Int(centerM))", size: SIMD3<Float>(0.05, 0.05, 42.5), position: SIMD3<Float>(p.x, p.y + railY, p.z), material: postMat, orientation: yaw)
+        }
+        // Rocks, pond, shelter, feeder, tree.
+        let rockMat = Self.pbr(UIColor(red: 0.55, green: 0.54, blue: 0.52, alpha: 1), roughness: 0.95)
+        for rock in 0..<4 {
+            let along = Double(stableIndex("zoorock-\(Int(centerM))-\(rock)", count: 25)) - 12
+            let lat = 15 + Float(stableIndex("zoorocklat-\(Int(centerM))-\(rock)", count: 22))
+            let p = gp(centerM + along, sideSign * lat)
+            let r = 0.5 + Float(stableIndex("zoorockr-\(Int(centerM))-\(rock)", count: 10)) * 0.09
+            let rockEntity = zooPart(MeshResource.generateSphere(radius: r), rockMat, SIMD3<Float>(p.x, p.y + r * 0.35, p.z), name: "zoo-rock")
+            rockEntity.scale = SIMD3<Float>(1.25, 0.72, 1)
+            world.addChild(rockEntity)
+        }
+        if species == 5 || species == 3 || species == 2 {
+            let p = gp(centerM - 8, sideSign * 33)
+            let pond = zooPart(FallbackCylinderMesh.make(height: 0.07, radius: species == 5 ? 3.4 : 2.7), Self.pbr(UIColor(red: 0.25, green: 0.45, blue: 0.62, alpha: 1), metallic: 0.1, roughness: 0.18), SIMD3<Float>(p.x, p.y + 0.06, p.z), name: "zoo-pond")
+            world.addChild(pond)
+        }
+        let hut = gp(centerM + 13, sideSign * 36)
+        _ = addBox(parent: world, name: "zoo-shelter-\(Int(centerM))", size: SIMD3<Float>(3.2, 2.3, 2.6), position: SIMD3<Float>(hut.x, hut.y + 1.15, hut.z), material: Self.pbr(UIColor(red: 0.45, green: 0.35, blue: 0.24, alpha: 1), roughness: 0.9), orientation: yaw)
+        _ = addBox(parent: world, name: "zoo-shelter-roof-\(Int(centerM))", size: SIMD3<Float>(3.7, 0.12, 3.1), position: SIMD3<Float>(hut.x, hut.y + 2.42, hut.z), material: Self.pbr(UIColor(red: 0.30, green: 0.28, blue: 0.27, alpha: 1), roughness: 0.8), orientation: yaw)
+        let feed = gp(centerM + 6, sideSign * 18)
+        _ = addBox(parent: world, name: "zoo-feeder-\(Int(centerM))", size: SIMD3<Float>(1.4, 0.5, 0.6), position: SIMD3<Float>(feed.x, feed.y + 0.25, feed.z), material: postMat, orientation: yaw)
+        _ = addBox(parent: world, name: "zoo-hay-\(Int(centerM))", size: SIMD3<Float>(1.2, 0.3, 0.45), position: SIMD3<Float>(feed.x, feed.y + 0.62, feed.z), material: Self.pbr(UIColor(red: 0.82, green: 0.72, blue: 0.38, alpha: 1), roughness: 1), orientation: yaw)
+        buildZooTree(at: gp(centerM - 14, sideSign * 30), seed: Int(centerM))
+        // Explanation panel facing the track.
+        let panel = gp(centerM, sideSign * 9.4)
+        _ = addBox(parent: world, name: "zoo-panel-\(Int(centerM))", size: SIMD3<Float>(1.3, 0.85, 0.05), position: SIMD3<Float>(panel.x, panel.y + 1.05, panel.z), material: Self.pbr(UIColor(red: 0.94, green: 0.93, blue: 0.88, alpha: 1), roughness: 0.6), orientation: yaw)
+        _ = addBox(parent: world, name: "zoo-panel-stripe-\(Int(centerM))", size: SIMD3<Float>(1.3, 0.22, 0.055), position: SIMD3<Float>(panel.x, panel.y + 1.36, panel.z), material: Self.pbr(UIColor(red: 0.85, green: 0.45, blue: 0.15, alpha: 1), roughness: 0.6), orientation: yaw)
+        // Animals.
+        let spots: [(along: Double, lat: Float)] = [(-9, 20), (6, 29), (-2, 24), (11, 33)]
+        let axisX = SIMD3<Float>(cos(mid.heading), 0, sin(mid.heading))
+        let axisZ = SIMD3<Float>(sin(mid.heading), 0, -cos(mid.heading))
+        for index in 0..<count {
+            let spot = spots[index % spots.count]
+            var rig = makeZooAnimal(species: species, mane: index == 0)
+            let p = gp(centerM + spot.along, sideSign * spot.lat)
+            rig.root.position = SIMD3<Float>(p.x, p.y + 0.07, p.z)
+            rig.heading = Float(stableIndex("zoohead-\(Int(centerM))-\(index)", count: 628)) / 100 - 3.14
+            rig.root.orientation = simd_quatf(angle: -rig.heading, axis: SIMD3<Float>(0, 1, 0))
+            rig.routeDistanceM = centerM + spot.along
+            rig.paddockCenter = SIMD3<Float>(p.x, p.y + 0.07, p.z)
+            rig.axisX = axisX
+            rig.axisZ = axisZ
+            rig.walkTarget = rig.root.position
+            rig.rngState = UInt64(0x2545 + Int(centerM) * 131 + index * 17_171)
+            world.addChild(rig.root)
+            zooAnimalRigs.append(rig)
+        }
+    }
+
+    private func buildZooTree(at point: SIMD3<Float>, seed: Int) {
+        let trunkMat = Self.pbr(UIColor(red: 0.36, green: 0.28, blue: 0.20, alpha: 1), roughness: 1)
+        let leafMat = Self.pbr(UIColor(red: 0.22, green: 0.38, blue: 0.20, alpha: 1), roughness: 1)
+        let trunkH: Float = 2.0 + Float(abs(seed) % 7) * 0.12
+        let trunk = zooPart(FallbackCylinderMesh.make(height: trunkH, radius: 0.13), trunkMat, SIMD3<Float>(point.x, point.y + trunkH / 2, point.z), name: "zoo-tree-trunk")
+        world.addChild(trunk)
+        let canopyR: Float = 1.5 + Float(abs(seed) % 5) * 0.18
+        let canopy = zooPart(MeshResource.generateSphere(radius: canopyR), leafMat, SIMD3<Float>(point.x, point.y + trunkH + canopyR * 0.55, point.z), name: "zoo-tree-canopy")
+        canopy.scale = SIMD3<Float>(1, 0.82, 1)
+        world.addChild(canopy)
+        let canopy2 = zooPart(MeshResource.generateSphere(radius: canopyR * 0.66), leafMat, SIMD3<Float>(point.x + 0.8, point.y + trunkH + canopyR * 0.95, point.z + 0.4), name: "zoo-tree-canopy2")
+        world.addChild(canopy2)
+    }
+
+    /// The zoo line's own world: entrance, speed-limit signs, 25 m
+    /// joint plates (the line is standard-length jointed rail end to
+    /// end), six enclosures with living animals, and the 動物園
+    /// terminal. Built only for the .zooLine variant; the mainline
+    /// world keeps its scenic zoo strip from buildZooAndPark.
+    private func buildZooLineWorld(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .zooLine else { return }
+        zooAnimalRigs = []
+        zooLastAnimTime = 0
+        let up = travelDirection == .up
+        let sideSign: Float = up ? -1 : 1
+        let trackLat: Float = up ? -2.1 : 2.1
+        func gp(_ d: Double, _ lateral: Float) -> SIMD3<Float> { groundOffsetPoint(sample(at: d), lateral: lateral) }
+        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0)) }
+        let postMat = Self.pbr(UIColor(red: 0.35, green: 0.36, blue: 0.37, alpha: 1), metallic: 0.6, roughness: 0.5)
+
+        // Entrance zone: gate over the visitor path, info board,
+        // ticket booth, parking with cars on the far side.
+        let gateA = gp(210, sideSign * 10.5)
+        let gateB = gp(210, sideSign * 17.5)
+        for gatePost in [gateA, gateB] {
+            _ = addBox(parent: world, name: "zoo-gate-post", size: SIMD3<Float>(0.45, 4.0, 0.45), position: SIMD3<Float>(gatePost.x, gatePost.y + 2.0, gatePost.z), material: Self.pbr(UIColor(red: 0.55, green: 0.42, blue: 0.30, alpha: 1), roughness: 0.85), orientation: yawAt(210))
+        }
+        let gateMid = gp(210, sideSign * 14)
+        _ = addBox(parent: world, name: "zoo-gate-beam", size: SIMD3<Float>(7.6, 0.5, 0.4), position: SIMD3<Float>(gateMid.x, gateMid.y + 3.85, gateMid.z), material: Self.pbr(UIColor(red: 0.55, green: 0.42, blue: 0.30, alpha: 1), roughness: 0.85), orientation: yawAt(210))
+        _ = addBox(parent: world, name: "zoo-gate-sign", size: SIMD3<Float>(3.4, 0.95, 0.1), position: SIMD3<Float>(gateMid.x, gateMid.y + 3.0, gateMid.z), material: Self.pbr(UIColor(red: 0.96, green: 0.94, blue: 0.88, alpha: 1), roughness: 0.6), orientation: yawAt(210))
+        let booth = gp(300, sideSign * 13)
+        _ = addBox(parent: world, name: "zoo-booth", size: SIMD3<Float>(2.4, 2.6, 2.2), position: SIMD3<Float>(booth.x, booth.y + 1.3, booth.z), material: Self.pbr(UIColor(red: 0.88, green: 0.84, blue: 0.76, alpha: 1), roughness: 0.8), orientation: yawAt(300))
+        _ = addBox(parent: world, name: "zoo-booth-roof", size: SIMD3<Float>(2.8, 0.14, 2.6), position: SIMD3<Float>(booth.x, booth.y + 2.7, booth.z), material: Self.pbr(UIColor(red: 0.40, green: 0.36, blue: 0.32, alpha: 1), roughness: 0.8), orientation: yawAt(300))
+        var parkD = 205.0
+        while parkD <= 320 {
+            let p = gp(parkD, -sideSign * 15)
+            _ = addBox(parent: world, name: "zoo-parking", size: SIMD3<Float>(17, 0.07, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.32, green: 0.32, blue: 0.34, alpha: 1), roughness: 0.95), orientation: yawAt(parkD))
+            parkD += 15
+        }
+        for car in 0..<3 {
+            let p = gp(225 + Double(car) * 38, -sideSign * 13.5)
+            addParkedCar(name: "zoo-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 225 + Double(car) * 38).heading + Float.pi / 2, seed: car * 3 + 1)
+        }
+        // Park trees scattered along both sides, clear of the
+        // paddock band and the station.
+        var treeD = 90.0
+        while treeD < 2_280 {
+            for side: Float in [-1.0, 1.0] {
+                let inPaddockBand = side == sideSign && treeD > 500 && treeD < 1_960
+                let jitter = Float(stableIndex("zootree-\(Int(treeD))-\(side > 0 ? 1 : 0)", count: 12))
+                if !inPaddockBand && stableIndex("zootreeok-\(Int(treeD))-\(side > 0 ? 1 : 0)", count: 4) != 0 {
+                    buildZooTree(at: gp(treeD, side * (16 + jitter)), seed: Int(treeD) + (side > 0 ? 7 : 0))
+                }
+            }
+            treeD += 55
+        }
+
+        // Speed-limit signs at the enclosure zone boundaries
+        // (30 km/h from 450 m, released at 1,900 m).
+        for (signD, texture) in [(450.0, "scenery_speed_30"), (1_900.0, "scenery_speed_end")] {
+            let base = gp(signD, up ? -4.0 : 4.0)
+            _ = addBox(parent: world, name: "zoo-speed-pole-\(Int(signD))", size: SIMD3<Float>(0.09, 2.4, 0.09), position: SIMD3<Float>(base.x, base.y + 1.2, base.z), material: postMat, orientation: yawAt(signD))
+            var signMat = Self.texturedPBR(.white, roughness: 0.55, textureName: texture)
+            signMat.faceCulling = .none
+            let board = addBox(parent: world, name: "zoo-speed-sign-\(Int(signD))", size: SIMD3<Float>(0.85, 0.85, 0.04), position: SIMD3<Float>(base.x, base.y + 2.15, base.z), material: signMat, orientation: yawAt(signD))
+            board.orientation = board.orientation * simd_quatf(angle: Float.pi, axis: SIMD3<Float>(0, 1, 0))
+        }
+
+        // Fishplates at every 25 m joint on both rails of the
+        // running track (standard-length rail, user spec).
+        var plateBatch = MeshBatchBuilder()
+        let steelMat = Self.pbr(UIColor(red: 0.30, green: 0.31, blue: 0.33, alpha: 1), metallic: 0.7, roughness: 0.5)
+        var jointD = 12.5
+        while jointD < 2_500 {
+            let s = sample(at: jointD)
+            for railSide: Float in [-0.72, 0.72] {
+                let outer: Float = railSide < 0 ? -0.095 : 0.095
+                let p = routeOffsetPoint(s, lateral: trackLat + railSide + outer)
+                plateBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.17, p.z), size: SIMD3<Float>(0.035, 0.13, 0.46), yaw: -s.heading)
+            }
+            jointD += 25
+        }
+        if let plates = plateBatch.build(name: "zoo-fishplates", material: steelMat) {
+            world.addChild(plates)
+        }
+
+        // The six enclosures along the 30 km/h stretch.
+        buildZooPaddock(centerM: 560, sideSign: sideSign, species: 5, count: 4, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: 770, sideSign: sideSign, species: 4, count: 3, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: 990, sideSign: sideSign, species: 0, count: 2, hasCage: true, travelDirection: travelDirection)
+        buildZooPaddock(centerM: 1_230, sideSign: sideSign, species: 2, count: 2, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: 1_490, sideSign: sideSign, species: 1, count: 2, hasCage: true, travelDirection: travelDirection)
+        buildZooPaddock(centerM: 1_710, sideSign: sideSign, species: 3, count: 2, hasCage: false, travelDirection: travelDirection)
+
+        // 動物園 terminal: platform, furniture, station house,
+        // departure board and a buffer stop past the end.
+        let whiteLine = Self.pbr(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.85)
+        buildOneStationPlatform(name: "platform-ZOO", start: 2_290, end: 2_500, trackLateral: trackLat, sideSign: sideSign, width: 5.0, whiteLineMaterial: whiteLine)
+        buildStationFurniture(name: "furniture-ZOO", centerChainage: 2_420, start: 2_290, end: 2_500, trackLateral: trackLat, sideSign: sideSign)
+        let house = gp(2_440, sideSign * 13.5)
+        _ = addBox(parent: world, name: "zoo-station-house", size: SIMD3<Float>(13, 4.2, 6.5), position: SIMD3<Float>(house.x, house.y + 2.1, house.z), material: Self.texturedPBR(.white, roughness: 0.85, textureName: "scenery_house_facade_5"), orientation: yawAt(2_440))
+        _ = addBox(parent: world, name: "zoo-station-roof", size: SIMD3<Float>(13.8, 0.35, 7.3), position: SIMD3<Float>(house.x, house.y + 4.4, house.z), material: Self.pbr(UIColor(red: 0.38, green: 0.34, blue: 0.30, alpha: 1), roughness: 0.8), orientation: yawAt(2_440))
+        let boardBase = gp(2_430, sideSign * 5.6)
+        _ = addBox(parent: world, name: "zoo-departure-pole", size: SIMD3<Float>(0.09, 2.6, 0.09), position: SIMD3<Float>(boardBase.x, boardBase.y + 1.3, boardBase.z), material: postMat, orientation: yawAt(2_430))
+        _ = addBox(parent: world, name: "zoo-departure-board", size: SIMD3<Float>(1.7, 0.55, 0.07), position: SIMD3<Float>(boardBase.x, boardBase.y + 2.45, boardBase.z), material: Self.pbr(UIColor(red: 0.08, green: 0.08, blue: 0.10, alpha: 1), roughness: 0.4), orientation: yawAt(2_430))
+        _ = addBox(parent: world, name: "zoo-departure-band", size: SIMD3<Float>(1.55, 0.30, 0.075), position: SIMD3<Float>(boardBase.x, boardBase.y + 2.45, boardBase.z), material: Self.pbr(UIColor(red: 0.95, green: 0.90, blue: 0.70, alpha: 1), roughness: 0.35), orientation: yawAt(2_430))
+        // Buffer stop on a short stub past the terminal.
+        let endSample = sample(at: 2_500)
+        let endPoint = routeOffsetPoint(endSample, lateral: trackLat)
+        let forward = SIMD3<Float>(sin(endSample.heading), 0, -cos(endSample.heading))
+        let bufferPos = SIMD3<Float>(endPoint.x, endPoint.y, endPoint.z) + forward * 9
+        _ = addBox(parent: world, name: "zoo-buffer-beam", size: SIMD3<Float>(1.9, 0.35, 0.3), position: SIMD3<Float>(bufferPos.x, bufferPos.y + 0.75, bufferPos.z), material: postMat, orientation: yawAt(2_500))
+        for legSide: Float in [-0.7, 0.7] {
+            let legPoint = routeOffsetPoint(endSample, lateral: trackLat + legSide)
+            let lp = SIMD3<Float>(legPoint.x, legPoint.y, legPoint.z) + forward * 9
+            _ = addBox(parent: world, name: "zoo-buffer-leg", size: SIMD3<Float>(0.22, 0.95, 0.22), position: SIMD3<Float>(lp.x, lp.y + 0.45, lp.z), material: postMat, orientation: yawAt(2_500))
+        }
+    }
+
+    /// Per-frame animal behaviour: individual timers pick idle /
+    /// graze / walk / rest; walking swings the legs and steers the
+    /// body, grazing lowers the head (or the giraffe's neck), rest
+    /// folds the legs and lowers the body, and every animal turns
+    /// its head toward the train when it passes within 130 m.
+    /// Animals beyond 430 m of the train are not posed (load gate).
+    private func updateZooAnimals(trainPositionM: Double, time: Double) {
+        guard !zooAnimalRigs.isEmpty else { return }
+        let dt = min(max(time - zooLastAnimTime, 0.001), 0.1)
+        zooLastAnimTime = time
+        for index in zooAnimalRigs.indices {
+            var rig = zooAnimalRigs[index]
+            if abs(trainPositionM - rig.routeDistanceM) > 430 && rig.state != 2 {
+                zooAnimalRigs[index] = rig
+                continue
+            }
+            func nextUnit() -> Double {
+                rig.rngState = rig.rngState &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                return Double((rig.rngState >> 33) % 1_000) / 1_000
+            }
+            if time >= rig.stateUntil {
+                let roll = nextUnit()
+                if rig.species == 5 {
+                    rig.state = roll < 0.45 ? 0 : 2
+                    rig.stateUntil = time + 5 + nextUnit() * 6
+                } else if roll < 0.30 {
+                    rig.state = 0; rig.stateUntil = time + 4 + nextUnit() * 5
+                } else if roll < 0.58 {
+                    rig.state = 1; rig.stateUntil = time + 6 + nextUnit() * 6
+                } else if roll < 0.85 {
+                    rig.state = 2; rig.stateUntil = time + 26
+                    let along = (nextUnit() - 0.5) * 30
+                    let lat = (nextUnit() - 0.5) * 20
+                    rig.walkTarget = rig.paddockCenter + rig.axisZ * Float(along) + rig.axisX * Float(lat)
+                    rig.walkTarget.y = rig.root.position.y
+                } else {
+                    rig.state = 3; rig.stateUntil = time + 8 + nextUnit() * 8
+                }
+            }
+            let trainNear = abs(trainPositionM - rig.routeDistanceM) < 130
+            let grazeTarget: Float = (rig.state == 1 && !trainNear) ? 1 : 0
+            rig.grazeAmount += (grazeTarget - rig.grazeAmount) * Float(min(1, dt * 2.5))
+            let restTarget: Float = rig.state == 3 ? 1 : 0
+            rig.restAmount += (restTarget - rig.restAmount) * Float(min(1, dt * 2.0))
+
+            // Legs: swing while walking, fold while resting.
+            let walkSpeed: Float = rig.species == 3 ? 0.55 : (rig.species == 2 ? 0.85 : (rig.species == 5 ? 0.22 : 0.7))
+            if rig.state == 2 {
+                let toTarget = rig.walkTarget - rig.root.position
+                let dist = simd_length(SIMD2<Float>(toTarget.x, toTarget.z))
+                if dist < 0.4 {
+                    rig.state = 0
+                    rig.stateUntil = time + 3 + nextUnit() * 4
+                } else {
+                    let desired = atan2(toTarget.x, -toTarget.z)
+                    var delta = desired - rig.heading
+                    while delta > Float.pi { delta -= 2 * Float.pi }
+                    while delta < -Float.pi { delta += 2 * Float.pi }
+                    rig.heading += delta * Float(min(1, dt * 2.2))
+                    rig.root.orientation = simd_quatf(angle: -rig.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let step = min(Float(dist), walkSpeed * Float(dt))
+                    rig.root.position += SIMD3<Float>(sin(rig.heading), 0, -cos(rig.heading)) * step
+                    rig.routeDistanceM += Double(step) * (abs(delta) < 1.2 ? 1 : 0.3)
+                    rig.phase += Float(dt) * (rig.species == 5 ? 9 : 5.2) * walkSpeed
+                }
+            }
+            for (legIndex, leg) in rig.legs.enumerated() {
+                let diagonal: Float = (legIndex == 0 || legIndex == 3) ? 0 : Float.pi
+                let swing: Float = rig.state == 2 ? sin(rig.phase + diagonal) * 0.42 : 0
+                let fold: Float = (legIndex < 2 ? -1.25 : 1.25) * rig.restAmount
+                leg.orientation = simd_quatf(angle: swing + fold, axis: SIMD3<Float>(1, 0, 0))
+            }
+            // Body height: stand, or lowered onto folded legs at rest.
+            if rig.species != 5 {
+                rig.body.position.y = rig.bodyStandY + (rig.bodyRestY - rig.bodyStandY) * rig.restAmount + (rig.state == 2 ? abs(sin(rig.phase)) * 0.03 : 0)
+            } else if rig.state == 2 {
+                rig.body.orientation = simd_quatf(angle: sin(rig.phase) * 0.07, axis: SIMD3<Float>(0, 0, 1))
+            }
+            // Head: graze pitch, plus a look toward the train.
+            var headYaw: Float = 0
+            if trainNear {
+                // The track lies toward -axisX * sideSign from the
+                // paddock; approximate the look with a fixed yaw
+                // toward the track side relative to the body.
+                headYaw = -0.65
+            }
+            rig.headPivot.orientation = simd_quatf(angle: -0.78 * rig.grazeAmount, axis: SIMD3<Float>(1, 0, 0)) * simd_quatf(angle: headYaw * (1 - rig.grazeAmount), axis: SIMD3<Float>(0, 1, 0))
+            if let neck = rig.neckPivot {
+                neck.orientation = simd_quatf(angle: 0.42 - 0.95 * rig.grazeAmount, axis: SIMD3<Float>(1, 0, 0))
+            }
+            // Tail sway and trunk sway keep idle animals alive.
+            rig.tailPivot.orientation = simd_quatf(angle: 0.30, axis: SIMD3<Float>(1, 0, 0)) * simd_quatf(angle: sin(Float(time) * 1.4 + Float(index) * 1.7) * 0.28, axis: SIMD3<Float>(0, 1, 0))
+            for (seg, pivot) in rig.trunkPivots.enumerated() {
+                pivot.orientation = simd_quatf(angle: sin(Float(time) * 0.8 + Float(seg) * 0.7 + Float(index)) * 0.10, axis: SIMD3<Float>(1, 0, 0))
+            }
+            zooAnimalRigs[index] = rig
+        }
+    }
+
+    /// The theme park line's own world: entrance plaza, the park
+    /// grounds beside the line (ferris wheel, roller coaster,
+    /// fairy-tale buildings and castle on a plaza pad), fishplates
+    /// every 25 m (standard-length jointed rail, like the zoo
+    /// line), and the テーマパーク terminal.
+    private func buildParkLineWorld(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .parkLine else { return }
+        let up = travelDirection == .up
+        let sideSign: Float = up ? -1 : 1
+        let trackLat: Float = up ? -2.1 : 2.1
+        func gp(_ d: Double, _ lateral: Float) -> SIMD3<Float> { groundOffsetPoint(sample(at: d), lateral: lateral) }
+        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0)) }
+        let postMat = Self.pbr(UIColor(red: 0.35, green: 0.36, blue: 0.37, alpha: 1), metallic: 0.6, roughness: 0.5)
+        let pastels: [UIColor] = [
+            UIColor(red: 0.96, green: 0.80, blue: 0.85, alpha: 1),
+            UIColor(red: 0.80, green: 0.88, blue: 0.96, alpha: 1),
+            UIColor(red: 0.98, green: 0.92, blue: 0.72, alpha: 1),
+            UIColor(red: 0.84, green: 0.94, blue: 0.82, alpha: 1),
+        ]
+
+        // Entrance plaza and parking near the origin.
+        var plazaD = 120.0
+        while plazaD <= 300 {
+            let p = gp(plazaD, sideSign * 16)
+            _ = addBox(parent: world, name: "park-entrance", size: SIMD3<Float>(20, 0.07, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.85, green: 0.78, blue: 0.70, alpha: 1), roughness: 0.95), orientation: yawAt(plazaD))
+            plazaD += 15
+        }
+        for car in 0..<2 {
+            let p = gp(160 + Double(car) * 60, -sideSign * 13.5)
+            addParkedCar(name: "park-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 160 + Double(car) * 60).heading + Float.pi / 2, seed: car * 2 + 2)
+        }
+        // Park trees along both sides.
+        var treeD = 80.0
+        while treeD < 1_750 {
+            for side: Float in [-1.0, 1.0] {
+                if stableIndex("parktreeok-\(Int(treeD))-\(side > 0 ? 1 : 0)", count: 4) != 0 {
+                    buildZooTree(at: gp(treeD, side * (15 + Float(stableIndex("parktree-\(Int(treeD))-\(side > 0 ? 1 : 0)", count: 12)))), seed: Int(treeD) + (side > 0 ? 3 : 0))
+                }
+            }
+            treeD += 60
+        }
+
+        // Fishplates at every 25 m joint (standard-length rail).
+        var plateBatch = MeshBatchBuilder()
+        let steelMat = Self.pbr(UIColor(red: 0.30, green: 0.31, blue: 0.33, alpha: 1), metallic: 0.7, roughness: 0.5)
+        var jointD = 12.5
+        while jointD < 2_000 {
+            let s = sample(at: jointD)
+            for railSide: Float in [-0.72, 0.72] {
+                let outer: Float = railSide < 0 ? -0.095 : 0.095
+                let p = routeOffsetPoint(s, lateral: trackLat + railSide + outer)
+                plateBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.17, p.z), size: SIMD3<Float>(0.035, 0.13, 0.46), yaw: -s.heading)
+            }
+            jointD += 25
+        }
+        if let plates = plateBatch.build(name: "park-fishplates", material: steelMat) {
+            world.addChild(plates)
+        }
+
+        // Park grounds: plaza pad under the attractions.
+        let parkStation = profileStation(at: 1_280, trackLateral: 0)
+        let xAxis = parkStation.xAxis
+        let tangent = -simd_cross(xAxis, parkStation.yAxis)
+        let parkGround = gp(1_280, sideSign * 115)
+        let parkGroundY = parkGround.y
+        let parkCenter = SIMD3<Float>(parkGround.x, parkGroundY, parkGround.z)
+        var padD = 950.0
+        while padD <= 1_620 {
+            let p = gp(padD, sideSign * 115)
+            _ = addBox(parent: world, name: "park-plaza", size: SIMD3<Float>(150, 0.09, 16.6), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.82, green: 0.76, blue: 0.68, alpha: 1), roughness: 0.95), orientation: yawAt(padD))
+            padD += 16
+        }
+        let parkYaw = yawAt(1_280)
+
+        // Ferris wheel (diameter 56 m) facing the line.
+        let wheelBase = parkCenter - xAxis * (sideSign * 37)
+        let wheelCenter = SIMD3<Float>(wheelBase.x, parkGroundY + 30, wheelBase.z)
+        let wheelMat = Self.pbr(UIColor(red: 0.92, green: 0.93, blue: 0.94, alpha: 1), metallic: 0.4, roughness: 0.4)
+        var wheelBatch = MeshBatchBuilder()
+        let rimSegments = 28
+        for i in 0..<rimSegments {
+            let a0 = Float(i) / Float(rimSegments) * Float.pi * 2
+            let a1 = Float(i + 1) / Float(rimSegments) * Float.pi * 2
+            let p0 = wheelCenter + (xAxis * cos(a0) + SIMD3<Float>(0, 1, 0) * sin(a0)) * 28
+            let p1 = wheelCenter + (xAxis * cos(a1) + SIMD3<Float>(0, 1, 0) * sin(a1)) * 28
+            wheelBatch.addSegment(from: p0, to: p1, thickness: 0.35)
+            if i % 7 == 0 {
+                wheelBatch.addSegment(from: wheelCenter, to: p0, thickness: 0.22)
+            }
+        }
+        for legSign: Float in [-1, 1] {
+            let foot = wheelBase + tangent * (legSign * 9)
+            wheelBatch.addSegment(from: wheelCenter, to: SIMD3<Float>(foot.x, parkGroundY, foot.z), thickness: 0.5)
+        }
+        if let wheel = wheelBatch.build(name: "park-wheel", material: wheelMat) {
+            world.addChild(wheel)
+        }
+        _ = addBox(parent: world, name: "park-wheel-hub", size: SIMD3<Float>(1.4, 1.4, 2.4), position: wheelCenter, material: wheelMat, orientation: parkYaw)
+        for gondola in 0..<12 {
+            let a = Float(gondola) / 12 * Float.pi * 2
+            let gpnt = wheelCenter + (xAxis * cos(a) + SIMD3<Float>(0, 1, 0) * sin(a)) * 28
+            _ = addBox(parent: world, name: "park-gondola-\(gondola)", size: SIMD3<Float>(1.7, 1.8, 1.7), position: SIMD3<Float>(gpnt.x, gpnt.y - 1.8, gpnt.z), material: Self.pbr(pastels[gondola % pastels.count], roughness: 0.5), orientation: parkYaw)
+        }
+
+        // Roller coaster: closed ellipse with two hills.
+        let coasterOrigin = parkCenter + xAxis * (sideSign * 35) - tangent * 10
+        var coasterStations: [ProfileStation] = []
+        var coasterPoints: [SIMD3<Float>] = []
+        let coasterN = 40
+        for i in 0...coasterN {
+            let theta = Double(i) / Double(coasterN) * Double.pi * 2
+            let along = Float(cos(theta)) * 56
+            let lat = Float(sin(theta)) * 34
+            let hill = 7 + 15 * Float(pow(max(sin(theta + 0.6), 0), 1.4)) + 5 * Float(max(sin(2 * theta), 0))
+            coasterPoints.append(coasterOrigin + tangent * along + xAxis * lat + SIMD3<Float>(0, hill, 0))
+        }
+        for i in 0...coasterN {
+            let prev = coasterPoints[(i + coasterN - 1) % coasterN]
+            let next = coasterPoints[(i + 1) % coasterN]
+            let tan = simd_normalize(next - prev)
+            var xA = simd_cross(SIMD3<Float>(0, 1, 0), tan)
+            xA = simd_length(xA) > 0.001 ? simd_normalize(xA) : xAxis
+            let yA = simd_normalize(simd_cross(xA, tan))
+            coasterStations.append(ProfileStation(center: coasterPoints[i], xAxis: xA, yAxis: yA, distanceM: Double(i)))
+        }
+        let coasterMat = Self.pbr(UIColor(red: 0.85, green: 0.45, blue: 0.30, alpha: 1), metallic: 0.5, roughness: 0.45)
+        if let track = profileStripEntity(name: "parkline-coaster-track", stations: Array(coasterStations.dropLast()), profile: [(-0.8, 0), (0.8, 0)], closed: true, material: coasterMat) { world.addChild(track) }
+        for i in stride(from: 0, to: coasterN, by: 3) {
+            let p = coasterPoints[i]
+            let h = p.y - parkGroundY
+            _ = addBox(parent: world, name: "parkline-coaster-support-\(i)", size: SIMD3<Float>(0.55, h, 0.55), position: SIMD3<Float>(p.x, parkGroundY + h / 2, p.z), material: Self.pbr(UIColor(red: 0.80, green: 0.80, blue: 0.78, alpha: 1), roughness: 0.8))
+        }
+
+        // Fairy-tale buildings and the castle.
+        let fairySpots: [(along: Float, lat: Float, w: Float, h: Float, d: Float)] = [
+            (-38, -30, 10, 7, 9), (34, -34, 11, 8, 9), (44, 22, 9, 6.5, 8),
+        ]
+        for (fairyIndex, spot) in fairySpots.enumerated() {
+            let base = parkCenter + tangent * spot.along + xAxis * spot.lat
+            _ = addBox(parent: world, name: "parkline-fairy-\(fairyIndex)", size: SIMD3<Float>(spot.w, spot.h, spot.d), position: SIMD3<Float>(base.x, parkGroundY + spot.h / 2, base.z), material: Self.pbr(pastels[fairyIndex % pastels.count], roughness: 0.8), orientation: parkYaw)
+            let roof = addBox(parent: world, name: "parkline-fairy-roof-\(fairyIndex)", size: SIMD3<Float>(spot.w * 0.78, spot.w * 0.78, spot.d + 0.4), position: SIMD3<Float>(base.x, parkGroundY + spot.h + spot.w * 0.24, base.z), material: Self.pbr(pastels[(fairyIndex + 1) % pastels.count], roughness: 0.7), orientation: parkYaw)
+            roof.orientation = roof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+        }
+        let castleBase = parkCenter + tangent * -6 + xAxis * (sideSign * 40)
+        _ = addBox(parent: world, name: "parkline-castle", size: SIMD3<Float>(11, 19, 11), position: SIMD3<Float>(castleBase.x, parkGroundY + 9.5, castleBase.z), material: Self.pbr(pastels[1], roughness: 0.8), orientation: parkYaw)
+        for turret in 0..<4 {
+            let tx = (turret % 2 == 0 ? -5.5 : 5.5) as Float
+            let tz = (turret < 2 ? -5.5 : 5.5) as Float
+            let tp = castleBase + xAxis * tx + tangent * tz
+            _ = addBox(parent: world, name: "parkline-castle-turret-\(turret)", size: SIMD3<Float>(2.4, 24, 2.4), position: SIMD3<Float>(tp.x, parkGroundY + 12, tp.z), material: Self.pbr(pastels[0], roughness: 0.8), orientation: parkYaw)
+        }
+        let castleRoof = addBox(parent: world, name: "parkline-castle-roof", size: SIMD3<Float>(8.6, 8.6, 11.4), position: SIMD3<Float>(castleBase.x, parkGroundY + 19 + 2.1, castleBase.z), material: Self.pbr(pastels[3], roughness: 0.7), orientation: parkYaw)
+        castleRoof.orientation = castleRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+
+        // テーマパーク terminal: platform, furniture, pastel
+        // station house and a buffer stop past the end.
+        let whiteLine = Self.pbr(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.85)
+        buildOneStationPlatform(name: "platform-PARK", start: 1_790, end: 2_000, trackLateral: trackLat, sideSign: sideSign, width: 5.0, whiteLineMaterial: whiteLine)
+        buildStationFurniture(name: "furniture-PARK", centerChainage: 1_920, start: 1_790, end: 2_000, trackLateral: trackLat, sideSign: sideSign)
+        let house = gp(1_940, sideSign * 13.5)
+        _ = addBox(parent: world, name: "park-station-house", size: SIMD3<Float>(12, 4.6, 6.5), position: SIMD3<Float>(house.x, house.y + 2.3, house.z), material: Self.pbr(pastels[0], roughness: 0.85), orientation: yawAt(1_940))
+        let houseRoof = addBox(parent: world, name: "park-station-roof", size: SIMD3<Float>(9.4, 9.4, 7.3), position: SIMD3<Float>(house.x, house.y + 4.6 + 2.2, house.z), material: Self.pbr(pastels[2], roughness: 0.7), orientation: yawAt(1_940))
+        houseRoof.orientation = houseRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+        let endSample = sample(at: 2_000)
+        let endPoint = routeOffsetPoint(endSample, lateral: trackLat)
+        let forward = SIMD3<Float>(sin(endSample.heading), 0, -cos(endSample.heading))
+        let bufferPos = SIMD3<Float>(endPoint.x, endPoint.y, endPoint.z) + forward * 9
+        _ = addBox(parent: world, name: "park-buffer-beam", size: SIMD3<Float>(1.9, 0.35, 0.3), position: SIMD3<Float>(bufferPos.x, bufferPos.y + 0.75, bufferPos.z), material: postMat, orientation: yawAt(2_000))
+        for legSide: Float in [-0.7, 0.7] {
+            let legPoint = routeOffsetPoint(endSample, lateral: trackLat + legSide)
+            let lp = SIMD3<Float>(legPoint.x, legPoint.y, legPoint.z) + forward * 9
+            _ = addBox(parent: world, name: "park-buffer-leg", size: SIMD3<Float>(0.22, 0.95, 0.22), position: SIMD3<Float>(lp.x, lp.y + 0.45, lp.z), material: postMat, orientation: yawAt(2_000))
+        }
+    }
+
     private func applyAspect(_ lamps: [ModelEntity], aspect: ThreeAspectSignal) {
         guard lamps.count == 4 else { return }
         // The 4-aspect A head's lamp order is yellow, red,
-        // yellow, green (top to bottom). Caution lights the top
-        // yellow alone; the warning aspect (both yellows) awaits
-        // the model's aspect set growing.
-        lamps[0].model?.materials = [aspect == .yellow ? signalYellowMaterial : signalDarkLampMaterial]
+        // yellow, green (top to bottom). Aspects: 進行 = green,
+        // 減速 = lower yellow + green (YG), 注意 = top yellow,
+        // 警戒 = both yellows (YY), 停止 = red.
+        lamps[0].model?.materials = [aspect == .yellow || aspect == .doubleYellow ? signalYellowMaterial : signalDarkLampMaterial]
         lamps[1].model?.materials = [aspect == .red ? signalRedMaterial : signalDarkLampMaterial]
-        lamps[2].model?.materials = [signalDarkLampMaterial]
-        lamps[3].model?.materials = [aspect == .green ? signalGreenMaterial : signalDarkLampMaterial]
+        lamps[2].model?.materials = [aspect == .doubleYellow || aspect == .yellowGreen ? signalYellowMaterial : signalDarkLampMaterial]
+        lamps[3].model?.materials = [aspect == .green || aspect == .yellowGreen ? signalGreenMaterial : signalDarkLampMaterial]
     }
 
     /// Lights the placed signal nearest the model's current reading
@@ -3514,7 +4265,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // pole (poles every 45 m; trees every 22.5 m land at least
         // 11.25 m away in chainage).
         var treeSerial = 0
-        for side: Float in [-1, 1] {
+        for side: Float in [-1.0, 1.0] {
             var d = side < 0 ? 26.25 : 48.75
             while d < 1_845 {
                 // quality25 (B): street trees stop at the station
@@ -3543,7 +4294,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // are skipped (quality25, B).
         var shrubBlobs: [(center: SIMD3<Float>, radii: SIMD3<Float>)] = []
         var shrubSerial = 0
-        for side: Float in [-1, 1] {
+        for side: Float in [-1.0, 1.0] {
             var d = 6.0
             while d < 1_852 {
                 if !frontNear(d, side: side, within: 6.5), !inStationZone(d) {
@@ -3584,7 +4335,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // run straight through the new platform bodies, whose
             // footprint reaches 3.6–8.1 m from the route centre.
             if !inStationZone(mid) {
-                for side: Float in [-1, 1] {
+                for side: Float in [-1.0, 1.0] {
                     let lateral: Float = side * Float(elevated ? 3.85 : 4.9)
                     troughBatch.addBox(center: SIMD3<Float>(s.x + lateral * cos(s.heading), s.elevationM + 0.01, s.z + lateral * sin(s.heading)), size: SIMD3<Float>(0.55, 0.22, 11.0), yaw: -s.heading)
                 }
@@ -3678,7 +4429,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             var chainage: Double
             var heading: Float
         }
-        for side: Float in [-1, 1] {
+        for side: Float in [-1.0, 1.0] {
             var points: [FencePoint] = []
             var d = 0.0
             while d <= sectionEnd {
@@ -4329,6 +5080,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         case .depotTransfer:
             guard pathID == "depot-spur" else { return nil }
             return direction == .up ? positionM : 2_000 - positionM
+        case .zooLine:
+            return nil // No AI traffic paths exist on the zoo shuttle.
+        case .parkLine:
+            return nil // Nor on the theme park shuttle.
         }
     }
 
@@ -5823,7 +6578,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 if let deck = ribbonEntity(name: "fan-deck-\(Int(spec.center))-\(span.tag)", width: 17, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
                     world.addChild(deck)
                 }
-                for side: Float in [-1, 1] {
+                for side: Float in [-1.0, 1.0] {
                     let sideTag = side > 0 ? "r" : "l"
                     let offsets = samples.map { sample -> Float in
                         let u = (min(max(sample.distanceM, span.start), span.end) - span.start) / 340
