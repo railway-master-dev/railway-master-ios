@@ -215,8 +215,8 @@ private enum RailwaySkyPalette {
             (0, SIMD3(0.025, 0.040, 0.085)),
             (5, SIMD3(0.075, 0.105, 0.190)),
             (6.5, SIMD3(0.43, 0.27, 0.32)),
-            (8, SIMD3(0.34, 0.58, 0.76)),
-            (12, SIMD3(0.47, 0.72, 0.87)),
+            (8, SIMD3(0.45, 0.62, 0.78)),
+            (12, SIMD3(0.58, 0.73, 0.85)),
             (17, SIMD3(0.86, 0.48, 0.31)),
             (19, SIMD3(0.34, 0.23, 0.37)),
             (21, SIMD3(0.035, 0.055, 0.115)),
@@ -394,11 +394,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var currentCabDesk = FictionalCabAndSoundCatalog.fieldChopper
     private var lastSceneFidelityBuildChainage = Double.nan
 
-    private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.92, green: 0.92, blue: 0.92, alpha: 1), roughness: 0.96, textureName: "scenery_ballast", normalName: "normal_ballast")
+    private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.84, green: 0.84, blue: 0.84, alpha: 1), roughness: 0.96, textureName: "scenery_ballast", normalName: "normal_ballast")
     private let sleeperMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.72, green: 0.62, blue: 0.52, alpha: 1), roughness: 0.88, textureName: "scenery_timber")
     private let railMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
     private let concreteMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.87, textureName: "scenery_concrete", normalName: "normal_concrete")
-    private let poleMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.58, blue: 0.58, alpha: 1), metallic: 0.62, roughness: 0.42, textureName: "scenery_steel")
+    private let poleMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.58, blue: 0.58, alpha: 1), metallic: 0.30, roughness: 0.55, textureName: "scenery_steel")
     private let wireMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.66, blue: 0.57, alpha: 1), metallic: 0.84, roughness: 0.24)
     private let roadMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.78, textureName: "scenery_asphalt", normalName: "normal_asphalt")
     private let glassMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.12, green: 0.26, blue: 0.31, alpha: 1), metallic: 0.18, roughness: 0.20)
@@ -417,8 +417,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private let officeMaterials = [
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.62, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.88, blue: 0.84, alpha: 1), roughness: 0.66, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
-        RailwaySceneWorld.texturedPBR(.white, metallic: 0.25, roughness: 0.34, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.92, blue: 1.0, alpha: 1), metallic: 0.25, roughness: 0.38, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(.white, metallic: 0.06, roughness: 0.52, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.92, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.56, textureName: "scenery_glass_facade", normalName: "normal_glass_facade"),
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.94, green: 0.90, blue: 0.84, alpha: 1), roughness: 0.9, textureName: "scenery_house_facade")
     ]
@@ -551,7 +551,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // balance had been tuned when the sun pointed up and only
         // fill + environment lit the scene. apply() scales this per
         // environment; the fill base rises 1,200 → 1,800 to compensate.
-        sunlight.light.intensity = 10_000
+        sunlight.light.intensity = 7_200
         sunlight.light.color = UIColor(red: 1.0, green: 0.91, blue: 0.77, alpha: 1)
         // Cast shadows: without a shadow configuration RealityKit
         // renders no shadows at all, which left every building, pole
@@ -585,8 +585,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         root.addChild(sunlight)
 
         fillLight = PointLight()
-        fillLight.light.intensity = 1_800
-        fillLight.light.attenuationRadius = 150
+        fillLight.light.intensity = 2_800
+        fillLight.light.attenuationRadius = 500
         fillLight.light.color = UIColor(red: 0.70, green: 0.79, blue: 0.88, alpha: 1)
         fillLight.position = SIMD3<Float>(0, 16, -30)
         root.addChild(fillLight)
@@ -621,6 +621,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // lengths; the station GLBs keep only their cores (see
         // stripGeneratedPlatformParts).
         buildStationPlatforms(routeVariant: routeVariant, travelDirection: travelDirection)
+        buildStationSurroundings(routeVariant: routeVariant, travelDirection: travelDirection)
         buildGenerated3DAssets(route: route)
     }
 
@@ -897,12 +898,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         fillLight.position = position + SIMD3<Float>(0, 16, 0)
 
         let tint = environment.warmCoolTint
-        sunlight.light.intensity = 10_000 * Float(environment.sunLightScale)
+        sunlight.light.intensity = 7_200 * Float(environment.sunLightScale)
         sunlight.light.color = UIColor(
             red: CGFloat(min(max(tint.x, 0), 1.2)), green: CGFloat(min(max(tint.y, 0), 1.2)),
             blue: CGFloat(min(max(tint.z, 0), 1.2)), alpha: 1
         )
-        fillLight.light.intensity = 1_800 * Float(environment.ambientLightScale * (1 - environment.fogStrength * 0.35))
+        fillLight.light.intensity = 2_800 * Float(environment.ambientLightScale * (1 - environment.fogStrength * 0.35))
         fillLight.light.color = UIColor(
             red: CGFloat(min(max(tint.x * 0.70, 0), 1)), green: CGFloat(min(max(tint.y * 0.79, 0), 1)),
             blue: CGFloat(min(max(tint.z * 0.88, 0), 1)), alpha: 1
@@ -1306,7 +1307,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // neutral tint multiplies them down to a sunlit-but-not-
             // clipped range. The far-ground materials below already
             // sit at 0.80–0.84 tints and are left as they are.
-            let apronTint = UIColor(red: 0.74, green: 0.74, blue: 0.74, alpha: 1)
+            let apronTint = UIColor(red: 0.68, green: 0.68, blue: 0.68, alpha: 1)
             let grassApron = Self.texturedPBR(apronTint, roughness: 1, textureName: "scenery_grass")
             let cityApron = Self.texturedPBR(apronTint, roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
             var runStart = 0
@@ -2834,6 +2835,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // up sunk into the new platform away from the
                 // anchor point), so buildStationFurniture now
                 // places them procedurally along the platform.
+                // quality31: the station_ group (building, glazing,
+                // sign) is removed too — bisection photo runs
+                // (diag3/4/5) proved that group renders as a rusty
+                // corrugated wall intruding behind the down
+                // platform at Matsubaracho; buildStationSurroundings
+                // now provides the station-front buildings instead.
                 stripGeneratedPlatformParts(entity)
                 adjustGeneratedStationHeights(entity)
                 entity.name = "generated-station-\(placement.stationId)-\(placement.trackCount)track-\(placement.platformCount)platform"
@@ -3910,6 +3917,175 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             platforms: platforms,
             generateUrbanScenery: true
         )
+    }
+
+    /// Station surroundings (quality31). quality29's platform
+    /// clearance pushed every building back from the platforms, and
+    /// the stations were left standing on a bare flat apron: nothing
+    /// behind the platform, no forecourt, no frontage. This pass
+    /// dresses every station the platform builder serves, in the
+    /// same placement order: a paved forecourt (concrete walk plus
+    /// an asphalt band) stepped along the banked frame, a post-and-
+    /// rail fence along the platform's back edge on the outer
+    /// thirds (the GLB core around the centre carries the footbridge
+    /// stairs and signs), a bicycle shelter with racks near the
+    /// +end, a shrub line along the forecourt's outer edge, and two
+    /// mid-rise frontage buildings per side standing on the apron
+    /// with their faces about 12.5 m behind the platform back —
+    /// clear of the platforms by construction, so the quality29
+    /// clearance stays intact. Everything stands on the apron datum
+    /// (sample elevation), which is the visible ground plane beside
+    /// the line at both grade and elevated stations.
+    private func buildStationSurroundings(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard !stationModelPlacements.isEmpty else { return }
+        var walkBatch = MeshBatchBuilder()
+        var roadBatch = MeshBatchBuilder()
+        var fenceBatch = MeshBatchBuilder()
+        var shelterBatch = MeshBatchBuilder()
+        var roofBatch = MeshBatchBuilder()
+        var baseBatch = MeshBatchBuilder()
+        var bodyBatches = officeMaterials.map { _ in MeshBatchBuilder() }
+        var shrubBlobs: [(center: SIMD3<Float>, radii: SIMD3<Float>)] = []
+        let topFull: Float = 0.3065 + 1.10
+
+        for (stationIndex, placement) in stationModelPlacements.enumerated() {
+            let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
+            let start = placement.chainageM - length / 2
+            let end = placement.chainageM + length / 2
+            let wide = placement.archetype.contains("terminal") || placement.archetype.contains("major") || placement.archetype == "junction_3platform"
+            let width: Float = wide ? 6.0 : 4.5
+            let midSample = sample(at: placement.chainageM)
+            let isMainlineSection = travelDirection == .up ? midSample.distanceM < 60_000 : midSample.distanceM >= 8_000
+            let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
+            let trackLaterals: [Float] = hasPassingTrack ? [-2.1, 2.1] : [travelDirection == .up ? -2.1 : 2.1]
+            for trackLateral in trackLaterals {
+                let sides: [Float] = hasPassingTrack ? [trackLateral < 0 ? -1.0 : 1.0] : [-1.0, 1.0]
+                for sideSign in sides {
+                    let backU: Float = 1.52 + width
+                    let backLateral = trackLateral + sideSign * backU
+
+                    // -- Forecourt paving, stepped every 8.5 m in
+                    // the banked frame like the lineside walls.
+                    var pavingD = start - 6
+                    while pavingD < end + 6 {
+                        let mid = min(pavingD + 4.25, end + 6)
+                        let frame = profileStation(at: mid, trackLateral: 0)
+                        let axisZ = simd_cross(frame.xAxis, frame.yAxis)
+                        let span = Float(min(8.5, end + 6 - pavingD)) + 0.4
+                        let walkCenter = frame.center + frame.xAxis * (backLateral + sideSign * 1.25) + frame.yAxis * (-0.005)
+                        walkBatch.addBoxAxes(center: walkCenter, size: SIMD3<Float>(2.5, 0.07, span), ax: frame.xAxis, ay: frame.yAxis, az: axisZ)
+                        let roadCenter = frame.center + frame.xAxis * (backLateral + sideSign * 6.9) + frame.yAxis * (-0.012)
+                        roadBatch.addBoxAxes(center: roadCenter, size: SIMD3<Float>(8.8, 0.06, span), ax: frame.xAxis, ay: frame.yAxis, az: axisZ)
+                        pavingD += 8.5
+                    }
+
+                    // -- Platform-back fence on the outer thirds:
+                    // posts every 4.25 m with a top and mid rail,
+                    // standing on the platform's back edge (the
+                    // benches at u = 5.35 sit just in front of it).
+                    let fenceU = sideSign * (backU - 0.15)
+                    let fenceRuns: [(Double, Double)] = [(start, placement.chainageM - 22), (placement.chainageM + 22, end)]
+                    for run in fenceRuns {
+                        var previousTop: SIMD3<Float>? = nil
+                        var previousMid: SIMD3<Float>? = nil
+                        var fd = run.0
+                        while fd <= run.1 {
+                            let station = profileStation(at: fd, trackLateral: trackLateral)
+                            let axisZ = simd_cross(station.xAxis, station.yAxis)
+                            let ramp = Float(min(min(fd - start, end - fd) / 6.0, 1))
+                            let top = 0.30 + (topFull - 0.30) * max(ramp, 0)
+                            let base = station.center + station.xAxis * fenceU + station.yAxis * top
+                            let postTop = base + station.yAxis * 0.95
+                            fenceBatch.addBoxAxes(center: base + station.yAxis * 0.475, size: SIMD3<Float>(0.07, 0.95, 0.07), ax: station.xAxis, ay: station.yAxis, az: axisZ)
+                            if let prevTop = previousTop, let prevMid = previousMid {
+                                fenceBatch.addSegment(from: prevTop, to: postTop, thickness: 0.05)
+                                fenceBatch.addSegment(from: prevMid, to: base + station.yAxis * 0.55, thickness: 0.04)
+                            }
+                            previousTop = postTop
+                            previousMid = base + station.yAxis * 0.55
+                            fd += 4.25
+                        }
+                    }
+
+                    // -- Bicycle shelter near the +end of the
+                    // forecourt: a steel canopy on four posts over
+                    // two rows of rack bars. The GLB station
+                    // building spans centre -19...-9 on one side,
+                    // so the +end stays clear on both sides.
+                    let shelterFrame = profileStation(at: placement.chainageM + length * 0.32, trackLateral: 0)
+                    let shelterAxisZ = simd_cross(shelterFrame.xAxis, shelterFrame.yAxis)
+                    let shelterCenter = shelterFrame.center + shelterFrame.xAxis * (backLateral + sideSign * 4.7)
+                    shelterBatch.addBoxAxes(center: shelterCenter + shelterFrame.yAxis * 2.25, size: SIMD3<Float>(3.4, 0.09, 6.4), ax: shelterFrame.xAxis, ay: shelterFrame.yAxis, az: shelterAxisZ)
+                    for postU: Float in [-1.5, 1.5] {
+                        for postV: Float in [-3.0, 3.0] {
+                            let postCenter = shelterCenter + shelterFrame.xAxis * postU + shelterAxisZ * postV + shelterFrame.yAxis * 1.1
+                            shelterBatch.addBoxAxes(center: postCenter, size: SIMD3<Float>(0.08, 2.2, 0.08), ax: shelterFrame.xAxis, ay: shelterFrame.yAxis, az: shelterAxisZ)
+                        }
+                    }
+                    for rackRow: Float in [-0.8, 0.8] {
+                        var rackV: Float = -2.4
+                        while rackV <= 2.4 {
+                            let rackCenter = shelterCenter + shelterFrame.xAxis * rackRow + shelterAxisZ * rackV + shelterFrame.yAxis * 0.3
+                            shelterBatch.addBoxAxes(center: rackCenter, size: SIMD3<Float>(0.9, 0.55, 0.05), ax: shelterFrame.xAxis, ay: shelterFrame.yAxis, az: shelterAxisZ)
+                            rackV += 1.2
+                        }
+                    }
+
+                    // -- Station-front buildings: two per side on
+                    // the apron, faces about 12.5 m behind the
+                    // platform back, clear of the platform span's
+                    // lateral band by construction.
+                    for (buildingIndex, fraction) in [(-0.58), (0.58)].enumerated() {
+                        let seed = stationIndex * 7 + buildingIndex * 3 + (sideSign > 0 ? 1 : 0) + (trackLateral > 0 ? 2 : 0)
+                        let bSample = sample(at: placement.chainageM + length * fraction)
+                        let bWidth: Float = 11 + Float(seed % 3) * 1.6
+                        let bDepth: Float = 7.5 + Float((seed / 3) % 2) * 1.5
+                        let bHeight: Float = 9 + Float((seed * 29) % 70) / 10
+                        let bLateral = backLateral + sideSign * (12.5 + bDepth / 2)
+                        let bx = bSample.x + bLateral * cos(bSample.heading)
+                        let bz = bSample.z + bLateral * sin(bSample.heading)
+                        let baseY = bSample.elevationM - 0.06
+                        bodyBatches[abs(seed) % bodyBatches.count].addBox(center: SIMD3<Float>(bx, baseY + bHeight / 2, bz), size: SIMD3<Float>(bDepth, bHeight, bWidth), yaw: -bSample.heading)
+                        roofBatch.addBox(center: SIMD3<Float>(bx, baseY + bHeight + 0.12, bz), size: SIMD3<Float>(bDepth + 0.4, 0.24, bWidth + 0.4), yaw: -bSample.heading)
+                        baseBatch.addBox(center: SIMD3<Float>(bx, baseY + 1.0, bz), size: SIMD3<Float>(bDepth + 0.15, 2.0, bWidth + 0.15), yaw: -bSample.heading)
+                    }
+
+                    // -- Trees between the forecourt and the
+                    // frontage buildings.
+                    for treeIndex in 0..<3 {
+                        let tSample = sample(at: placement.chainageM + length * (Double(treeIndex) - 1) * 0.30)
+                        let tLateral = backLateral + sideSign * 12.3
+                        let tx = tSample.x + tLateral * cos(tSample.heading)
+                        let tz = tSample.z + tLateral * sin(tSample.heading)
+                        addTree(parent: world, name: "station-tree-\(stationIndex)-\(Int(trackLateral))-\(Int(sideSign))-\(treeIndex)", x: tx, z: tz, height: 5 + Float((stationIndex + treeIndex) % 4) * 0.8, material: foliageMaterials[(stationIndex + treeIndex) % foliageMaterials.count], groundY: tSample.elevationM - 0.02)
+                    }
+
+                    // -- Shrub line along the forecourt's outer
+                    // edge.
+                    var shrubD = start + 3
+                    while shrubD < end - 2 {
+                        let sSample = sample(at: shrubD)
+                        let sLateral = backLateral + sideSign * 11.9
+                        let cx = sSample.x + sLateral * cos(sSample.heading)
+                        let cz = sSample.z + sLateral * sin(sSample.heading)
+                        let jitter = foliageJitter(seed: Float(shrubD), salt: Float(stationIndex * 3 + 1))
+                        shrubBlobs.append((center: SIMD3<Float>(cx, sSample.elevationM + 0.30 + jitter * 0.08, cz), radii: SIMD3<Float>(0.85, 0.42, 0.7)))
+                        shrubD += 7
+                    }
+                }
+            }
+        }
+
+        if let mesh = walkBatch.build(name: "station-forecourt-walk", material: concreteMaterial) { world.addChild(mesh) }
+        if let mesh = roadBatch.build(name: "station-forecourt-road", material: roadMaterial) { world.addChild(mesh) }
+        if let mesh = fenceBatch.build(name: "station-back-fence", material: poleMaterial) { world.addChild(mesh) }
+        if let mesh = shelterBatch.build(name: "station-bike-shelter", material: poleMaterial) { world.addChild(mesh) }
+        if let mesh = roofBatch.build(name: "station-front-roofs", material: roofMaterials[2]) { world.addChild(mesh) }
+        if let mesh = baseBatch.build(name: "station-front-bases", material: concreteMaterial) { world.addChild(mesh) }
+        for (materialIndex, batch) in bodyBatches.enumerated() {
+            if let mesh = batch.build(name: "station-front-body-\(materialIndex)", material: officeMaterials[materialIndex]) { world.addChild(mesh) }
+        }
+        if let shrubs = foliageBlobEntity(name: "station-shrubs", blobs: shrubBlobs, material: foliageMaterials[0], longitudes: 6, latitudes: 5) { world.addChild(shrubs) }
     }
 
     /// Coarse PLACEHOLDER bridges, cuttings, embankments, and static crossings for the low/medium scene.
