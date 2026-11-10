@@ -623,16 +623,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // anywhere on the line; if the texture is missing the flat
         // palette colour remains as the fallback.
         if let skyTexture = SceneTextureProvider.texture(named: "scenery_sky") {
-            // Emissive PBR rather than UnlitMaterial: the unlit
-            // material's faceCulling needs iOS 18 while the project
-            // targets iOS 17; the PBR one is available and an
-            // emissive texture ignores scene lighting just the same.
-            var skyMaterial = PhysicallyBasedMaterial()
-            skyMaterial.baseColor = .init(tint: .black)
-            skyMaterial.emissiveColor = .init(tint: .white, texture: .init(skyTexture))
-            skyMaterial.emissiveIntensity = 1.0
-            skyMaterial.faceCulling = .none
+            var skyMaterial = UnlitMaterial()
+            skyMaterial.color = .init(tint: .white, texture: .init(skyTexture))
             skyDome = ModelEntity(mesh: MeshResource.generateSphere(radius: 1_800), materials: [skyMaterial])
+            // The dome is viewed from inside, but UnlitMaterial's
+            // faceCulling needs iOS 18 (the project targets 17) and
+            // emissiveColor takes no texture in this SDK. Mirroring
+            // the sphere on X flips its winding instead, so the
+            // inside faces render on any iOS version; a mirrored
+            // sky is indistinguishable from the original.
+            skyDome?.scale = SIMD3<Float>(-1, 1, 1)
             if let skyDome {
                 root.addChild(skyDome)
             }
