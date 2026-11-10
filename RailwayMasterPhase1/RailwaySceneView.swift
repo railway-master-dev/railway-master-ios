@@ -581,11 +581,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // "not real" cue in the CI #213 tour photos). The range is
         // capped at ~250 m so the shadow map stays detailed around
         // the line instead of covering the whole visible distance.
-        if #available(iOS 26.0, *) {
-            var sunlightShadow = DirectionalLightComponent.Shadow()
-            sunlightShadow.shadowProjection = .automatic(maximumDistance: 250)
-            sunlight.components.set(sunlightShadow)
-        }
+        // DIAG6 (throwaway): shadow component intentionally NOT
+        // set — discriminates shadow vs geometry for the dark
+        // bands seen on the track in tour photos.
         // quality25 (D): the orientation this replaces —
         // simd_quatf(angle: -.pi/3.6, axis: (-0.6, 0.8, -0.3)) —
         // rotates the light's forward vector [0, 0, -1] to
@@ -1616,7 +1614,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 for (trackIndex, lateral) in trackOffsets.enumerated() {
                     let centerX = sample.x + lateral * cos(sample.heading)
                     let centerZ = sample.z + lateral * sin(sample.heading)
-                    addSurfaceBox(parent: world, name: "ballast-\(index)-\(trackIndex)", size: SIMD3<Float>(3.2, 0.15, segmentLength), position: SIMD3<Float>(centerX, sample.elevationM - 0.01, centerZ), color: UIColor(red: 0.25, green: 0.26, blue: 0.25, alpha: 1), roughness: 0.96, orientation: trackOrientation)
+                    addSurfaceBox(parent: world, name: "ballast-\(index)-\(trackIndex)", size: SIMD3<Float>(3.2, 0.15, segmentLength), position: SIMD3<Float>(centerX, sample.elevationM - 0.01, centerZ), color: UIColor(red: 1, green: 0, blue: 0, alpha: 1), roughness: 0.96, orientation: trackOrientation)
                     // Rails are no longer boxes: buildRailsAndShoulders
                     // extrudes a true head/web/base profile along the
                     // line (see below).
