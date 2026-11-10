@@ -47,6 +47,11 @@ enum StopScoringRouteAdapter {
             if trip.variant == .depotTransfer {
                 // A yard stop zone is the canonical 2 km depot spur, not a passenger platform.
                 platformBounds = (0, routeLengthM)
+            } else if trip.variant == .zooLine || trip.variant == .parkLine {
+                // The zoo / theme park terminals are synthetic stops
+                // outside the canonical plan; score them against a
+                // 120 m terminal platform zone.
+                platformBounds = (max(0, routeLengthM - 120), routeLengthM)
             } else if trip.variant == .branchShuttle,
                       stop.stationID == plan.network.branchJunctionStationID {
                 // The junction's canonical platform is on the main line; project its PLACEHOLDER length
@@ -92,6 +97,12 @@ enum StopScoringRouteAdapter {
                         return sourceTrackID == "branch_line" ? sourceChainage : sourceChainage - (junctionChainageM ?? stationRawChainageM)
                     case .depotTransfer:
                         return sourceChainage
+                    case .zooLine:
+                        // The zoo route's zero is 大野 (mainline chainage 50,710 m).
+                        return sourceChainage - 50_710
+                    case .parkLine:
+                        // The park route's zero is 館川 (mainline chainage 55,161 m).
+                        return sourceChainage - 55_161
                     }
                 }
                 let progressA = routeProgress(rawStart)
