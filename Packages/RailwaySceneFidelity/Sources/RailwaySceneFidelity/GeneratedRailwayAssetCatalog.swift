@@ -15,6 +15,13 @@ public enum RailwayGenerated3DAsset: String, CaseIterable, Codable, Sendable {
     case station5Track4Platform = "station_5track_4platform"
     case stationTerminal = "station_terminal"
     case suburbanCorridorModules = "suburban_corridor_modules"
+    /// own.guest E231 (CC BY 4.0), repainted as the TOO RAILWAY
+    /// commuter train; nodes car_1...car_10, see the integration
+    /// notes in workspace/models/e231_sketchfab/.
+    case tooE231 = "too_e231_10car"
+    /// own.guest 117 series "Sun Liner" (CC BY 4.0), repainted as
+    /// the TOO RAILWAY limited-express train; nodes car_1...car_8.
+    case too117 = "too_117_8car"
 }
 
 public struct RailwayGeneratedStationLayout: Codable, Hashable, Sendable, Identifiable {
