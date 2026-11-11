@@ -23,6 +23,11 @@ public struct SceneTrafficActorInput: Codable, Hashable, Sendable, Identifiable 
     public let wheelRotationRadians: Double
     public let walkCycleRadians: Double
     public let verticalOffsetM: Double
+    /// Raw service-type value for train actors (e.g. "limitedExpress"),
+    /// bridged as a plain string so this package stays decoupled from
+    /// the traffic simulation package. Renderers use it to pick a
+    /// vehicle model; nil for non-train actors.
+    public let trainServiceRawValue: String?
 
     public init(
         id: String,
@@ -37,7 +42,8 @@ public struct SceneTrafficActorInput: Codable, Hashable, Sendable, Identifiable 
         isWalking: Bool = false,
         wheelRotationRadians: Double = 0,
         walkCycleRadians: Double = 0,
-        verticalOffsetM: Double = 0
+        verticalOffsetM: Double = 0,
+        trainServiceRawValue: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -52,6 +58,7 @@ public struct SceneTrafficActorInput: Codable, Hashable, Sendable, Identifiable 
         self.wheelRotationRadians = wheelRotationRadians
         self.walkCycleRadians = walkCycleRadians
         self.verticalOffsetM = verticalOffsetM
+        self.trainServiceRawValue = trainServiceRawValue
     }
 }
 
@@ -70,6 +77,8 @@ public struct SceneTrafficActorPose: Codable, Hashable, Sendable, Identifiable {
     public let isWalking: Bool
     public let wheelRotationRadians: Double
     public let walkCycleRadians: Double
+    /// Raw service-type value for train actors; see SceneTrafficActorInput.
+    public let trainServiceRawValue: String?
 }
 
 /// Projects route-relative actor poses using the exact frame used by the track and platform meshes.
@@ -101,7 +110,8 @@ public enum SceneTrafficActorProjector {
                 speedMps: actor.speedMps, lengthM: actor.lengthM,
                 isVisible: actor.isVisible, isWalking: actor.isWalking,
                 wheelRotationRadians: actor.wheelRotationRadians,
-                walkCycleRadians: actor.walkCycleRadians
+                walkCycleRadians: actor.walkCycleRadians,
+                trainServiceRawValue: actor.trainServiceRawValue
             )
         }
     }
