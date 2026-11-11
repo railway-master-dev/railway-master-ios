@@ -55,6 +55,14 @@
     {
       "file": "HighFidelityAssets/driver_cab_interior_detailed.glb",
       "purpose": "Selected owner-provided detailed fictional cab interior; Z-up converted to Y-up in the scene; per-primitive uniform vertex colors preserved."
+    },
+    {
+      "file": "too_e231_10car.glb",
+      "purpose": "Player commuter train exterior (10 cars, nodes car_1..car_10): based on 'JR東日本E231系電車' by own.guest (Sketchfab), CC BY 4.0; repainted to the fictional TOO RAILWAY livery, JR marks removed. Credit in app."
+    },
+    {
+      "file": "too_117_8car.glb",
+      "purpose": "Player limited-express train exterior (8 cars, nodes car_1..car_8): based on '117系 サンライナー' by own.guest (Sketchfab), CC BY 4.0; repainted to the fictional TOO RAILWAY livery, Sun Liner marks removed. Credit in app."
     }
   ],
   "integration": "Native loader maps COLOR_0 to per-primitive SimpleMaterial colors. Selected detailed vehicle/cab models use Z-up to Y-up conversion at the scene node; all source dimensions are in metres. Existing procedural vehicle remains a fallback.",
@@ -66,8 +74,9 @@
     ],
     "addOnPackAudit": "The supplied add-on archive contained 27 GLBs and 21 PNGs; 10 base GLBs duplicated the earlier base pack. Only 2 of its 17 distinct high-fidelity models were bundled. Its README says 14 models, while the directory contains 17.",
     "omittedAddOnContent": "The other 15 distinct high-fidelity GLBs, the 10 duplicate base GLBs, and all 21 PNGs are not included.",
-    "thirdPartyMeshesIncluded": false,
+    "thirdPartyMeshesIncluded": true,
     "externalResourceURICount": 0,
-    "commercialRights": "No third-party model, external texture, or third-party URI is bundled. Source terms and commercial exclusivity have not been independently established; review before distribution."
+    "commercialRights": "Bundled third-party content is limited to the two CC BY 4.0 train models credited in the app; no other third-party model, external texture, or third-party URI is bundled.",
+    "thirdPartyModels": "Two player-train exteriors by own.guest (Sketchfab), CC BY 4.0, repainted to a fictional livery with original operator marks removed; attribution is shown in the app. All other models remain project-generated as described above."
   }
 }
