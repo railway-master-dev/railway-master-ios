@@ -2616,7 +2616,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         whiteLampMat.emissiveColor = .init(color: UIColor(red: 0.95, green: 0.96, blue: 0.98, alpha: 1))
         whiteLampMat.emissiveIntensity = 1.8
         let sensorMat = Self.pbr(UIColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1), metallic: 0.3, roughness: 0.55)
-        for crossing in computeCrossingCenters(route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
+        for crossing in crossingCenters {
             let d2 = crossing - 130
             if d2 < 60 { continue }
             let base = groundOffsetPoint(sample(at: d2), lateral: signLat * 1.7)
@@ -4218,7 +4218,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             spark = existing
         } else {
             var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(color: UIColor(red: 0.75, green: 0.85, blue: 1.0, alpha: 1))
+            material.baseColor = .init(tint: UIColor(red: 0.75, green: 0.85, blue: 1.0, alpha: 1))
             material.emissiveColor = .init(color: UIColor(red: 0.65, green: 0.78, blue: 1.0, alpha: 1))
             material.emissiveIntensity = 6
             let made = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.15), materials: [material])
