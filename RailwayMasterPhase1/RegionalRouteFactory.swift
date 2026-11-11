@@ -99,8 +99,9 @@ private struct GeneratedCurveRun {
 /// Radii follow the BVE measurements (Toyoko R200-2000, Tojo R300-10000):
 /// tight in the city and broad across the rural stretches, so the curve
 /// is readable in the forward view instead of everything looking
-/// straight. Cant stays 55-105 mm everywhere: the equilibrium cant for
-/// R300 at its 50 km/h curve limit is about 98 mm.
+/// straight. Cant stays 55-105 mm everywhere, and since the 2026-11-11
+/// recalibration the curve limit credits that fitted cant plus 55 mm
+/// of cant deficiency (passenger practice).
 private enum MainlineAlignmentZone {
     case urbanCore
     case fringe
@@ -110,9 +111,9 @@ private enum MainlineAlignmentZone {
 
     var radiusRange: ClosedRange<Double> {
         switch self {
-        case .urbanCore: return 300...800
-        case .fringe: return 400...1_000
-        case .suburban: return 600...1_600
+        case .urbanCore: return 300...700
+        case .fringe: return 400...900
+        case .suburban: return 550...1_400
         case .rural: return 1_600...4_000
         case .coastal: return 800...2_000
         }
@@ -120,11 +121,27 @@ private enum MainlineAlignmentZone {
 
     var tangentRange: ClosedRange<Double> {
         switch self {
-        case .urbanCore: return 300...900
-        case .fringe: return 400...1_200
-        case .suburban: return 650...2_450
+        case .urbanCore: return 200...650
+        case .fringe: return 350...1_000
+        case .suburban: return 550...1_800
         case .rural: return 1_200...3_000
         case .coastal: return 800...2_000
+        }
+    }
+
+    /// Line speed cap for the zone (2026-11-11, user request: a big
+    /// private railway profile — the city belt winds at 80 km/h at
+    /// most, the hub fringe allows 90, and the limit is only released
+    /// once the line is clear of the city). Rural and coastal zones
+    /// sit at the 110 base-table maximum, so the cap is a no-op
+    /// there; the curve limit still binds on their tighter radii.
+    var speedCapKmh: Double {
+        switch self {
+        case .urbanCore: return 80
+        case .fringe: return 90
+        case .suburban: return 80
+        case .rural: return 110
+        case .coastal: return 110
         }
     }
 
@@ -144,9 +161,9 @@ private enum MainlineAlignmentZone {
 
     var circularRange: ClosedRange<Double> {
         switch self {
-        case .urbanCore: return 250...800
-        case .fringe: return 350...1_000
-        case .suburban: return 650...2_250
+        case .urbanCore: return 220...700
+        case .fringe: return 300...900
+        case .suburban: return 550...1_800
         case .rural: return 1_200...3_000
         case .coastal: return 600...1_800
         }
@@ -521,7 +538,16 @@ enum RegionalRouteFactory {
             let localSection = max(0, Int(floor(localM / step)))
             let nearStation = stations.contains { abs($0.positionM - midpointM) < 720 }
             let baseLimit = [75.0, 90.0, 100.0, 85.0, 110.0, 95.0][localSection % 6]
-            let curveLimit = run.map { min(baseLimit, max(40.0, 3.6 * sqrt(max(1, 0.65 * $0.radiusM)))) } ?? baseLimit
+            // Curve limit from the cant equilibrium (2026-11-11,
+            // recalibrated to passenger practice at the user's
+            // request): v = 3.6 * sqrt(g * R * (cant + deficiency)
+            // / gauge), crediting each curve's own fitted cant plus
+            // 55 mm of cant deficiency on the 1,067 mm gauge. R600
+            // with 90 mm cant now allows about 102 km/h, where the
+            // old flat 0.65 factor (a 71 mm total allowance) gave 71.
+            let curveLimit = run.map { curve in
+                min(baseLimit, max(40.0, 3.6 * sqrt(max(1, 9.8 * (curve.cantMm + 55) / 1_067 * curve.radiusM))))
+            } ?? baseLimit
             var speedLimit = nearStation ? min(curveLimit, 55.0) : curveLimit
             if variant == .zooLine {
                 // Zoo line zones (up layout): approach 45, the enclosure
@@ -532,6 +558,14 @@ enum RegionalRouteFactory {
             }
             if variant == .parkLine {
                 speedLimit = min(speedLimit, 45)
+            }
+            // City-belt speed cap (2026-11-11): on the mainline the
+            // zone cap binds over the cycling base table, so the run
+            // out of the terminus stays at 80 km/h through the winding
+            // urban and suburban zones, 90 through the hub fringe,
+            // and only opens up on the rural and coastal stretches.
+            if activeRegion?.kind == .mainline {
+                speedLimit = min(speedLimit, mainlineZone(at: localM).speedCapKmh)
             }
             // Mainline gradients follow the zone amplitude (city
             // +/-25 permille down to coast/rural +/-5-6), blended at
