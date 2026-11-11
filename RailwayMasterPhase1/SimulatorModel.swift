@@ -38,6 +38,58 @@ enum SimulationRunPhase: String, Sendable {
 }
 
 @MainActor
+/// Passing waits （待避）, 2026-11-11 (user request): at the three
+/// multi-track stations a low-priority train (rapid / semi-express /
+/// local) pulls into the outer siding platform and waits while a
+/// faster train passes on the main line. Priorities follow the
+/// service hierarchy (fewer stops = higher priority). The siding
+/// runs outside the station platform (its outer face serves the
+/// siding), 9.64 m from the route centre; the player crosses the
+/// turnout fans at 45 km/h under a caution home signal （場内・注意）.
+enum PassingWaitPlanner {
+    /// The loop-equipped stations: 東央千原 (major 5-track),
+    /// 東央佐原 and 木更川 (passing 3-track layouts) plus 秋水・
+    /// 日原・上総二ノ宮・大野, added 2026-11-11 when the user
+    /// approved building the diagram properly — the loops are
+    /// spaced along the whole line so an overtake can always be
+    /// absorbed nearby. （西立河 was the other candidate for the
+    /// western gap, but its throat sits inside the tunnel section,
+    /// so 日原 carries that slot.)
+    static let stationIDs: Set<String> = ["S03", "S04", "S06", "S07", "S09", "S11", "S12", "S14", "S15", "S17", "S19", "S22", "S23", "S24", "S27"]
+    /// Platform half length (105 m) plus the 340 m turnout fan.
+    static let sidingHalfSpanM = 445.0
+    /// Diverging speed over the turnout fans (12号分岐の目安).
+    static let turnoutLimitKmh = 45.0
+
+    static func priority(of category: ServiceCategory) -> Int {
+        switch category {
+        case .limitedExpress: return 0
+        case .rapidExpress: return 1
+        case .express: return 2
+        case .rapid: return 3
+        case .semiExpress: return 4
+        case .local: return 5
+        }
+    }
+
+    static func priority(of type: TrainServiceType) -> Int {
+        switch type {
+        case .limitedExpress: return 0
+        case .rapidExpress: return 1
+        case .express: return 2
+        case .rapid: return 3
+        case .semiExpress: return 4
+        case .local: return 5
+        }
+    }
+
+    /// Only the lower-priority services wait, and only for a
+    /// strictly faster passer.
+    static func shouldRoute(player: ServiceCategory, passer: TrainServiceType) -> Bool {
+        priority(of: player) >= 3 && priority(of: passer) < priority(of: player)
+    }
+}
+
 final class SimulatorModel: ObservableObject {
     private static let blockLengthM = 500.0
     private static let safetyMarginM = 18.0
@@ -196,6 +248,18 @@ final class SimulatorModel: ObservableObject {
     private var appliedTimetableDepartureDelaySeconds = 0
     private var trafficEngine: TrafficSimulationEngine?
     private var trafficScenario: TrafficScenario?
+    /// Active passing wait: the player is routed to the siding at
+    /// `stationCenterM` (travel frame) until the passer clears.
+    private struct PassingWaitState {
+        let stationID: String
+        let stationCenterM: Double
+        let stationPathM: Double
+        let passerID: String
+        let passerType: TrainServiceType
+        let latchedAtSeconds: Double
+    }
+    private var passingWait: PassingWaitState?
+    @Published private(set) var passingWaitMessage: String?
     private var maintenanceEffects = MaintenanceTrainEffects.neutral(trainID: "PLAYER")
     private var atsSystem: EducationalATSConfirmation?
     private var protectionSession: FictionalLiveProtectionSession?
@@ -399,7 +463,31 @@ final class SimulatorModel: ObservableObject {
             }
         }
 
-        let signalContext = nextSignalContext()
+        updatePassingWait()
+        var signalContext = nextSignalContext()
+        // Siding entry rule (2026-11-11, user specification): while
+        // routed into the siding the home signal shows caution
+        // （場内・注意）; while held at the platform the departure
+        // side shows stop until the passer clears. Only ever
+        // restricts a green / yellow-green reading, never relaxes.
+        if let wait = passingWait, let reading = signalContext.reading,
+           reading.aspect == .green || reading.aspect == .yellowGreen,
+           let block = signalContext.block, abs(block.startM - wait.stationCenterM) < 1_900 {
+            let overrideAspect: ThreeAspectSignal?
+            if passingWaitHolding {
+                overrideAspect = .red
+            } else if engine.positionM < wait.stationCenterM - 30 {
+                overrideAspect = .yellow
+            } else {
+                overrideAspect = nil
+            }
+            if let overrideAspect {
+                signalContext = (
+                    reading: BlockSignalReading(blockID: reading.blockID, aspect: overrideAspect, blockStartM: reading.blockStartM, label: reading.label),
+                    block: signalContext.block
+                )
+            }
+        }
         if let reading = signalContext.reading,
            reading.aspect != .green,
            lastATSProtectedBlockID != reading.blockID {
@@ -455,7 +543,7 @@ final class SimulatorModel: ObservableObject {
             )
         } else if waitingForScheduledDeparture {
             effectiveControls = TrainControls(throttleNotch: 0, brakeNotch: 7)
-        } else if stationHold || maintenanceEffects.departureHeld || activeIncidentEffects.departureHeld {
+        } else if stationHold || passingWaitHolding || maintenanceEffects.departureHeld || activeIncidentEffects.departureHeld {
             effectiveControls = TrainControls(throttleNotch: 0, brakeNotch: max(1, controls.brakeNotch), emergencyBrake: false)
         } else {
             effectiveControls = controls
@@ -500,6 +588,93 @@ final class SimulatorModel: ObservableObject {
         advanceGameModeSessionFromHost()
         scheduleAutomaticApproachAnnouncement()
         advanceScheduledAudio(to: simulationTime)
+    }
+
+    /// Whether the passing wait is holding the player at the
+    /// platform (stopped, passer not yet clear of the station).
+    private var passingWaitHolding: Bool {
+        guard let wait = passingWait else { return false }
+        return abs(engine.positionM - wait.stationCenterM) <= Self.arrivalToleranceM && engine.speedMps <= 0.5
+    }
+
+    private func serviceTypeName(_ type: TrainServiceType) -> String {
+        switch type {
+        case .limitedExpress: return "特急"
+        case .rapidExpress: return "快速急行"
+        case .express: return "急行"
+        case .rapid: return "快速"
+        case .semiExpress: return "準急"
+        case .local: return "各停"
+        }
+    }
+
+    /// Passing-wait state machine, evaluated once per tick before
+    /// the signal context: latch when a faster train is closing on
+    /// a multi-track station the player is about to stop at, release
+    /// when it has cleared the station (with fail-safes so the
+    /// player can never be trapped).
+    private func updatePassingWait() {
+        let mainLength = (regionalPlan?.network.mainlineLengthKm ?? 60) * 1_000
+        if let wait = passingWait {
+            var release = simulationTime - wait.latchedAtSeconds > 420
+            if let passer = trafficSnapshot?.trains.first(where: { $0.id == wait.passerID }) {
+                let cleared = travelDirection == .up
+                    ? passer.positionM - 80 > wait.stationPathM + 40
+                    : passer.positionM + 80 < wait.stationPathM - 40
+                if cleared { release = true }
+            } else if trafficSnapshot != nil {
+                release = true
+            }
+            let leftBehind = engine.positionM > wait.stationCenterM + PassingWaitPlanner.sidingHalfSpanM + 80
+            let teleportedAway = engine.positionM < wait.stationCenterM - 3_400
+            if release || leftBehind || teleportedAway {
+                passingWait = nil
+                passingWaitMessage = nil
+            } else {
+                passingWaitMessage = passingWaitHolding
+                    ? "通過待ち：\(serviceTypeName(wait.passerType))の通過を待っています"
+                    : "側線に進入します（分岐制限45km/h）"
+            }
+            return
+        }
+        guard !demoDriveEnabled else { return }
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        guard PassingWaitPlanner.priority(of: serviceCategory) >= 3 else { return }
+        guard activeStops.indices.contains(nextStopIndex) else { return }
+        let stop = activeStops[nextStopIndex]
+        guard PassingWaitPlanner.stationIDs.contains(stop.stationID) else { return }
+        let distance = stop.positionM - engine.positionM
+        guard distance > -40, distance < 3_000 else { return }
+        guard let snapshot = trafficSnapshot else { return }
+        let stationPathM: Double
+        if routeVariant == .mainline {
+            stationPathM = travelDirection == .up ? stop.positionM : mainLength - stop.positionM
+        } else if travelDirection == .up {
+            guard stop.positionM < mainLength else { return }
+            stationPathM = stop.positionM
+        } else {
+            let branchLength = (regionalPlan?.network.branchLengthKm ?? 8) * 1_000
+            guard stop.positionM >= branchLength else { return }
+            stationPathM = mainLength - (stop.positionM - branchLength)
+        }
+        let myTrack = travelDirection == .up ? "main-up" : "main-down"
+        for train in snapshot.trains where train.trackID == myTrack && train.phase == .running {
+            guard PassingWaitPlanner.shouldRoute(player: serviceCategory, passer: train.serviceType) else { continue }
+            let gap = travelDirection == .up ? stationPathM - train.positionM : train.positionM - stationPathM
+            guard gap > 100, gap < 3_400 else { continue }
+            let eta = gap / max(train.speedMps, 6.0)
+            guard eta < 260 else { continue }
+            passingWait = PassingWaitState(
+                stationID: stop.stationID,
+                stationCenterM: stop.positionM,
+                stationPathM: stationPathM,
+                passerID: train.id,
+                passerType: train.serviceType,
+                latchedAtSeconds: simulationTime
+            )
+            passingWaitMessage = "側線に進入します（分岐制限45km/h）"
+            return
+        }
     }
 
     private func nextSignalContext() -> (reading: BlockSignalReading?, block: RailwayBlock?) {
@@ -780,7 +955,7 @@ final class SimulatorModel: ObservableObject {
         let mainLength = (regionalPlan?.network.mainlineLengthKm ?? 60) * 1_000
         let branchLength = (regionalPlan?.network.branchLengthKm ?? 8) * 1_000
         let routePosition = min(max(engine.positionM, 0), route.distanceM)
-        let trackID: String
+        var trackID: String
         let position: Double
         let direction: TrafficDirection
         switch routeVariant {
@@ -820,6 +995,14 @@ final class SimulatorModel: ObservableObject {
             position = travelDirection == .up ? routePosition : 2_000 - routePosition
             direction = travelDirection == .up ? .increasing : .decreasing
         }
+        // Passing wait: inside the siding span the player reports
+        // the siding track, so the traffic engine's per-track
+        // separation no longer holds the faster train behind.
+        if let wait = passingWait,
+           abs(routePosition - wait.stationCenterM) <= PassingWaitPlanner.sidingHalfSpanM {
+            if trackID == "main-up" { trackID = "main-up-siding" }
+            if trackID == "main-down" { trackID = "main-down-siding" }
+        }
         guard position.isFinite, position >= 0 else { return nil }
         return SharedTrainState(
             trainID: "PLAYER",
@@ -836,7 +1019,14 @@ final class SimulatorModel: ObservableObject {
         signalBlock: RailwayBlock?,
         brakingMultiplier: Double = 1
     ) -> Double {
-        let currentLimit = max(route.condition(at: engine.positionM).speedLimitKmh, 0)
+        var currentLimit = max(route.condition(at: engine.positionM).speedLimitKmh, 0)
+        // Turnout cap: while routed to the siding, the fan span is
+        // a 45 km/h diverging restriction (see targets below for
+        // the approach braking point).
+        if let wait = passingWait,
+           abs(engine.positionM - wait.stationCenterM) <= PassingWaitPlanner.sidingHalfSpanM {
+            currentLimit = min(currentLimit, PassingWaitPlanner.turnoutLimitKmh)
+        }
         var targets: [SafetyStopTarget] = []
         if activeStops.indices.contains(nextStopIndex) {
             let nextStop = activeStops[nextStopIndex]
@@ -860,6 +1050,22 @@ final class SimulatorModel: ObservableObject {
                 targets.append(restriction)
             }
             previousLimit = section.speedLimitKmh
+        }
+
+        if let wait = passingWait {
+            let spanStart = wait.stationCenterM - PassingWaitPlanner.sidingHalfSpanM
+            if engine.positionM < spanStart,
+               let turnoutTarget = try? SafetyStopTarget(identifier: "turnout-\(wait.stationID)", positionM: spanStart, targetSpeedKmh: PassingWaitPlanner.turnoutLimitKmh) {
+                targets.append(turnoutTarget)
+            }
+            // While held at the platform, a stop target just ahead
+            // of the train keeps the ATS pattern at zero until the
+            // passer clears (added only once stopped, so the
+            // station approach pattern is never distorted).
+            if passingWaitHolding,
+               let holdTarget = try? SafetyStopTarget(identifier: "passing-wait-hold", positionM: wait.stationCenterM + 12, targetSpeedKmh: 0) {
+                targets.append(holdTarget)
+            }
         }
 
         if let signal, let block = signalBlock, let aspectCap = signal.aspect.speedLimitKmh {
@@ -3226,7 +3432,13 @@ final class SimulatorModel: ObservableObject {
             minimumTrainGapM: source.minimumTrainGapM,
             minimumRoadVehicleGapM: source.minimumRoadVehicleGapM,
             passingVisualizationDistanceM: source.passingVisualizationDistanceM,
-            tracks: source.tracks,
+            tracks: source.tracks + [
+                // Siding tracks at the multi-track stations: same
+                // path and direction as the mains, offset outboard
+                // to the loop line beside the platform (9.64 m).
+                TrafficTrackDefinition(id: "main-up-siding", routePathID: "mainline", parallelGroupID: "mainline", direction: .increasing, lateralOffsetM: -9.64),
+                TrafficTrackDefinition(id: "main-down-siding", routePathID: "mainline", parallelGroupID: "mainline", direction: .decreasing, lateralOffsetM: 9.64)
+            ],
             roads: source.roads,
             platforms: source.platforms,
             trains: source.trains.map { plan in
