@@ -754,6 +754,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 buildRuralDressing(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 buildTreeLinesAndHills(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 buildStationCharacter(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                buildSpeedSigns(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                buildSignCatalog(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             }
             buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             if routeVariant != .zooLine && routeVariant != .parkLine {
@@ -830,7 +832,28 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         updatePantographSpark(speedKmh: speedKmh, time: simulationTime, inTunnel: route.condition(at: positionM).tunnelResistanceMultiplier > 1.01)
         updateGeneratedStationModel(positionM: positionM)
         let centerSample = sample(at: positionM)
-        let playerLateral: Float = travelDirection == .up ? -2.1 : 2.1
+        // Passing wait (2026-11-11): when the traffic snapshot
+        // reports the player on a siding track, the consist and
+        // the camera follow the fan profile out to the loop line
+        // (9.64 m) and back — each car by its own chainage, the
+        // way a real train threads the crossover.
+        let playerOnSiding = trafficSnapshot?.playerTrain?.trackID.hasSuffix("-siding") ?? false
+        func playerTrackLateral(at chainage: Double) -> Float {
+            let base: Float = travelDirection == .up ? -2.1 : 2.1
+            guard playerOnSiding else { return base }
+            let side: Float = base < 0 ? -1 : 1
+            for spec in throatFanSpecs() where abs(chainage - spec.center) <= spec.half + 340 {
+                if chainage < spec.center - spec.half {
+                    return side * throatFanLateral(u: (chainage - (spec.center - spec.half - 340)) / 340, tag: "in")
+                }
+                if chainage > spec.center + spec.half {
+                    return side * throatFanLateral(u: (chainage - (spec.center + spec.half)) / 340, tag: "out")
+                }
+                return side * Float(9.64)
+            }
+            return base
+        }
+        let playerLateral: Float = playerTrackLateral(at: positionM)
         let sample = RouteSample(
             distanceM: centerSample.distanceM,
             x: centerSample.x + playerLateral * cos(centerSample.heading),
@@ -846,7 +869,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let chainage = positionM - 9.75 - Double(consistIndex) * 19.5
             let carSample = self.sample(at: chainage)
             let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
-            let trackSide: Float = travelDirection == .up ? -2.1 : 2.1
+            let trackSide: Float = playerTrackLateral(at: chainage)
             model.root.position = SIMD3<Float>(
                 carSample.x + trackSide * carLateral.x, carSample.elevationM, carSample.z + trackSide * carLateral.z
             )
@@ -872,7 +895,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let frontBogieSample = self.sample(at: carChainage + 6.35)
             let rearBogieSample = self.sample(at: carChainage - 6.35)
             let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
-            let trackSide: Float = travelDirection == .up ? -2.1 : 2.1
+            let trackSide: Float = playerTrackLateral(at: carChainage)
             model.root.position = SIMD3<Float>(
                 carSample.x + trackSide * carLateral.x, carSample.elevationM, carSample.z + trackSide * carLateral.z
             )
@@ -2412,6 +2435,448 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
+    /// Speed restriction signs (2026-11-11, user check): the zoo
+    /// line had its 30 km/h signs, but the main line's restrictions
+    /// existed only in the ATS and the HUD — nothing stood beside
+    /// the track. Signs are now derived from the playable route's
+    /// own section limits: where the limit drops and stays down
+    /// (or drops by 20+ at once), a board shows the new limit
+    /// rounded down to a multiple of five; where a signed
+    /// restriction ends, a release board follows. They stand on
+    /// the left of the running track, facing the approaching
+    /// train, clear of the station spans.
+    private func buildSpeedSigns(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
+        let sections = route.sections
+        guard sections.count > 2 else { return }
+        let postMat = Self.pbr(UIColor(red: 0.55, green: 0.56, blue: 0.58, alpha: 1), metallic: 0.5, roughness: 0.5)
+        var materials: [Int: PhysicallyBasedMaterial] = [:]
+        func signMaterial(_ value: Int) -> PhysicallyBasedMaterial {
+            if let cached = materials[value] { return cached }
+            var m = Self.texturedPBR(.white, roughness: 0.55, textureName: value == 0 ? "scenery_speed_release" : "scenery_speed_\(value)")
+            m.faceCulling = .none
+            materials[value] = m
+            return m
+        }
+        let lateral: Float = travelDirection == .up ? -4.0 : 4.0
+        func placeSign(value: Int, at d: Double) {
+            if stationModelPlacements.contains(where: { abs($0.chainageM - d) < 150 }) { return }
+            let base = groundOffsetPoint(sample(at: d), lateral: lateral)
+            let yaw = simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "speedsign-pole-\(value)-\(Int(d))", size: SIMD3<Float>(0.09, 2.4, 0.09), position: SIMD3<Float>(base.x, base.y + 1.2, base.z), material: postMat, orientation: yaw)
+            let board = addBox(parent: world, name: "speedsign-\(value)-\(Int(d))", size: SIMD3<Float>(0.85, 0.85, 0.04), position: SIMD3<Float>(base.x, base.y + 2.15, base.z), material: signMaterial(value), orientation: yaw)
+            board.orientation = board.orientation * simd_quatf(angle: Float.pi, axis: SIMD3<Float>(0, 1, 0))
+        }
+        var activeValue: Int? = nil
+        for i in 1..<sections.count {
+            let prev = sections[i - 1].speedLimitKmh
+            let cur = sections[i].speedLimitKmh
+            let next: Double? = i + 1 < sections.count ? sections[i + 1].speedLimitKmh : nil
+            if cur < prev - 0.5 {
+                let persists = next == nil || next! <= cur + 0.5 || prev - cur >= 20
+                if persists {
+                    let value = max(40, min(110, Int(cur / 5) * 5))
+                    if activeValue == nil || value < activeValue! {
+                        placeSign(value: value, at: sections[i].startM - 2)
+                        activeValue = value
+                    }
+                }
+            } else if cur > prev + 0.5, activeValue != nil {
+                let persists = next == nil || next! >= cur - 0.5
+                if persists {
+                    placeSign(value: 0, at: sections[i].startM - 2)
+                    activeValue = nil
+                }
+            }
+        }
+    }
+
+    /// Sign catalog (2026-11-11, user request: every sign on the
+    /// isok.jp railway-system catalog page). Part 1 — lineside:
+    /// gradient posts at sustained gradient changes, curve posts
+    /// and transition markers from the route's own curve data,
+    /// hectometre posts （距離標・丙号）, land boundary posts
+    /// （用地界標）, lineside telephones （連絡用屋外子）, catenary
+    /// auto-tension weight stacks （自動張力調整装置）, train
+    /// approach lamps at crossings （列車接近知らせ灯）, wind
+    /// regulation boards on the coastal windows （風・始端/終端標）
+    /// and catenary end boards （架線終端標識）. Part 2 — stations
+    /// and signals: see buildSignCatalogStations.
+    private func buildSignCatalog(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
+        let up = travelDirection == .up
+        let signLat: Float = up ? -4.0 : 4.0
+        let postMat = Self.pbr(UIColor(red: 0.55, green: 0.56, blue: 0.58, alpha: 1), metallic: 0.5, roughness: 0.5)
+        var matCache: [String: PhysicallyBasedMaterial] = [:]
+        func mat(_ texture: String) -> PhysicallyBasedMaterial {
+            if let cached = matCache[texture] { return cached }
+            var m = Self.texturedPBR(.white, roughness: 0.55, textureName: texture)
+            m.faceCulling = .none
+            matCache[texture] = m
+            return m
+        }
+        func postBoard(_ d: Double, _ lat: Float, _ texture: String, w: Float = 0.85, h: Float = 0.85, top: Float = 2.15, tag: String) {
+            let base = groundOffsetPoint(sample(at: d), lateral: lat)
+            let yaw = simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "signpost-\(tag)", size: SIMD3<Float>(0.09, top, 0.09), position: SIMD3<Float>(base.x, base.y + top / 2, base.z), material: postMat, orientation: yaw)
+            let b = addBox(parent: world, name: "sign-\(tag)", size: SIMD3<Float>(w, h, 0.04), position: SIMD3<Float>(base.x, base.y + top - h / 2 + 0.08, base.z), material: mat(texture), orientation: yaw)
+            b.orientation = b.orientation * simd_quatf(angle: Float.pi, axis: SIMD3<Float>(0, 1, 0))
+        }
+        func nearStation(_ d: Double, _ margin: Double = 150) -> Bool {
+            stationModelPlacements.contains(where: { abs($0.chainageM - d) < margin })
+        }
+
+        // -- Gradient posts: at sustained changes of 3‰ or more.
+        let gradientSet = [0, 5, 10, 15, 20, 25, 30, 35]
+        let sections = route.sections
+        for i in 1..<sections.count {
+            let prev = sections[i - 1].gradientPermille
+            let cur = sections[i].gradientPermille
+            if abs(cur - prev) >= 3 {
+                let persists = i + 1 >= sections.count || abs(sections[i + 1].gradientPermille - cur) < 3
+                if persists && !nearStation(sections[i].startM) {
+                    let v = Int(abs(cur).rounded())
+                    let shown = gradientSet.min(by: { abs($0 - v) < abs($1 - v) }) ?? 0
+                    postBoard(sections[i].startM - 2, signLat, "scenery_sign_gradient_\(shown)", tag: "gradient-\(Int(sections[i].startM))")
+                }
+            }
+        }
+
+        // -- Curve posts （曲線標） and transition markers （逓減標）.
+        var seenCurves = Set<Int>()
+        for section in sections {
+            guard let transition = section.curveTransition, let radius = section.curveRadiusM else { continue }
+            let key = Int(transition.startM / 10)
+            if seenCurves.contains(key) { continue }
+            seenCurves.insert(key)
+            let rSet = [300, 400, 500, 600, 800, 1000, 1200, 1600, 2000]
+            let shownR = rSet.min(by: { abs($0 - Int(radius)) < abs($1 - Int(radius)) }) ?? 800
+            if !nearStation(transition.startM) {
+                postBoard(transition.startM - 2, signLat, "scenery_sign_curve_\(shownR)", tag: "curve-\(key)")
+                postBoard(transition.endM + 2, signLat, "scenery_sign_curve_\(shownR)", tag: "curve-end-\(key)")
+                postBoard(transition.startM - 2, -signLat, "scenery_sign_transition", w: 0.5, h: 0.5, top: 1.5, tag: "transition-\(key)")
+            }
+        }
+
+        // -- Hectometre posts, boundary posts, telephones (batched).
+        var postBatch = MeshBatchBuilder()
+        let phoneMat = Self.pbr(UIColor(red: 0.42, green: 0.44, blue: 0.46, alpha: 1), metallic: 0.3, roughness: 0.6)
+        var d = 100.0
+        while d < route.distanceM - 60 {
+            let s = sample(at: d)
+            if Int(d) % 1000 != 0 {
+                let p = groundOffsetPoint(s, lateral: -signLat * 1.1)
+                postBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.27, p.z), size: SIMD3<Float>(0.12, 0.55, 0.12), yaw: -s.heading)
+            }
+            if Int(d) % 200 == 0 {
+                let side: Float = (Int(d / 200) % 2 == 0) ? -1 : 1
+                let p = groundOffsetPoint(s, lateral: side * 12.0)
+                postBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.35, p.z), size: SIMD3<Float>(0.15, 0.7, 0.15), yaw: -s.heading)
+            }
+            d += 100
+        }
+        if let mesh = postBatch.build(name: "sign-hectometre-posts", material: concreteMaterial) { world.addChild(mesh) }
+        var phoneD = 1_000.0
+        while phoneD < route.distanceM - 100 {
+            if !nearStation(phoneD, 220) {
+                let base = groundOffsetPoint(sample(at: phoneD), lateral: signLat * 1.2)
+                let yaw = simd_quatf(angle: -sample(at: phoneD).heading, axis: SIMD3<Float>(0, 1, 0))
+                _ = addBox(parent: world, name: "sign-phone-post-\(Int(phoneD))", size: SIMD3<Float>(0.08, 1.5, 0.08), position: SIMD3<Float>(base.x, base.y + 0.75, base.z), material: postMat, orientation: yaw)
+                _ = addBox(parent: world, name: "sign-phone-\(Int(phoneD))", size: SIMD3<Float>(0.42, 0.62, 0.24), position: SIMD3<Float>(base.x, base.y + 1.55, base.z), material: phoneMat, orientation: yaw)
+            }
+            phoneD += 2_000
+        }
+
+        // -- Catenary auto-tension weight stacks every ~1,500 m.
+        var tensionD = 750.0
+        while tensionD < route.distanceM - 100 {
+            if !nearStation(tensionD, 200) {
+                let base = groundOffsetPoint(sample(at: tensionD), lateral: signLat * 1.45)
+                let yaw = simd_quatf(angle: -sample(at: tensionD).heading, axis: SIMD3<Float>(0, 1, 0))
+                for k in 0..<3 {
+                    _ = addBox(parent: world, name: "sign-tension-\(Int(tensionD))-\(k)", size: SIMD3<Float>(0.55, 0.32, 0.55), position: SIMD3<Float>(base.x, base.y + 0.35 + Float(k) * 0.34, base.z), material: concreteMaterial, orientation: yaw)
+                }
+                let pulley = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.1, radius: 0.3), materials: [postMat])
+                pulley.name = "sign-tension-pulley-\(Int(tensionD))"
+                pulley.position = SIMD3<Float>(base.x, base.y + 1.65, base.z)
+                pulley.orientation = yaw * simd_quatf(angle: Float.pi / 2, axis: SIMD3<Float>(0, 0, 1))
+                world.addChild(pulley)
+            }
+            tensionD += 1_500
+        }
+
+        // -- Train approach lamps before crossings.
+        var lampMat = Self.pbr(UIColor(red: 0.98, green: 0.72, blue: 0.25, alpha: 1), roughness: 0.35)
+        lampMat.emissiveColor = .init(color: UIColor(red: 0.98, green: 0.72, blue: 0.25, alpha: 1))
+        lampMat.emissiveIntensity = 2.0
+        var redLampMat = Self.pbr(UIColor(red: 0.92, green: 0.15, blue: 0.12, alpha: 1), roughness: 0.35)
+        redLampMat.emissiveColor = .init(color: UIColor(red: 0.92, green: 0.15, blue: 0.12, alpha: 1))
+        redLampMat.emissiveIntensity = 2.0
+        var whiteLampMat = Self.pbr(UIColor(red: 0.95, green: 0.96, blue: 0.98, alpha: 1), roughness: 0.35)
+        whiteLampMat.emissiveColor = .init(color: UIColor(red: 0.95, green: 0.96, blue: 0.98, alpha: 1))
+        whiteLampMat.emissiveIntensity = 1.8
+        let sensorMat = Self.pbr(UIColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1), metallic: 0.3, roughness: 0.55)
+        for crossing in computeCrossingCenters(route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
+            let d2 = crossing - 130
+            if d2 < 60 { continue }
+            let base = groundOffsetPoint(sample(at: d2), lateral: signLat * 1.7)
+            let yaw = simd_quatf(angle: -sample(at: d2).heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "sign-approachlamp-post-\(Int(crossing))", size: SIMD3<Float>(0.08, 2.3, 0.08), position: SIMD3<Float>(base.x, base.y + 1.15, base.z), material: postMat, orientation: yaw)
+            _ = addBox(parent: world, name: "sign-approachlamp-\(Int(crossing))", size: SIMD3<Float>(0.2, 0.2, 0.2), position: SIMD3<Float>(base.x, base.y + 2.35, base.z), material: lampMat, orientation: yaw)
+            // 2026-11-11 addendum (user chose the 5 visible items
+            // from the catalog re-check): special signal flasher
+            // （特殊信号発光機） before the crossing, crossing
+            // indicator lamp （踏切表示灯） past it, obstruction
+            // alarm board （踏切支障報知装置） at the roadside and
+            // obstacle detector posts （踏切障害物検知装置） at the
+            // four corners.
+            let flashD = crossing - 20
+            let flashBase = groundOffsetPoint(sample(at: flashD), lateral: signLat * 1.15)
+            let flashYaw = simd_quatf(angle: -sample(at: flashD).heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "sign-flasher-post-\(Int(crossing))", size: SIMD3<Float>(0.09, 2.6, 0.09), position: SIMD3<Float>(flashBase.x, flashBase.y + 1.3, flashBase.z), material: postMat, orientation: flashYaw)
+            _ = addBox(parent: world, name: "sign-flasher-head-\(Int(crossing))", size: SIMD3<Float>(0.32, 0.55, 0.22), position: SIMD3<Float>(flashBase.x, flashBase.y + 2.75, flashBase.z), material: sensorMat, orientation: flashYaw)
+            let flashLamp = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.09), materials: [redLampMat])
+            flashLamp.name = "sign-flasher-lamp-\(Int(crossing))"
+            let flashFront = groundOffsetPoint(sample(at: flashD - 0.18), lateral: signLat * 1.15)
+            flashLamp.position = SIMD3<Float>(flashFront.x, flashBase.y + 2.85, flashFront.z)
+            world.addChild(flashLamp)
+            let lampD = crossing + 4
+            let lampBase = groundOffsetPoint(sample(at: lampD), lateral: -signLat * 1.15)
+            let lampYaw = simd_quatf(angle: -sample(at: lampD).heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "sign-crosslamp-post-\(Int(crossing))", size: SIMD3<Float>(0.08, 2.4, 0.08), position: SIMD3<Float>(lampBase.x, lampBase.y + 1.2, lampBase.z), material: postMat, orientation: lampYaw)
+            _ = addBox(parent: world, name: "sign-crosslamp-head-\(Int(crossing))", size: SIMD3<Float>(0.22, 0.3, 0.18), position: SIMD3<Float>(lampBase.x, lampBase.y + 2.5, lampBase.z), material: sensorMat, orientation: lampYaw)
+            let crossLamp = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.07), materials: [whiteLampMat])
+            crossLamp.name = "sign-crosslamp-\(Int(crossing))"
+            let lampFront = groundOffsetPoint(sample(at: lampD + 0.16), lateral: -signLat * 1.15)
+            crossLamp.position = SIMD3<Float>(lampFront.x, lampBase.y + 2.5, lampFront.z)
+            world.addChild(crossLamp)
+            postBoard(crossing + 7, -signLat * 2.6, "scenery_sign_crossing_alarm", w: 0.62, h: 0.75, top: 1.75, tag: "crossalarm-\(Int(crossing))")
+            for cornerD in [crossing - 5, crossing + 5] {
+                for cornerLat in [Float(-3.4), Float(3.4)] {
+                    let cb = groundOffsetPoint(sample(at: cornerD), lateral: cornerLat)
+                    let cyaw = simd_quatf(angle: -sample(at: cornerD).heading, axis: SIMD3<Float>(0, 1, 0))
+                    _ = addBox(parent: world, name: "sign-detector-\(Int(cornerD))-\(Int(cornerLat))", size: SIMD3<Float>(0.12, 0.95, 0.12), position: SIMD3<Float>(cb.x, cb.y + 0.47, cb.z), material: postMat, orientation: cyaw)
+                    _ = addBox(parent: world, name: "sign-detector-head-\(Int(cornerD))-\(Int(cornerLat))", size: SIMD3<Float>(0.18, 0.25, 0.18), position: SIMD3<Float>(cb.x, cb.y + 1.05, cb.z), material: sensorMat, orientation: cyaw)
+                }
+            }
+        }
+
+        // -- Wind regulation boards on the coastal windows.
+        if routeVariant == .mainline || routeVariant == .throughBranch {
+            func travelD(_ c: Double) -> Double { up ? c : route.distanceM - c }
+            for window in [(38_500.0, 40_500.0), (43_600.0, 48_600.0), (53_000.0, 59_900.0)] {
+                let entry = min(travelD(window.0), travelD(window.1))
+                let exit = max(travelD(window.0), travelD(window.1))
+                postBoard(entry - 5, signLat, "scenery_sign_wind", tag: "wind-start-\(Int(window.0))")
+                postBoard(exit + 5, signLat, "scenery_sign_wind", tag: "wind-end-\(Int(window.0))")
+            }
+            // Catenary end boards near both line ends.
+            postBoard(150, signLat, "scenery_sign_catenary_end", top: 3.1, tag: "catenary-end-a")
+            postBoard(route.distanceM - 150, signLat, "scenery_sign_catenary_end", top: 3.1, tag: "catenary-end-b")
+        }
+
+        buildSignCatalogStations(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+    }
+
+    /// Sign catalog part 2 — stations and signals: station limit
+    /// boards （停車場標） at both ends of every station area,
+    /// approach boards （停車場接近標）, brake boards （ブレーキ標）
+    /// where the approach descends, train stop markers
+    /// （列車停止目標） for 4/6/8/10-car trains on every platform,
+    /// "long" boards at the wide stations, fouling-point markers
+    /// （車両接触限界標識） at the throats, departure reaction
+    /// boards （出発反応標識） at the departure signals, repeater
+    /// signals （中継信号機） before blind home signals, distant
+    /// signals （遠方信号機） on the fast approaches, route
+    /// indicators （進路表示機） at the junctions, shunting signals
+    /// （入換信号機） at the depot and junction throats, and the
+    /// depot boards （無閉塞禁止・車両停止標識・移動禁止）.
+    private func buildSignCatalogStations(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        let up = travelDirection == .up
+        let signLat: Float = up ? -4.0 : 4.0
+        let signalLat: Float = up ? -3.7 : 3.7
+        let postMat = Self.pbr(UIColor(red: 0.55, green: 0.56, blue: 0.58, alpha: 1), metallic: 0.5, roughness: 0.5)
+        let headMat = Self.pbr(UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1), metallic: 0.3, roughness: 0.6)
+        var matCache: [String: PhysicallyBasedMaterial] = [:]
+        func mat(_ texture: String) -> PhysicallyBasedMaterial {
+            if let cached = matCache[texture] { return cached }
+            var m = Self.texturedPBR(.white, roughness: 0.55, textureName: texture)
+            m.faceCulling = .none
+            matCache[texture] = m
+            return m
+        }
+        func litMat(_ color: UIColor) -> PhysicallyBasedMaterial {
+            var m = Self.pbr(color, roughness: 0.35)
+            m.emissiveColor = .init(color: color)
+            m.emissiveIntensity = 2.0
+            return m
+        }
+        let whiteLamp = litMat(UIColor(red: 0.95, green: 0.96, blue: 0.98, alpha: 1))
+        let redLamp = litMat(UIColor(red: 0.92, green: 0.15, blue: 0.12, alpha: 1))
+        let greenLamp = litMat(UIColor(red: 0.25, green: 0.85, blue: 0.35, alpha: 1))
+        let yellowLamp = litMat(UIColor(red: 0.98, green: 0.78, blue: 0.2, alpha: 1))
+        func postBoard(_ d: Double, _ lat: Float, _ texture: String, w: Float = 0.85, h: Float = 0.85, top: Float = 2.15, tag: String) {
+            let base = groundOffsetPoint(sample(at: d), lateral: lat)
+            let yaw = simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "signpost-\(tag)", size: SIMD3<Float>(0.09, top, 0.09), position: SIMD3<Float>(base.x, base.y + top / 2, base.z), material: postMat, orientation: yaw)
+            let b = addBox(parent: world, name: "sign-\(tag)", size: SIMD3<Float>(w, h, 0.04), position: SIMD3<Float>(base.x, base.y + top - h / 2 + 0.08, base.z), material: mat(texture), orientation: yaw)
+            b.orientation = b.orientation * simd_quatf(angle: Float.pi, axis: SIMD3<Float>(0, 1, 0))
+        }
+        func staticHead(_ d: Double, _ lat: Float, lamps: [PhysicallyBasedMaterial], tag: String) {
+            let base = groundOffsetPoint(sample(at: d), lateral: lat)
+            let yaw = simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "signpost-\(tag)", size: SIMD3<Float>(0.11, 3.6, 0.11), position: SIMD3<Float>(base.x, base.y + 1.8, base.z), material: postMat, orientation: yaw)
+            _ = addBox(parent: world, name: "signalhead-\(tag)", size: SIMD3<Float>(0.34, 0.34 + Float(lamps.count) * 0.3, 0.2), position: SIMD3<Float>(base.x, base.y + 3.6 + Float(lamps.count) * 0.15, base.z), material: headMat, orientation: yaw)
+            for (i, lamp) in lamps.enumerated() {
+                let lampEntity = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.075), materials: [lamp])
+                lampEntity.name = "signallamp-\(tag)-\(i)"
+                let back = groundOffsetPoint(sample(at: d - 0.16), lateral: lat)
+                lampEntity.position = SIMD3<Float>(back.x, base.y + 3.6 + Float(lamps.count - i) * 0.3 - 0.02, back.z)
+                world.addChild(lampEntity)
+            }
+        }
+
+        // -- Station boards from the placements (travel frame).
+        for placement in stationModelPlacements {
+            let c = placement.chainageM
+            let half = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2
+            postBoard(c - 430, signLat, "scenery_sign_station_limit", tag: "stationlimit-a-\(placement.stationId)")
+            postBoard(c + 430, signLat, "scenery_sign_station_limit", tag: "stationlimit-b-\(placement.stationId)")
+            postBoard(c - half - 350, signLat, "scenery_sign_station_approach", tag: "stationapproach-\(placement.stationId)")
+            // Brake board where the approach descends at 8‰ or more.
+            var gSum = 0.0
+            var gLen = 0.0
+            for s in route.sections {
+                let a = max(s.startM, c - 1_500)
+                let b = min(s.endM, c - 300)
+                if b > a { gSum += s.gradientPermille * (b - a); gLen += (b - a) }
+            }
+            if gLen > 0 && gSum / gLen <= -8 {
+                postBoard(c - half - 550, signLat, "scenery_sign_brake", tag: "brake-\(placement.stationId)")
+            }
+        }
+
+        // -- Stop markers and long boards on the platforms.
+        let topFull: Float = 0.3065 + 1.10
+        var markerBatches: [Int: MeshBatchBuilder] = [:]
+        var longBatch = MeshBatchBuilder()
+        var standBatch = MeshBatchBuilder()
+        var seenMarkers = Set<String>()
+        for placement in stationModelPlacements {
+            let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
+            let wide = placement.archetype.contains("terminal") || placement.archetype.contains("major") || placement.archetype == "junction_3platform"
+            let midSample = sample(at: placement.chainageM)
+            let isMainlineSection = travelDirection == .up ? midSample.distanceM < 60_000 : midSample.distanceM >= 8_000
+            let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
+            let trackLaterals: [Float] = hasPassingTrack ? [-2.1, 2.1] : [travelDirection == .up ? -2.1 : 2.1]
+            for trackLateral in trackLaterals {
+                let sides: [Float] = hasPassingTrack ? [trackLateral < 0 ? -1.0 : 1.0] : [-1.0, 1.0]
+                for sideSign in sides {
+                    for cars in [4, 6, 8, 10] {
+                        for dirSign in [-1.0, 1.0] {
+                            let cm = placement.chainageM + dirSign * (Double(cars) * 10 + 1)
+                            let key = "\(Int(cm))-\(Int(trackLateral * 10))-\(Int(sideSign))-\(cars)-\(Int(dirSign))"
+                            if seenMarkers.contains(key) { continue }
+                            seenMarkers.insert(key)
+                            let frame = profileStation(at: cm, trackLateral: trackLateral)
+                            let axisZ = simd_cross(frame.xAxis, frame.yAxis)
+                            let flip = dirSign > 0
+                            let ax = flip ? frame.xAxis * -1 : frame.xAxis
+                            let az = flip ? axisZ * -1 : axisZ
+                            let center = frame.center + frame.xAxis * (sideSign * 1.85) + frame.yAxis * (topFull + 0.62)
+                            if markerBatches[cars] == nil { markerBatches[cars] = MeshBatchBuilder() }
+                            markerBatches[cars]!.addBoxAxes(center: center, size: SIMD3<Float>(0.55, 0.55, 0.04), ax: ax, ay: frame.yAxis, az: az)
+                            standBatch.addBoxAxes(center: frame.center + frame.xAxis * (sideSign * 1.85) + frame.yAxis * (topFull + 0.28), size: SIMD3<Float>(0.06, 0.56, 0.06), ax: frame.xAxis, ay: frame.yAxis, az: axisZ)
+                        }
+                    }
+                    if wide {
+                        let cm = placement.chainageM - length / 2 + 10
+                        let frame = profileStation(at: cm, trackLateral: trackLateral)
+                        let axisZ = simd_cross(frame.xAxis, frame.yAxis)
+                        longBatch.addBoxAxes(center: frame.center + frame.xAxis * (sideSign * 1.85) + frame.yAxis * (topFull + 0.85), size: SIMD3<Float>(0.95, 0.6, 0.04), ax: frame.xAxis, ay: frame.yAxis, az: axisZ)
+                    }
+                    // Fouling-point markers at both throats.
+                    if hasPassingTrack {
+                        for endSign in [-1.0, 1.0] {
+                            let fm = placement.chainageM + endSign * (length / 2 + 28)
+                            let fp = groundOffsetPoint(sample(at: fm), lateral: 0)
+                            _ = addBox(parent: world, name: "sign-fouling-\(placement.stationId)-\(Int(endSign))", size: SIMD3<Float>(0.14, 0.85, 0.14), position: SIMD3<Float>(fp.x, fp.y + 0.42, fp.z), material: mat("scenery_sign_stop_train"), orientation: simd_quatf(angle: -sample(at: fm).heading, axis: SIMD3<Float>(0, 1, 0)))
+                        }
+                    }
+                }
+            }
+        }
+        for (cars, batch) in markerBatches {
+            if let mesh = batch.build(name: "sign-stopmarkers-\(cars)", material: mat("scenery_sign_stopmark_\(cars)")) { world.addChild(mesh) }
+        }
+        if let mesh = longBatch.build(name: "sign-long-boards", material: mat("scenery_sign_long")) { world.addChild(mesh) }
+        if let mesh = standBatch.build(name: "sign-stopmarker-stands", material: postMat) { world.addChild(mesh) }
+
+        // -- Signal extras from the centre-frame signal geometry.
+        if routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle {
+            let totalCentre: Double = routeVariant == .throughBranch ? 68_000 : (routeVariant == .branchShuttle ? 8_000 : 60_000)
+            func travelD(_ c: Double) -> Double { up ? c : route.distanceM - c }
+            for placement in stationModelPlacements {
+                let centre = chainageFromCenter(distanceM: placement.chainageM, route: route, travelDirection: travelDirection)
+                guard centre > 300, centre < totalCentre - 300 else { continue }
+                let approachC = centre + (up ? -400 : 400)
+                let departureC = centre + (up ? 170 : -170)
+                if departureC > 60, departureC < totalCentre - 60 {
+                    postBoard(travelD(departureC), signalLat, "scenery_sign_departure_reaction", w: 0.5, h: 0.5, top: 1.7, tag: "depreact-\(placement.stationId)")
+                }
+                let approachTravel = travelD(approachC)
+                // Repeater before a home signal on a blind curve.
+                let probe = route.sections.first(where: { approachTravel - 250 >= $0.startM && approachTravel - 250 < $0.endM })
+                if let radius = probe?.curveRadiusM, radius < 900 {
+                    staticHead(approachTravel - 450, signalLat, lamps: [whiteLamp, whiteLamp], tag: "repeater-\(placement.stationId)")
+                }
+                // Distant signal on a fast approach.
+                if let limit = probe?.speedLimitKmh, limit >= 95 {
+                    staticHead(approachTravel - 950, signalLat, lamps: [yellowLamp, greenLamp], tag: "distant-\(placement.stationId)")
+                }
+                // Route indicator at the junctions.
+                if placement.archetype.contains("junction") || placement.stationId == "S24" || placement.stationId == "S26" || placement.stationId == "S12" {
+                    postBoard(approachTravel - 5, signalLat, "scenery_sign_route", w: 0.8, h: 0.8, top: 4.6, tag: "route-\(placement.stationId)")
+                    // Route advance indicator （進路予告機）: the same
+                    // diagram repeated about 480 m earlier.
+                    postBoard(approachTravel - 480, signalLat, "scenery_sign_route", w: 0.8, h: 0.8, top: 4.2, tag: "routeadvance-\(placement.stationId)")
+                }
+            }
+            // Shunting signals at the junction throats.
+            for junctionId in ["S24", "S26"] {
+                if let placement = stationModelPlacements.first(where: { $0.stationId == junctionId }) {
+                    let base = groundOffsetPoint(sample(at: placement.chainageM - 320), lateral: signLat)
+                    let yaw = simd_quatf(angle: -sample(at: placement.chainageM - 320).heading, axis: SIMD3<Float>(0, 1, 0))
+                    _ = addBox(parent: world, name: "sign-shunt-\(junctionId)", size: SIMD3<Float>(0.3, 0.55, 0.24), position: SIMD3<Float>(base.x, base.y + 0.85, base.z), material: headMat, orientation: yaw)
+                    let lampEntity = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.06), materials: [redLamp])
+                    lampEntity.name = "sign-shunt-lamp-\(junctionId)"
+                    let back = groundOffsetPoint(sample(at: placement.chainageM - 320 - 0.15), lateral: signLat)
+                    lampEntity.position = SIMD3<Float>(back.x, base.y + 0.98, back.z)
+                    world.addChild(lampEntity)
+                }
+            }
+        }
+
+        // -- Depot boards (main line only).
+        if routeVariant == .mainline || routeVariant == .throughBranch {
+            func travelD(_ c: Double) -> Double { up ? c : route.distanceM - c }
+            let yardSide: Float = up ? 6.5 : -6.5
+            postBoard(travelD(27_545), yardSide, "scenery_sign_noblock", w: 1.7, h: 0.95, top: 2.0, tag: "depot-noblock")
+            postBoard(travelD(27_660), yardSide * 1.3, "scenery_sign_stop_vehicle", w: 0.7, h: 0.7, top: 1.6, tag: "depot-stop-a")
+            postBoard(travelD(27_750), yardSide * 1.3, "scenery_sign_stop_vehicle", w: 0.7, h: 0.7, top: 1.6, tag: "depot-stop-b")
+            postBoard(travelD(27_700), yardSide, "scenery_sign_nomove", w: 0.85, h: 0.55, top: 1.5, tag: "depot-nomove")
+            postBoard(travelD(27_790), yardSide * 1.3, "scenery_sign_stop_train", w: 0.7, h: 0.7, top: 1.6, tag: "depot-stoptrain")
+            // Shunting signal at the depot throat.
+            let base = groundOffsetPoint(sample(at: travelD(27_545)), lateral: signLat)
+            let yaw = simd_quatf(angle: -sample(at: travelD(27_545)).heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "sign-shunt-depot", size: SIMD3<Float>(0.3, 0.55, 0.24), position: SIMD3<Float>(base.x, base.y + 0.85, base.z), material: headMat, orientation: yaw)
+            let lampEntity = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.06), materials: [redLamp])
+            lampEntity.name = "sign-shunt-lamp-depot"
+            lampEntity.position = SIMD3<Float>(base.x, base.y + 0.98, base.z)
+            world.addChild(lampEntity)
+        }
+    }
+
     /// Tourist terminus (quality41 final, user request): the
     /// down-side terminus 鴨河 is a full tourist destination in the
     /// Hakone / Atami / Kamakura mould, and the approach builds up
@@ -2473,7 +2938,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             _ = addBox(parent: world, name: "tourist-hotel-canopy-\(i)", size: SIMD3<Float>(3.4, 0.22, 7), position: SIMD3<Float>(cp.x, y + 3.2, cp.z), material: roofMat, orientation: yaw(c))
         }
         for (i, c) in [57_250.0, 57_420.0].enumerated() {
-            let p = gp(c, land * 15)
+            // Lateral 17.5 (was 15): 千蔵 became a passing-loop
+            // station in diagram v4, and the loop deck edge runs
+            // to 12.5 — the shops keep a clear margin from it.
+            let p = gp(c, land * 17.5)
             let y = gy(c)
             _ = addBox(parent: world, name: "tourist-shop-chikura-\(i)", size: SIMD3<Float>(6, 4.4, 7.5), position: SIMD3<Float>(p.x, y + 2.2, p.z), material: shopFacadeMaterial, orientation: yaw(c))
         }
@@ -5787,7 +6255,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             entity.orientation = simd_quatf(angle: -(sample.heading + Float(actor.headingRadians)), axis: SIMD3<Float>(0, 1, 0))
             if let legs = platformPeopleLegs[actor.id] {
                 if actor.phase == .walking {
-                    let swing = sin(Float(simulationTime) * 7 + Float(stableIndex(actor.id, count: 628)) / 100) * 0.45
+                    let swing: Float = sin(Float(currentSimulationTime) * 7 + Float(stableIndex(actor.id, count: 628)) / 100) * 0.45
                     legs.0.orientation = simd_quatf(angle: swing, axis: SIMD3<Float>(1, 0, 0))
                     legs.1.orientation = simd_quatf(angle: -swing, axis: SIMD3<Float>(1, 0, 0))
                 } else {
@@ -6623,6 +7091,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var shopBatch = MeshBatchBuilder()
         var shrubBlobs: [(center: SIMD3<Float>, radii: SIMD3<Float>)] = []
         let topFull: Float = 0.3065 + 1.10
+        // Stations with a loop line (passing waits): their
+        // forecourt band is a running track, so furniture that
+        // used to stand there has to move (2026-11-11 quality
+        // pass for the added passing stations).
+        let loopCenters = Set(throatFanSpecs().map { $0.center })
 
         for (stationIndex, placement) in stationModelPlacements.enumerated() {
             let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
@@ -6630,6 +7103,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let end = placement.chainageM + length / 2
             let wide = placement.archetype.contains("terminal") || placement.archetype.contains("major") || placement.archetype == "junction_3platform"
             let width: Float = wide ? 6.0 : 4.5
+            let isLoopStation = loopCenters.contains(placement.chainageM)
             let midSample = sample(at: placement.chainageM)
             let isMainlineSection = travelDirection == .up ? midSample.distanceM < 60_000 : midSample.distanceM >= 8_000
             let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
@@ -6692,7 +7166,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         let gateFrame = profileStation(at: placement.chainageM, trackLateral: trackLateral)
                         let gateAxisZ = simd_cross(gateFrame.xAxis, gateFrame.yAxis)
                         let gateBasis = simd_quatf(simd_float3x3(gateFrame.xAxis, gateFrame.yAxis, gateAxisZ))
-                        let gateCenter = gateFrame.center + gateFrame.xAxis * (sideSign * (backU + 1.25)) + gateFrame.yAxis * 0.03
+                        let gateCenter = gateFrame.center + gateFrame.xAxis * (sideSign * (backU + (isLoopStation ? 5.6 : 1.25))) + gateFrame.yAxis * 0.03
                         let gateBodyMat = Self.pbr(UIColor(red: 0.62, green: 0.64, blue: 0.66, alpha: 1), metallic: 0.45, roughness: 0.4)
                         let gateFlapMat = Self.pbr(UIColor(red: 0.85, green: 0.55, blue: 0.20, alpha: 1), roughness: 0.5)
                         for gateIndex in -1...1 {
@@ -6773,14 +7247,33 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
                     // quality41: a drink vending machine at the
                     // walkway's edge on the end opposite the
-                    // bicycle shelter — the most recognisable
-                    // small object at a Japanese station front,
-                    // with a photographic front.
-                    let vSample = sample(at: placement.chainageM - length * 0.32)
-                    let vLateral = backLateral + sideSign * 2.2
-                    let vx = vSample.x + vLateral * cos(vSample.heading)
-                    let vz = vSample.z + vLateral * sin(vSample.heading)
-                    _ = addBox(parent: world, name: "station-vending-\(stationIndex)-\(Int(trackLateral))-\(Int(sideSign))", size: SIMD3<Float>(0.65, 1.85, 1.1), position: SIMD3<Float>(vx, vSample.elevationM + 0.90, vz), material: vendingFacadeMaterial, orientation: simd_quatf(angle: -vSample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                    // Vending machine by the station front. At
+                    // the loop stations the forecourt band is the
+                    // loop line itself, so the machine stands on
+                    // the platform back instead (2026-11-11).
+                    if isLoopStation {
+                        let vFrame = profileStation(at: placement.chainageM - length * 0.32, trackLateral: trackLateral)
+                        let vAxisZ = simd_cross(vFrame.xAxis, vFrame.yAxis)
+                        let vBasis = simd_quatf(simd_float3x3(vFrame.xAxis, vFrame.yAxis, vAxisZ))
+                        let vPos = vFrame.center + vFrame.xAxis * (sideSign * (backU - 0.75)) + vFrame.yAxis * (topFull + 0.925)
+                        _ = addBox(parent: world, name: "station-vending-\(stationIndex)-\(Int(trackLateral))-\(Int(sideSign))", size: SIMD3<Float>(0.65, 1.85, 1.1), position: vPos, material: vendingFacadeMaterial, orientation: vBasis)
+                    } else {
+                        let vSample = sample(at: placement.chainageM - length * 0.32)
+                        let vLateral = backLateral + sideSign * 2.2
+                        let vx = vSample.x + vLateral * cos(vSample.heading)
+                        let vz = vSample.z + vLateral * sin(vSample.heading)
+                        _ = addBox(parent: world, name: "station-vending-\(stationIndex)-\(Int(trackLateral))-\(Int(sideSign))", size: SIMD3<Float>(0.65, 1.85, 1.1), position: SIMD3<Float>(vx, vSample.elevationM + 0.90, vz), material: vendingFacadeMaterial, orientation: simd_quatf(angle: -vSample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                    }
+                    // Pedestrian crossing over the loop line on
+                    // the station walkway (loop stations): a low
+                    // slab between the rails, top below rail head.
+                    if isLoopStation {
+                        let cFrame = profileStation(at: placement.chainageM, trackLateral: trackLateral)
+                        let cAxisZ = simd_cross(cFrame.xAxis, cFrame.yAxis)
+                        let cBasis = simd_quatf(simd_float3x3(cFrame.xAxis, cFrame.yAxis, cAxisZ))
+                        let cPos = cFrame.center + cFrame.xAxis * (sideSign * 7.54) + cFrame.yAxis * 0.24
+                        _ = addBox(parent: world, name: "station-loop-crossing-\(stationIndex)-\(Int(sideSign))", size: SIMD3<Float>(5.4, 0.05, 2.4), position: cPos, material: concreteMaterial, orientation: cBasis)
+                    }
 
                     // -- Night pass P4 (2026-11-11): small life at
                     // the local stations. A car park past the
@@ -7346,9 +7839,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// world never had. The specs come from the station placements,
     /// in the same chainage frame the placement loop uses.
     private func throatFanSpecs() -> [(center: Double, half: Double)] {
+        // The loop line is drawn at the multi-track archetypes
+        // plus the stations PassingWaitPlanner names for the
+        // full diagram build (2026-11-11): the diagram v4 set of
+        // 15 passing stations (7 original + 荻沼・小原・
+        // ひばりヶ岡・東村川・津田池・三街道・波花・千蔵)
+        // carry the same fan + through-loop treatment even
+        // though their cores are ordinary two-platform layouts.
+        // Every scenery guard keys off this list (fences,
+        // walkway slabs, pole/building/tree clearances), so a
+        // station added here inherits the whole treatment.
+        let extraLoopStations: Set<String> = ["S03", "S04", "S06", "S07", "S09", "S11", "S14", "S15", "S19", "S23", "S24", "S27"]
         var specs: [(center: Double, half: Double)] = []
         for placement in stationModelPlacements {
-            if placement.archetype == "major_5track_4platform" || placement.archetype == "passing_3track_2platform" {
+            if placement.archetype == "major_5track_4platform" || placement.archetype == "passing_3track_2platform" || extraLoopStations.contains(placement.stationId) {
                 specs.append((center: placement.chainageM, half: platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2))
             }
         }
@@ -7373,16 +7877,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         return false
     }
 
-    /// Siding lateral across its 340 m span: diverge over the
-    /// first 200 m, hold at 6.3 m, converge over the last 80 m.
-    private func throatFanLateral(u: Double) -> Float {
+    /// Siding lateral across its 340 m fan span. Since the
+    /// passing-wait work (2026-11-11) the loop line runs THROUGH
+    /// the station at 9.64 m — outside the platform, whose outer
+    /// face (platform band ends at 8.12 m) serves the siding with
+    /// the standard 1.52 m clearance. The "in" fan diverges over
+    /// its first 240 m and then holds; the "out" fan holds and
+    /// converges over its last 300 m; between the fans the
+    /// through segment (buildThroatFans) stays at 9.64 m.
+    private func throatFanLateral(u: Double, tag: String) -> Float {
         func smooth(_ x: Double) -> Double {
             let t = min(max(x, 0), 1)
             return t * t * (3 - 2 * t)
         }
-        let diverge = smooth(u / (200.0 / 340.0))
-        let converge = smooth((u - 260.0 / 340.0) / (80.0 / 340.0))
-        return Float(2.1 + 4.2 * diverge * (1 - converge))
+        let shift: Double
+        if tag == "in" {
+            shift = smooth(u / (240.0 / 340.0))
+        } else {
+            shift = 1 - smooth((u - 40.0 / 340.0) / (300.0 / 340.0))
+        }
+        return Float(2.1 + 7.54 * shift)
     }
 
     private func buildThroatFans(routeVariant: RegionalRouteVariant) {
@@ -7393,6 +7907,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let shoulderMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_ballast", normalName: "normal_ballast")
         let trackbedMaterial = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_trackbed", normalName: "normal_trackbed")
         let deckMaterial = Self.pbr(UIColor(red: 0.46, green: 0.48, blue: 0.47, alpha: 1), roughness: 0.84)
+        let fenceMat = Self.pbr(UIColor(red: 0.55, green: 0.57, blue: 0.58, alpha: 1), metallic: 0.6, roughness: 0.45)
         let railProfile: [(x: Float, y: Float)] = [
             (-0.075, 0.145), (0.075, 0.145), (0.075, 0.175), (0.018, 0.185),
             (0.018, 0.255), (0.037, 0.265), (0.037, 0.305), (-0.037, 0.305),
@@ -7415,14 +7930,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // Kankumoshi throat the siding would otherwise hang
                 // off the 8.4 m deck edge. At ground level the slab
                 // lies below the formation and stays invisible.
-                if let deck = ribbonEntity(name: "fan-deck-\(Int(spec.center))-\(span.tag)", width: 17, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
+                if let deck = ribbonEntity(name: "fan-deck-\(Int(spec.center))-\(span.tag)", width: 25, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
                     world.addChild(deck)
                 }
                 for side: Float in [-1.0, 1.0] {
                     let sideTag = side > 0 ? "r" : "l"
                     let offsets = samples.map { sample -> Float in
                         let u = (min(max(sample.distanceM, span.start), span.end) - span.start) / 340
-                        return side * throatFanLateral(u: u)
+                        return side * throatFanLateral(u: u, tag: span.tag)
                     }
                     // 5 mm above the running trackbed so the two
                     // ribbons never z-fight where the siding lies
@@ -7433,10 +7948,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     var stations: [ProfileStation] = []
                     var d = span.start
                     while d < span.end {
-                        stations.append(profileStation(at: d, trackLateral: side * throatFanLateral(u: (d - span.start) / 340)))
+                        stations.append(profileStation(at: d, trackLateral: side * throatFanLateral(u: (d - span.start) / 340, tag: span.tag)))
                         d += 8.5
                     }
-                    stations.append(profileStation(at: span.end, trackLateral: side * throatFanLateral(u: 1)))
+                    stations.append(profileStation(at: span.end, trackLateral: side * throatFanLateral(u: 1, tag: span.tag)))
                     let prefix = "fan-\(Int(spec.center))-\(span.tag)-\(sideTag)"
                     for railSide: Float in [-0.72, 0.72] {
                         let profile = railProfile.map { (x: $0.x + railSide, y: $0.y) }
@@ -7454,6 +7969,73 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     if let right = profileStripEntity(name: "\(prefix)-shoulder-r", stations: stations, profile: shoulderRight, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
                         world.addChild(right)
                     }
+                }
+            }
+            // Passing-wait addendum (2026-11-11): the loop line
+            // continues through the station at 9.64 m, outside the
+            // platform — the track the waiting train stands on.
+            for side: Float in [-1.0, 1.0] {
+                let sideTag = side > 0 ? "r" : "l"
+                let midStart = spec.center - spec.half
+                let midEnd = spec.center + spec.half
+                if let lo = samples.firstIndex(where: { $0.distanceM >= midStart - 8.5 }),
+                   let hi = samples.lastIndex(where: { $0.distanceM <= midEnd + 8.5 }), lo < hi {
+                    let range = lo..<(hi + 1)
+                    if let deck = ribbonEntity(name: "fan-mid-deck-\(Int(spec.center))-\(sideTag)", width: 25, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
+                        world.addChild(deck)
+                    }
+                    let midOffsets = samples.map { _ in side * Float(9.64) }
+                    if let bed = ribbonEntity(name: "fan-mid-trackbed-\(Int(spec.center))-\(sideTag)", width: 4.6, y: 0.185, tileLength: 5, offsets: midOffsets, material: trackbedMaterial, range: range) {
+                        world.addChild(bed)
+                    }
+                }
+                var stations: [ProfileStation] = []
+                var d = midStart
+                while d < midEnd {
+                    stations.append(profileStation(at: d, trackLateral: side * Float(9.64)))
+                    d += 8.5
+                }
+                stations.append(profileStation(at: midEnd, trackLateral: side * Float(9.64)))
+                let prefix = "fan-mid-\(Int(spec.center))-\(sideTag)"
+                for railSide: Float in [-0.72, 0.72] {
+                    let profile = railProfile.map { (x: $0.x + railSide, y: $0.y) }
+                    if let rail = profileStripEntity(name: "\(prefix)-rail-\(railSide)", stations: stations, profile: profile, closed: true, material: railSteel) {
+                        world.addChild(rail)
+                    }
+                    let band = bandProfile.map { (x: $0.x + railSide, y: $0.y) }
+                    if let bandEntity = profileStripEntity(name: "\(prefix)-band-\(railSide)", stations: stations, profile: band, closed: false, material: runningBand) {
+                        world.addChild(bandEntity)
+                    }
+                }
+                if let left = profileStripEntity(name: "\(prefix)-shoulder-l", stations: stations, profile: shoulderLeft, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+                    world.addChild(left)
+                }
+                if let right = profileStripEntity(name: "\(prefix)-shoulder-r", stations: stations, profile: shoulderRight, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+                    world.addChild(right)
+                }
+                // Fence along the loop's outer edge through the
+                // station (2026-11-11 quality pass), with gaps at
+                // the walkway crossing and the bicycle shelter.
+                var fenceBatch = MeshBatchBuilder()
+                var fd = midStart
+                while fd < midEnd {
+                    let segMid = (fd + min(fd + 8.5, midEnd)) / 2
+                    let atWalkway = abs(segMid - spec.center) < 2.2
+                    let atShelter = abs(segMid - (spec.center + spec.half * 2 * 0.32)) < 4.8
+                    if !atWalkway && !atShelter {
+                        let f0 = profileStation(at: fd, trackLateral: side * Float(12.3))
+                        let f1 = profileStation(at: min(fd + 8.5, midEnd), trackLateral: side * Float(12.3))
+                        let fAxisZ = simd_cross(f0.xAxis, f0.yAxis)
+                        let mid = (f0.center + f1.center) / 2
+                        for railY: Float in [0.55, 0.95] {
+                            fenceBatch.addBoxAxes(center: mid + f0.yAxis * railY, size: SIMD3<Float>(0.05, 0.07, 8.6), ax: f0.xAxis, ay: f0.yAxis, az: fAxisZ)
+                        }
+                        fenceBatch.addBoxAxes(center: f0.center + f0.yAxis * 0.55, size: SIMD3<Float>(0.09, 1.1, 0.09), ax: f0.xAxis, ay: f0.yAxis, az: fAxisZ)
+                    }
+                    fd += 8.5
+                }
+                if let fence = fenceBatch.build(name: "fan-mid-fence-\(Int(spec.center))-\(sideTag)", material: fenceMat) {
+                    world.addChild(fence)
                 }
             }
         }
@@ -7737,7 +8319,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // platform edges (quality35 photo round); the
                 // station area is served by the station's own
                 // lighting, so poles skip it.
-                if !onSeaSide && !corridorReserved(at: d, landmarks: landmarks) && !inStationZone(d, extraMargin: 10) && !(d > 27_540 && d < 27_860) {
+                if !onSeaSide && !corridorReserved(at: d, landmarks: landmarks) && !inStationZone(d, extraMargin: 10) && !nearThroatFan(d) && !(d > 27_540 && d < 27_860) {
                     if band == 0 {
                         spots.append(PoleSpot(chainage: d, sample: sample(at: d), lateral: sideSign * 18.6))
                     } else {
