@@ -96,6 +96,7 @@ struct ContentView: View {
                     // (user decision 2026-11-08); vehicle physics and
                     // sound still follow the selected profile.
                     cabDesk: FictionalCabAndSoundCatalog.e231Early,
+                    serviceCategory: model.serviceCategory,
                     stationModelPlacements: generatedStationModelPlacements,
                     nextStopName: nextStopName,
                     distanceToNextStopM: distanceToNextStopM,
