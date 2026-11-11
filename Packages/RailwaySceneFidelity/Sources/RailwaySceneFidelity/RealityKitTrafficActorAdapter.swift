@@ -62,7 +62,7 @@ public final class RailwayTrafficActorRealityKitAdapter {
         actor.name = "traffic-actor-\(pose.id)"
         switch pose.kind {
         case .train:
-            makeTrain(in: actor, lengthM: pose.lengthM, seed: pose.id)
+            makeTrain(in: actor, pose: pose)
         case .roadVehicle:
             roadWheels[pose.id] = makeRoadVehicle(in: actor, seed: pose.id)
         case .platformPassenger:
@@ -71,7 +71,99 @@ public final class RailwayTrafficActorRealityKitAdapter {
         return actor
     }
 
-    private func makeTrain(in parent: Entity, lengthM: Double, seed: String) {
+    /// AI trains wear the same GLB models as the player train
+    /// (E231 / 117, 2026-11-11): limited expresses get the 117,
+    /// other services the E231, with the car count taken from the
+    /// plan length so the consist spans exactly the plan's length.
+    /// Any load problem falls back to the procedural box train.
+    private func makeTrain(in parent: Entity, pose: SceneTrafficActorPose) {
+        if makeGLBTrain(in: parent, lengthM: pose.lengthM, serviceRawValue: pose.trainServiceRawValue) {
+            return
+        }
+        makeBoxTrain(in: parent, lengthM: pose.lengthM, seed: pose.id)
+    }
+
+    // MARK: - GLB consists (cached prototypes, cloned per actor)
+
+    /// Loaded GLB roots kept alive so their car nodes stay valid
+    /// as clone prototypes; each asset is loaded at most once.
+    private var glbPrototypeRoots: [String: Entity] = [:]
+    private var glbPrototypeCars: [String: [String: Entity]] = [:]
+    private var glbFailedAssets: Set<String> = []
+
+    private func glbCarPrototypes(for asset: RailwayGenerated3DAsset, nodeNames: [String]) -> [Entity]? {
+        let key = asset.rawValue
+        if glbFailedAssets.contains(key) { return nil }
+        if let cached = glbPrototypeCars[key] {
+            let ordered = nodeNames.compactMap { cached[$0] }
+            return ordered.count == nodeNames.count ? ordered : nil
+        }
+        guard let loaded = try? RailwayGeneratedAssetLoader.loadModel(for: asset) else {
+            glbFailedAssets.insert(key)
+            return nil
+        }
+        func findNode(_ entity: Entity, _ name: String) -> Entity? {
+            if entity.name == name { return entity }
+            for child in entity.children {
+                if let found = findNode(child, name) { return found }
+            }
+            return nil
+        }
+        var cars: [String: Entity] = [:]
+        for index in 1...10 {
+            let name = "car_\(index)"
+            if let node = findNode(loaded, name) { cars[name] = node }
+        }
+        glbPrototypeRoots[key] = loaded
+        glbPrototypeCars[key] = cars
+        let ordered = nodeNames.compactMap { cars[$0] }
+        guard ordered.count == nodeNames.count else {
+            glbFailedAssets.insert(key)
+            return nil
+        }
+        return ordered
+    }
+
+    private func makeGLBTrain(in parent: Entity, lengthM: Double, serviceRawValue: String?) -> Bool {
+        let asset: RailwayGenerated3DAsset
+        let nodeNames: [String]
+        if serviceRawValue == "limitedExpress" {
+            asset = .too117
+            nodeNames = (1...8).map { "car_\($0)" }
+        } else if lengthM >= 180 {
+            asset = .tooE231
+            nodeNames = (1...10).map { "car_\($0)" }
+        } else {
+            asset = .tooE231
+            nodeNames = (1...7).map { "car_\($0)" } + ["car_10"]
+        }
+        // The GLB cars are 19.5 m each; only substitute the box
+        // train when the consist spans the plan length exactly
+        // (short depot moves keep the length-matched box train).
+        guard abs(Double(nodeNames.count) * 19.5 - lengthM) < 1 else { return false }
+        guard let prototypes = glbCarPrototypes(for: asset, nodeNames: nodeNames) else { return false }
+        // Same convention as the player's GLB consist: car nodes
+        // are centred at their own origin with the length along
+        // local X and the wheel bottoms at y = 0, so a -90-degree
+        // yaw maps them onto the actor's local Z length axis. The
+        // actor root sits at the train centre, so cars step from
+        // -span/2. Both models are double-ended, so which cab
+        // leads is immaterial.
+        let pitch: Float = 19.5
+        let totalSpan = pitch * Float(prototypes.count)
+        for (index, prototype) in prototypes.enumerated() {
+            let car = prototype.clone(recursive: true)
+            car.orientation = simd_quatf(angle: -Float.pi / 2, axis: SIMD3<Float>(0, 1, 0))
+            let wrapper = Entity()
+            wrapper.name = "ai-glb-car-\(index)"
+            wrapper.position = SIMD3<Float>(0, 0, -totalSpan * 0.5 + (Float(index) + 0.5) * pitch)
+            wrapper.addChild(car)
+            parent.addChild(wrapper)
+        }
+        return true
+    }
+
+    private func makeBoxTrain(in parent: Entity, lengthM: Double, seed: String) {
         let totalLength = Float(min(max(lengthM, 8), 240))
         let coachLength: Float = 19
         let coachCount = min(12, max(1, Int(ceil(totalLength / coachLength))))
