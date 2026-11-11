@@ -75,7 +75,7 @@ def accessor_values(document: dict[str, Any], binary: bytes, accessor_index: int
     view = views[view_index]
     offset = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
     normalized = accessor.get("normalized", False)
-    components = 4 if type_name == "VEC4" else 3
+    components = {"VEC4": 4, "VEC3": 3, "VEC2": 2}[type_name]
     size = 4 if component == 5126 else 1 if component == 5121 else 2 if component == 5123 else 0
     require(size > 0, f"unsupported accessor component type {component}")
     stride = view.get("byteStride", components * size)
@@ -104,6 +104,7 @@ def validate_glb(path: Path) -> tuple[int, int, str]:
 
     primitive_count = 0
     colored_count = 0
+    textured_count = 0
     for mesh in document.get("meshes", []):
         for primitive in mesh.get("primitives", []):
             primitive_count += 1
@@ -113,17 +114,49 @@ def validate_glb(path: Path) -> tuple[int, int, str]:
             require(isinstance(position_index, int), f"missing POSITION in {path.relative_to(ASSET_ROOT)}")
             _, position_count, _, _ = accessor_values(document, binary, position_index, "VEC3")
             color_index = attributes.get("COLOR_0")
-            require(isinstance(color_index, int), f"missing COLOR_0 in {path.relative_to(ASSET_ROOT)}")
-            component, color_count, normalized, colors = accessor_values(document, binary, color_index, "VEC4")
-            require(color_count == position_count, f"COLOR_0 vertex count mismatch in {path.relative_to(ASSET_ROOT)}")
-            require(component == 5126 or (component == 5121 and normalized),
-                    f"COLOR_0 encoding unsupported by runtime loader in {path.relative_to(ASSET_ROOT)}")
-            require(all(color == colors[0] for color in colors[1:]),
-                    f"nonuniform per-vertex color would be flattened by runtime loader: {path.relative_to(ASSET_ROOT)}")
-            colored_count += 1
-    require(primitive_count > 0 and colored_count == primitive_count, f"missing mesh/color data in {path.relative_to(ASSET_ROOT)}")
+            if isinstance(color_index, int):
+                component, color_count, normalized, colors = accessor_values(document, binary, color_index, "VEC4")
+                require(color_count == position_count, f"COLOR_0 vertex count mismatch in {path.relative_to(ASSET_ROOT)}")
+                require(component == 5126 or (component == 5121 and normalized),
+                        f"COLOR_0 encoding unsupported by runtime loader in {path.relative_to(ASSET_ROOT)}")
+                require(all(color == colors[0] for color in colors[1:]),
+                        f"nonuniform per-vertex color would be flattened by runtime loader: {path.relative_to(ASSET_ROOT)}")
+                colored_count += 1
+            else:
+                # 2026-11-11: textured glTF primitives (the own.guest
+                # player trains) carry a PBR material with an embedded
+                # base-color texture instead of COLOR_0; the runtime
+                # loader renders exactly those through the texture.
+                material_index = primitive.get("material")
+                materials = document.get("materials", [])
+                require(isinstance(material_index, int) and 0 <= material_index < len(materials),
+                        f"primitive has neither COLOR_0 nor a material in {path.relative_to(ASSET_ROOT)}")
+                pbr = materials[material_index].get("pbrMetallicRoughness", {})
+                texture_index = pbr.get("baseColorTexture", {}).get("index")
+                if isinstance(texture_index, int):
+                    textures = document.get("textures", [])
+                    require(0 <= texture_index < len(textures),
+                            f"textured primitive lacks a valid baseColorTexture in {path.relative_to(ASSET_ROOT)}")
+                    image_index = textures[texture_index].get("source")
+                    images = document.get("images", [])
+                    require(isinstance(image_index, int) and 0 <= image_index < len(images)
+                            and isinstance(images[image_index].get("bufferView"), int),
+                            f"base color image is not embedded in {path.relative_to(ASSET_ROOT)}")
+                    uv_index = attributes.get("TEXCOORD_0")
+                    require(isinstance(uv_index, int), f"textured primitive lacks TEXCOORD_0 in {path.relative_to(ASSET_ROOT)}")
+                    _, uv_count, _, _ = accessor_values(document, binary, uv_index, "VEC2")
+                    require(uv_count == position_count, f"TEXCOORD_0 vertex count mismatch in {path.relative_to(ASSET_ROOT)}")
+                else:
+                    # Factor-only PBR material (e.g. the 117's dark
+                    # underframe paint): the loader renders it as a
+                    # flat PBR color, no UVs needed.
+                    factor = pbr.get("baseColorFactor")
+                    require(isinstance(factor, list) and len(factor) >= 3,
+                            f"primitive material has neither a base color texture nor a factor in {path.relative_to(ASSET_ROOT)}")
+                textured_count += 1
+    require(primitive_count > 0 and colored_count + textured_count == primitive_count, f"missing mesh/color data in {path.relative_to(ASSET_ROOT)}")
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    return primitive_count, colored_count, digest
+    return primitive_count, colored_count + textured_count, digest
 
 
 def main() -> None:
@@ -162,8 +195,8 @@ def main() -> None:
     selected = [path for path in glbs if path.parent.name == "HighFidelityAssets"]
     require({path.name for path in selected} == {"commuter_train_car_detailed.glb", "driver_cab_interior_detailed.glb"},
             "unexpected add-on high-fidelity resource set; only two selected models are intended")
-    print(f"PASS: {len(glbs)} unique embedded GLB 2.0 files, {total_primitives} colored triangle primitives, zero external URIs")
-    print("PASS: every primitive has loader-compatible uniform COLOR_0; selected add-on car/cab resources appear once")
+    print(f"PASS: {len(glbs)} unique embedded GLB 2.0 files, {total_primitives} colored or textured triangle primitives, zero external URIs")
+    print("PASS: every primitive has loader-compatible uniform COLOR_0 or an embedded PBR base-color texture; selected add-on car/cab resources appear once")
     print("PASS: 32 unique station layouts (28 mainline, 4 branch), platform counts match, S12 is 5-track/4-platform")
 
     # 2026-11-07 scenery/station quality revision checks.
@@ -177,7 +210,7 @@ def main() -> None:
     # (IHDR width/height are big-endian uint32 at bytes 16..24).
     texture_root = ROOT / "Packages/RailwaySceneFidelity/Sources/RailwaySceneFidelity/Resources"
     textures = sorted(texture_root.glob("scenery_*.png"))
-    require(len(textures) == 102, f"expected 102 scenery textures, found {len(textures)}")
+    require(len(textures) == 108, f"expected 108 scenery textures, found {len(textures)}")
     for texture in textures:
         header = texture.read_bytes()[:24]
         require(header[:8] == b"\x89PNG\r\n\x1a\n", f"not a PNG: {texture.name}")
