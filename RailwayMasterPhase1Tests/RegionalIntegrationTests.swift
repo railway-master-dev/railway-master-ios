@@ -390,4 +390,28 @@ final class RegionalIntegrationTests: XCTestCase {
         incompatible.scenarioID = "different-scenario"
         XCTAssertThrowsError(try restored.restoreState(from: incompatible))
     }
+
+    func testPassingWaitPrioritiesFollowTheServiceHierarchy() {
+        // Strictly decreasing priority from limited express to local.
+        let order: [ServiceCategory] = [.limitedExpress, .rapidExpress, .express, .rapid, .semiExpress, .local]
+        for (index, category) in order.enumerated() {
+            XCTAssertEqual(PassingWaitPlanner.priority(of: category), index)
+        }
+        // Only rapid / semi-express / local wait, only for a
+        // strictly faster passer.
+        XCTAssertTrue(PassingWaitPlanner.shouldRoute(player: .local, passer: .limitedExpress))
+        XCTAssertTrue(PassingWaitPlanner.shouldRoute(player: .local, passer: .semiExpress))
+        XCTAssertTrue(PassingWaitPlanner.shouldRoute(player: .semiExpress, passer: .rapid))
+        XCTAssertTrue(PassingWaitPlanner.shouldRoute(player: .rapid, passer: .express))
+        XCTAssertFalse(PassingWaitPlanner.shouldRoute(player: .rapid, passer: .semiExpress))
+        XCTAssertFalse(PassingWaitPlanner.shouldRoute(player: .local, passer: .local))
+        XCTAssertFalse(PassingWaitPlanner.shouldRoute(player: .express, passer: .limitedExpress))
+        XCTAssertFalse(PassingWaitPlanner.shouldRoute(player: .limitedExpress, passer: .rapidExpress))
+    }
+
+    func testPassingWaitStationsAreTheMultiTrackStations() {
+        XCTAssertEqual(PassingWaitPlanner.stationIDs, ["S03", "S04", "S06", "S07", "S09", "S11", "S12", "S14", "S15", "S17", "S19", "S22", "S23", "S24", "S27"])
+        XCTAssertEqual(PassingWaitPlanner.turnoutLimitKmh, 45)
+        XCTAssertEqual(PassingWaitPlanner.sidingHalfSpanM, 445)
+    }
 }
