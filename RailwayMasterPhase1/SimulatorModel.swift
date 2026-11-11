@@ -3478,24 +3478,7 @@ final class SimulatorModel: ObservableObject {
             ],
             roads: source.roads,
             platforms: source.platforms,
-            trains: source.trains.map { plan in
-                AITrainPlan(
-                    id: plan.id,
-                    trackID: plan.trackID,
-                    departureTimeSeconds: max(0, plan.departureTimeSeconds - serviceDayStart),
-                    startPositionM: plan.startPositionM,
-                    destinationPositionM: plan.destinationPositionM,
-                    maximumSpeedMps: plan.maximumSpeedMps,
-                    accelerationMps2: plan.accelerationMps2,
-                    brakingDecelerationMps2: plan.brakingDecelerationMps2,
-                    lengthM: plan.lengthM,
-                    stops: plan.stops,
-                    serviceType: plan.serviceType,
-                    servicePeriod: plan.servicePeriod,
-                    operationKind: plan.operationKind,
-                    scheduledTripDurationSeconds: plan.scheduledTripDurationSeconds
-                )
-            },
+            trains: Self.generatedDiagramTrains(serviceDayStart: serviceDayStart, sourceTrains: source.trains),
             roadVehicles: source.roadVehicles.map { plan in
                 RoadVehiclePlan(
                     id: plan.id,
@@ -3521,6 +3504,243 @@ final class SimulatorModel: ObservableObject {
             routePaths: source.routePaths,
             dataStatus: source.dataStatus
         )
+    }
+
+    /// Shifts a bundled sample plan onto the game clock (zero =
+    /// 05:30), exactly as the pre-diagram scenario did.
+    private static func shiftedTrain(_ plan: AITrainPlan, serviceDayStart: Double) -> AITrainPlan {
+        AITrainPlan(
+            id: plan.id,
+            trackID: plan.trackID,
+            departureTimeSeconds: max(0, plan.departureTimeSeconds - serviceDayStart),
+            startPositionM: plan.startPositionM,
+            destinationPositionM: plan.destinationPositionM,
+            maximumSpeedMps: plan.maximumSpeedMps,
+            accelerationMps2: plan.accelerationMps2,
+            brakingDecelerationMps2: plan.brakingDecelerationMps2,
+            lengthM: plan.lengthM,
+            stops: plan.stops,
+            serviceType: plan.serviceType,
+            servicePeriod: plan.servicePeriod,
+            operationKind: plan.operationKind,
+            scheduledTripDurationSeconds: plan.scheduledTripDurationSeconds
+        )
+    }
+
+    /// Diagram v4 phase offsets in minutes (8:00-base), solved on
+    /// 2026-11-11 so the 9:00-12:00 window runs conflict-free at the
+    /// 15 passing stations; see workspace/diagram/_diagram_v4_result.json.
+    /// Applied as the offset of the first departure of each daytime
+    /// pattern (every phase is smaller than its headway, so this
+    /// reproduces the solver's departure series inside the window).
+    private static func diagramV4PhaseMinutes(direction: ServiceDirection, category: ServiceCategory) -> Int {
+        switch (direction, category) {
+        case (.down, .limitedExpress): return 52
+        case (.down, .rapidExpress): return 19
+        case (.down, .express): return 17
+        case (.down, .rapid): return 0
+        case (.down, .semiExpress): return 7
+        case (.down, .local): return 3
+        case (.up, .limitedExpress): return 38
+        case (.up, .rapidExpress): return 6
+        case (.up, .express): return 23
+        case (.up, .rapid): return 6
+        case (.up, .semiExpress): return 8
+        case (.up, .local): return 1
+        }
+    }
+
+    /// Diagram v4 AI traffic (2026-11-11): the bundled scenario's
+    /// ten sample trains are replaced by a full service day
+    /// generated from the operations plan. Every timetable pattern
+    /// contributes departures at its own first/last/interval; the
+    /// daytime patterns already carry the v4 headways in the plan
+    /// JSON and additionally get the v4 phase offset above. Plan
+    /// directions are geographic: "down" departs the Kaibukuro end
+    /// toward Kamogawa (increasing centre chainage, track main-up)
+    /// and "up" runs back (track main-down) -- the same convention
+    /// TimetableBuilder uses for the player's trips. Stops are the
+    /// service's mainline stops with 30 s dwell (45 s at S12
+    /// Chihara); the termini themselves are the run's endpoints,
+    /// not stops. Plan durations describe the 68 km through run,
+    /// so over the 60 km mainline the pace is conservative; each
+    /// train's maximum speed is set from the cruise speed the plan
+    /// implies (distance over duration minus dwell and an
+    /// acceleration allowance), with 30 percent headroom, and the
+    /// engine's schedule cap keeps the train near its planned
+    /// whole-line time. Formations follow the user's consist
+    /// rules: locals and limited expresses are 8 cars (156 m),
+    /// the other mainline categories 10 cars (195 m). The plan's
+    /// through services cannot switch route paths mid-run in the
+    /// traffic engine, so the branch instead gets its own local
+    /// shuttles on the branch tracks, and the bundled depot
+    /// movements are carried over shifted. If the plan cannot be
+    /// loaded, the bundled sample trains are kept (shifted) so
+    /// traffic still runs.
+    private static func generatedDiagramTrains(serviceDayStart: Double, sourceTrains: [AITrainPlan]) -> [AITrainPlan] {
+        let depotTrains = sourceTrains.filter { $0.operationKind != .passengerService }
+            .map { Self.shiftedTrain($0, serviceDayStart: serviceDayStart) }
+        guard let plan = FictionalOperationsPlan.loadBundled() else {
+            return sourceTrains.map { Self.shiftedTrain($0, serviceDayStart: serviceDayStart) }
+        }
+        let mainlineLength = plan.network.mainlineLengthKm * 1_000
+        let mainlineChainage: [String: Double] = Dictionary(
+            uniqueKeysWithValues: plan.stations
+                .filter { $0.lineId == plan.network.mainlineID }
+                .map { ($0.stationId, $0.chainageKm * 1_000) }
+        )
+        let branchChainages: [Double] = plan.stations
+            .filter { $0.lineId == plan.network.branchID }
+            .map { $0.chainageKm * 1_000 }
+            .filter { $0 > 0 && $0 < plan.network.branchLengthKm * 1_000 }
+            .sorted()
+        let chiharaChainage = mainlineChainage["S12"] ?? 24_194
+
+        var trains: [AITrainPlan] = []
+        for service in plan.services {
+            guard let serviceType = TrainServiceType(rawValue: service.category.rawValue) else { continue }
+            let ascendingStops = service.stopStationIDs
+                .compactMap { mainlineChainage[$0] }
+                .sorted()
+            let durationSeconds = Double(service.plannedDurationMinutes * 60)
+            let lengthM: Double
+            if service.category == .local || service.category == .limitedExpress {
+                lengthM = 8 * 19.5
+            } else {
+                lengthM = 10 * 19.5
+            }
+            let acceleration: Double
+            switch service.category {
+            case .local: acceleration = 0.70
+            case .semiExpress: acceleration = 0.75
+            case .rapid: acceleration = 0.80
+            case .express: acceleration = 0.85
+            case .rapidExpress: acceleration = 0.90
+            case .limitedExpress: acceleration = 0.95
+            }
+            let speedCap: Double
+            switch service.category {
+            case .local: speedCap = 27.8
+            case .semiExpress, .rapid: speedCap = 30.6
+            case .express: speedCap = 33.3
+            case .rapidExpress: speedCap = 36.1
+            case .limitedExpress: speedCap = 38.9
+            }
+            for pattern in plan.timetablePatterns where pattern.category == service.category {
+                let isDown = pattern.direction == .down
+                var orderedStops = ascendingStops.filter { $0 > 0 && $0 < mainlineLength }
+                if !isDown { orderedStops.reverse() }
+                let stops = orderedStops.map { chainage -> TrafficTrainStop in
+                    let dwell: Double
+                    if abs(chainage - chiharaChainage) < 0.5 {
+                        dwell = 45
+                    } else {
+                        dwell = 30
+                    }
+                    return TrafficTrainStop(positionM: chainage, dwellSeconds: dwell)
+                }
+                let totalDwell = stops.reduce(0.0) { $0 + $1.dwellSeconds }
+                let movingSeconds = max(600.0, durationSeconds - totalDwell - Double(stops.count) * 25.0 - 30.0)
+                let cruise = mainlineLength / movingSeconds
+                let maximumSpeed = min(speedCap, cruise * 1.3)
+                guard let firstMinute = FictionalOperationsPlan.minutesSinceMidnight(pattern.firstDeparture),
+                      let lastMinute = FictionalOperationsPlan.minutesSinceMidnight(pattern.lastDeparture),
+                      pattern.intervalMinutes > 0 else { continue }
+                var minute = firstMinute
+                if pattern.daypart == .daytime {
+                    minute += Self.diagramV4PhaseMinutes(direction: pattern.direction, category: pattern.category)
+                }
+                let period: TrafficServicePeriod
+                switch pattern.daypart {
+                case .morningRush: period = .morningRush
+                case .daytime, .evening: period = .daytime
+                case .night: period = .night
+                }
+                let trackID: String
+                let startPosition: Double
+                let destinationPosition: Double
+                if isDown {
+                    trackID = "main-up"
+                    startPosition = 0
+                    destinationPosition = mainlineLength
+                } else {
+                    trackID = "main-down"
+                    startPosition = mainlineLength
+                    destinationPosition = 0
+                }
+                while minute <= lastMinute {
+                    trains.append(AITrainPlan(
+                        id: "v4-\(service.category.rawValue)-\(pattern.direction.rawValue)-\(pattern.daypart.rawValue)-\(minute)",
+                        trackID: trackID,
+                        departureTimeSeconds: max(0, Double(minute * 60) - serviceDayStart),
+                        startPositionM: startPosition,
+                        destinationPositionM: destinationPosition,
+                        maximumSpeedMps: maximumSpeed,
+                        accelerationMps2: acceleration,
+                        brakingDecelerationMps2: acceleration + 0.1,
+                        lengthM: lengthM,
+                        stops: stops,
+                        serviceType: serviceType,
+                        servicePeriod: period,
+                        operationKind: .passengerService,
+                        scheduledTripDurationSeconds: durationSeconds
+                    ))
+                    minute += pattern.intervalMinutes
+                }
+            }
+        }
+
+        // Branch shuttles every 30 minutes, 06:00-23:30, on the
+        // branch tracks (8 cars, like every branch formation).
+        let branchLength = plan.network.branchLengthKm * 1_000
+        for isUp in [true, false] {
+            var orderedBranchStops = branchChainages
+            if !isUp { orderedBranchStops.reverse() }
+            let branchStops = orderedBranchStops.map { TrafficTrainStop(positionM: $0, dwellSeconds: 30) }
+            let trackID: String
+            let startPosition: Double
+            let destinationPosition: Double
+            if isUp {
+                trackID = "branch-up"
+                startPosition = 0
+                destinationPosition = branchLength
+            } else {
+                trackID = "branch-down"
+                startPosition = branchLength
+                destinationPosition = 0
+            }
+            var minute = 6 * 60
+            while minute <= 23 * 60 + 30 {
+                let period: TrafficServicePeriod
+                if minute < 9 * 60 {
+                    period = .morningRush
+                } else if minute < 22 * 60 {
+                    period = .daytime
+                } else {
+                    period = .night
+                }
+                trains.append(AITrainPlan(
+                    id: "v4-branch-\(isUp ? "up" : "down")-\(minute)",
+                    trackID: trackID,
+                    departureTimeSeconds: max(0, Double(minute * 60) - serviceDayStart),
+                    startPositionM: startPosition,
+                    destinationPositionM: destinationPosition,
+                    maximumSpeedMps: 13.9,
+                    accelerationMps2: 0.70,
+                    brakingDecelerationMps2: 0.80,
+                    lengthM: 8 * 19.5,
+                    stops: branchStops,
+                    serviceType: .local,
+                    servicePeriod: period,
+                    operationKind: .passengerService,
+                    scheduledTripDurationSeconds: nil
+                ))
+                minute += 30
+            }
+        }
+
+        trains.append(contentsOf: depotTrains)
+        return trains
     }
 
     private static func makeTrafficEngine(from scenario: TrafficScenario) -> TrafficSimulationEngine? {
