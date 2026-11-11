@@ -37,7 +37,6 @@ enum SimulationRunPhase: String, Sendable {
     case overshot
 }
 
-@MainActor
 /// Passing waits （待避）, 2026-11-11 (user request): at the three
 /// multi-track stations a low-priority train (rapid / semi-express /
 /// local) pulls into the outer siding platform and waits while a
@@ -90,6 +89,7 @@ enum PassingWaitPlanner {
     }
 }
 
+@MainActor
 final class SimulatorModel: ObservableObject {
     private static let blockLengthM = 500.0
     private static let safetyMarginM = 18.0
