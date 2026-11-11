@@ -177,7 +177,7 @@ def main() -> None:
     # (IHDR width/height are big-endian uint32 at bytes 16..24).
     texture_root = ROOT / "Packages/RailwaySceneFidelity/Sources/RailwaySceneFidelity/Resources"
     textures = sorted(texture_root.glob("scenery_*.png"))
-    require(len(textures) == 51, f"expected 51 scenery textures, found {len(textures)}")
+    require(len(textures) == 102, f"expected 102 scenery textures, found {len(textures)}")
     for texture in textures:
         header = texture.read_bytes()[:24]
         require(header[:8] == b"\x89PNG\r\n\x1a\n", f"not a PNG: {texture.name}")
