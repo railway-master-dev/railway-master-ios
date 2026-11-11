@@ -1578,7 +1578,7 @@ final class SimulatorModel: ObservableObject {
     // quality40: station survey — every one of the 32 stations,
     // shot from 20 m before its centre (the user's choice), so the
     // platform faces, canopies and station cores fill the frame.
-    private static let tourSpotsM: [Double] = [5, 1_819, 3_851, 5_980, 8_206, 10_335, 12_367, 14_593, 16_915, 19_141, 21_270, 24_174, 26_303, 28_432, 30_657, 32_883, 35_109, 37_335, 39_561, 41_786, 44_012, 46_238, 48_464, 50_690, 52_915, 55_141, 57_367, 59_980, 61_980, 63_980, 65_980, 67_980, 17_905, 3_545]
+    private static let tourSpotsM: [Double] = [5, 1_819, 3_851, 5_980, 8_206, 10_335, 12_367, 14_593, 16_915, 19_141, 21_270, 24_174, 26_303, 28_432, 30_657, 32_883, 35_109, 37_335, 39_561, 41_786, 44_012, 46_238, 48_464, 50_690, 52_915, 55_141, 57_367, 59_980, 61_980, 63_980, 65_980, 67_980, 17_905, 3_545, 12_067]
 
     /// The active tour's spots: the short-line tours launched with
     /// `-RMZooTour` / `-RMParkTour` photograph their own routes
@@ -1613,8 +1613,16 @@ final class SimulatorModel: ObservableObject {
     // executed the train had teleported on. The tour is now a
     // two-way handshake: after READY the app HOLDS the spot until
     // the script writes Documents/tour-ack-<i>.txt (it writes the
-    // ACK right after each screenshot), with a 150 s timeout so a
-    // dead script can never stall the tour or the job.
+    // ACK only after a successful screenshot), with a 900 s
+    // timeout so a dead script can never stall the tour or the
+    // job. 2026-11-11: the timeout was 150 s, but CI #409 showed
+    // a single wedged simctl screenshot can block for 300-900 s —
+    // the app timed out and teleported on mid-capture, so files
+    // were labelled with the wrong stations (06-st03-oginuma.png
+    // actually showed Akimizu). 900 s outlasts any single capture
+    // the script will still retry, and the script's own recovery
+    // (relaunch, then simulator reboot) releases the hold sooner
+    // in practice.
     private var tourAwaitingAckIndex = -1
     private var tourReadyWallTime: TimeInterval = -1
     private var tourLastAckCheckWall: TimeInterval = -1
@@ -1638,11 +1646,11 @@ final class SimulatorModel: ObservableObject {
         } else if tourAwaitingAckIndex == tourSpotIndex, tourReadyWallTime >= 0 {
             // READY is out for the current spot: wait for the
             // script's ACK (checked about twice a second), or time
-            // out after 150 s and move on regardless.
+            // out after 900 s and move on regardless.
             if now - tourLastAckCheckWall >= 0.5 {
                 tourLastAckCheckWall = now
                 let acknowledged = tourAckExists(for: tourSpotIndex)
-                if acknowledged || now - tourReadyWallTime >= 150 {
+                if acknowledged || now - tourReadyWallTime >= 900 {
                     if !acknowledged {
                         logTourLine("ACKTIMEOUT spot=\(tourSpotIndex)\n")
                     }
@@ -1925,6 +1933,7 @@ final class SimulatorModel: ObservableObject {
             return false
         }
         storageNotice = nil
+        applyFormationProfile(category: category, variant: variant)
         route = trip.profile
         activeStops = trip.stops
         routeID = trip.routeID
@@ -1935,6 +1944,34 @@ final class SimulatorModel: ObservableObject {
         blockSystem = Self.makeBlocks(route: trip.profile)
         reset()
         return true
+    }
+
+    /// Formation rules (user decision, 2026-11-11): the limited
+    /// express is always the resistance-control 8-car formation
+    /// (the 117 series, resistor control as specified); locals and
+    /// the branch, zoo and park shuttles are always 8 cars; the
+    /// other categories run 10 cars on the main line and 8 cars on
+    /// through-branch services, whose 170 m platforms cannot take
+    /// a 195 m 10-car train. The VVVF formations carry the E231
+    /// exterior and the resistance formation the 117 (scene-side
+    /// selection keys off profile car count and control family).
+    private func applyFormationProfile(category: ServiceCategory, variant: RegionalRouteVariant) {
+        if variant == .branchShuttle || variant == .zooLine || variant == .parkLine {
+            selectVehicleProfile(.vvvfFormation8)
+            return
+        }
+        switch category {
+        case .limitedExpress:
+            selectVehicleProfile(.resistanceFormation8)
+        case .local:
+            selectVehicleProfile(.vvvfFormation8)
+        case .rapidExpress, .express, .rapid, .semiExpress:
+            if variant == .throughBranch {
+                selectVehicleProfile(.vvvfFormation8)
+            } else {
+                selectVehicleProfile(.vvvfFormation10)
+            }
+        }
     }
 
     private func rebuildStopScoringSession() {
