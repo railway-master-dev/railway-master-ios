@@ -26,6 +26,7 @@ private enum DrivingSheet: String, Identifiable {
     case doorProcedureScoring
     case saveManager
     case sessionResult
+    case credits
 
     var id: String { rawValue }
 }
@@ -274,6 +275,8 @@ struct ContentView: View {
                 )
             case .regionalAudit:
                 RegionalNetworkAuditSheet()
+            case .credits:
+                CreditsSheet()
             case .audioControls:
                 SoundControlSheet(
                     isEnabled: Binding(
@@ -508,6 +511,11 @@ struct ContentView: View {
                     activeSheet = .audioControls
                 } label: {
                     Label("サウンド試聴・音量", systemImage: "speaker.wave.2.fill")
+                }
+                Button {
+                    activeSheet = .credits
+                } label: {
+                    Label("クレジット", systemImage: "doc.text")
                 }
             } label: {
                 Image(systemName: "calendar.badge.clock")
