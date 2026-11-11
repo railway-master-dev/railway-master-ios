@@ -287,6 +287,19 @@ private struct ParsedGeneratedGLB {
         return nodes[index]
     }
 
+    /// Raw bytes of an embedded image (PNG/JPEG in a bufferView),
+    /// for glTF materials that carry real textures.
+    func imageData(at index: Int) -> Data? {
+        let images = json["images"] as? [[String: Any]] ?? []
+        guard images.indices.contains(index),
+              let viewIndex = images[index]["bufferView"] as? Int,
+              let view = try? bufferView(at: viewIndex) else { return nil }
+        let start = view["byteOffset"] as? Int ?? 0
+        let length = view["byteLength"] as? Int ?? 0
+        guard start >= 0, length > 0, start + length <= binary.count else { return nil }
+        return binary.subdata(in: start..<(start + length))
+    }
+
     func mesh(at index: Int) throws -> [String: Any] {
         let meshes = json["meshes"] as? [[String: Any]] ?? []
         guard meshes.indices.contains(index) else { throw GeneratedGLBFormatError.invalidReference("mesh index") }
@@ -338,6 +351,7 @@ private struct ParsedGeneratedGLB {
 #if canImport(RealityKit) && canImport(UIKit)
 import RealityKit
 import UIKit
+import ImageIO
 import simd
 
 public enum RailwayGeneratedAssetLoaderError: Error, LocalizedError {
@@ -360,6 +374,52 @@ public enum RailwayGeneratedAssetLoaderError: Error, LocalizedError {
 public enum RailwayGeneratedAssetLoader {
     private static var documents: [String: ParsedGeneratedGLB] = [:]
     private static var meshes: [String: MeshResource] = [:]
+    private static var glbTextures: [String: TextureResource] = [:]
+
+    /// The glTF PBR material of a primitive, when it carries one
+    /// with a base color (texture or factor). Returns nil for the
+    /// material-less bundled models, which keep the COLOR_0 path.
+    private static func gltfMaterial(asset: RailwayGenerated3DAsset, document: ParsedGeneratedGLB, primitive: [String: Any]) -> PhysicallyBasedMaterial? {
+        guard let materialIndex = primitive["material"] as? Int else { return nil }
+        let materials = document.json["materials"] as? [[String: Any]] ?? []
+        guard materials.indices.contains(materialIndex),
+              let pbr = materials[materialIndex]["pbrMetallicRoughness"] as? [String: Any] else { return nil }
+        var tint = UIColor.white
+        var hasFactor = false
+        if let factor = pbr["baseColorFactor"] as? [NSNumber], factor.count >= 3 {
+            tint = UIColor(red: CGFloat(factor[0].floatValue), green: CGFloat(factor[1].floatValue), blue: CGFloat(factor[2].floatValue), alpha: 1)
+            hasFactor = true
+        }
+        var material = PhysicallyBasedMaterial()
+        if let textureInfo = pbr["baseColorTexture"] as? [String: Any],
+           let textureIndex = textureInfo["index"] as? Int,
+           let texture = gltfTexture(asset: asset, document: document, textureIndex: textureIndex) {
+            material.baseColor = .init(tint: tint, texture: .init(texture))
+        } else if hasFactor {
+            material.baseColor = .init(tint: tint, texture: nil)
+        } else {
+            return nil
+        }
+        let roughness = (pbr["roughnessFactor"] as? NSNumber)?.floatValue ?? 0.6
+        let metallic = (pbr["metallicFactor"] as? NSNumber)?.floatValue ?? 0.0
+        material.roughness = .init(floatLiteral: roughness)
+        material.metallic = .init(floatLiteral: metallic)
+        return material
+    }
+
+    private static func gltfTexture(asset: RailwayGenerated3DAsset, document: ParsedGeneratedGLB, textureIndex: Int) -> TextureResource? {
+        let key = "\(asset.rawValue):tex:\(textureIndex)"
+        if let cached = glbTextures[key] { return cached }
+        let textures = document.json["textures"] as? [[String: Any]] ?? []
+        guard textures.indices.contains(textureIndex),
+              let imageIndex = textures[textureIndex]["source"] as? Int,
+              let data = document.imageData(at: imageIndex),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              let texture = try? TextureResource.generate(from: image, options: .init(semantic: .color)) else { return nil }
+        glbTextures[key] = texture
+        return texture
+    }
 
     public static func loadModel(for asset: RailwayGenerated3DAsset) throws -> Entity {
         let document = try parsedDocument(for: asset)
@@ -451,26 +511,36 @@ public enum RailwayGeneratedAssetLoader {
                     meshResource = try MeshResource.generate(from: [descriptor])
                     meshes[meshCacheKey] = meshResource
                 }
-                let color = try document.colorAccessor(attributes["COLOR_0"])
-                var material = SimpleMaterial(
-                    color: UIColor(red: CGFloat(color.x), green: CGFloat(color.y), blue: CGFloat(color.z), alpha: CGFloat(color.w)),
-                    roughness: .init(floatLiteral: Self.roughness(for: name)),
-                    isMetallic: Self.isMetallic(name)
-                )
-                // Station surfaces with generated UVs get the package photo
-                // texture for their role; the texture carries the color, so
-                // the tint stays white. Anything unmapped keeps its flat
-                // vertex color exactly as before.
-                if hasUVs,
-                   let textureName = Self.stationTextureName(
-                       nodeName: name,
-                       meshName: mesh["name"] as? String,
-                       materialName: Self.materialName(in: document, primitive: primitive)),
-                   let texture = Self.stationTexture(named: textureName) {
-                    material.baseColor = .texture(texture)
-                    material.tintColor = .white
+                // Primitives carrying a real glTF PBR material (the
+                // own.guest train models: embedded photo textures,
+                // no COLOR_0) render through that material. Bundled
+                // procedural GLBs have no materials at all and keep
+                // the vertex-color path below, unchanged.
+                let model: ModelEntity
+                if let pbrMaterial = Self.gltfMaterial(asset: asset, document: document, primitive: primitive) {
+                    model = ModelEntity(mesh: meshResource, materials: [pbrMaterial])
+                } else {
+                    let color = try document.colorAccessor(attributes["COLOR_0"])
+                    var material = SimpleMaterial(
+                        color: UIColor(red: CGFloat(color.x), green: CGFloat(color.y), blue: CGFloat(color.z), alpha: CGFloat(color.w)),
+                        roughness: .init(floatLiteral: Self.roughness(for: name)),
+                        isMetallic: Self.isMetallic(name)
+                    )
+                    // Station surfaces with generated UVs get the package photo
+                    // texture for their role; the texture carries the color, so
+                    // the tint stays white. Anything unmapped keeps its flat
+                    // vertex color exactly as before.
+                    if hasUVs,
+                       let textureName = Self.stationTextureName(
+                           nodeName: name,
+                           meshName: mesh["name"] as? String,
+                           materialName: Self.materialName(in: document, primitive: primitive)),
+                       let texture = Self.stationTexture(named: textureName) {
+                        material.baseColor = .texture(texture)
+                        material.tintColor = .white
+                    }
+                    model = ModelEntity(mesh: meshResource, materials: [material])
                 }
-                let model = ModelEntity(mesh: meshResource, materials: [material])
                 model.name = "\(name)_primitive_\(primitiveIndex)"
                 entity.addChild(model)
             }
