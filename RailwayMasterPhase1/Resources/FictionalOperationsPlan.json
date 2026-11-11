@@ -661,7 +661,7 @@
       "daypart": "daytime",
       "firstDeparture": "09:00",
       "lastDeparture": "17:00",
-      "intervalMinutes": 25,
+      "intervalMinutes": 30,
       "plannedDurationMinutes": 100,
       "calendar": "WEEKDAY_PLACEHOLDER",
       "dataStatus": "PLACEHOLDER"
@@ -705,7 +705,7 @@
       "daypart": "daytime",
       "firstDeparture": "09:00",
       "lastDeparture": "17:00",
-      "intervalMinutes": 25,
+      "intervalMinutes": 30,
       "plannedDurationMinutes": 100,
       "calendar": "WEEKDAY_PLACEHOLDER",
       "dataStatus": "PLACEHOLDER"
@@ -749,7 +749,7 @@
       "daypart": "daytime",
       "firstDeparture": "09:00",
       "lastDeparture": "17:00",
-      "intervalMinutes": 35,
+      "intervalMinutes": 60,
       "plannedDurationMinutes": 80,
       "calendar": "WEEKDAY_PLACEHOLDER",
       "dataStatus": "PLACEHOLDER"
@@ -793,7 +793,7 @@
       "daypart": "daytime",
       "firstDeparture": "09:00",
       "lastDeparture": "17:00",
-      "intervalMinutes": 35,
+      "intervalMinutes": 60,
       "plannedDurationMinutes": 80,
       "calendar": "WEEKDAY_PLACEHOLDER",
       "dataStatus": "PLACEHOLDER"
@@ -837,7 +837,7 @@
       "daypart": "daytime",
       "firstDeparture": "09:00",
       "lastDeparture": "17:00",
-      "intervalMinutes": 50,
+      "intervalMinutes": 60,
       "plannedDurationMinutes": 60,
       "calendar": "WEEKDAY_PLACEHOLDER",
       "dataStatus": "PLACEHOLDER"
@@ -881,7 +881,7 @@
       "daypart": "daytime",
       "firstDeparture": "09:00",
       "lastDeparture": "17:00",
-      "intervalMinutes": 50,
+      "intervalMinutes": 60,
       "plannedDurationMinutes": 60,
       "calendar": "WEEKDAY_PLACEHOLDER",
       "dataStatus": "PLACEHOLDER"
