@@ -136,6 +136,15 @@ PYEOF
     # Resolve the app data container now (before launch) so the tour
     # photography below can poll the demo log the app writes there.
     APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
+    # 2026-11-11: clear any stale tour ACKs and demo log left in
+    # the container by an earlier run or attempt. A leftover
+    # tour-ack-<i>.txt releases the app's hold the moment it
+    # arrives at spot i, before the script has photographed it —
+    # one of the ways CI #409's script raced ahead of the app.
+    if [ -n "$APP_DATA" ]; then
+      rm -f "$APP_DATA/Documents"/tour-ack-*.txt 2>/dev/null || true
+      rm -f "$APP_DATA/Documents/demo-drive-log.txt" 2>/dev/null || true
+    fi
     # -RMDemoDrive -RMTour: the app teleports the standing train to a
     # new scenic chainage every ~35 s of wall time (first at ~25 s),
     # so one launch photographs sixteen different places along the
@@ -165,8 +174,10 @@ PYEOF
     # spot (model and view share the main runloop, so sim time
     # advancing means frames at the new location have been
     # presented), and then HOLDS that spot until the script writes
-    # Documents/tour-ack-<i>.txt — which the script does right
-    # after each screenshot — or 150 s pass. quality24's READY-only
+    # Documents/tour-ack-<i>.txt — which the script does only
+    # after a successful screenshot — or 900 s pass (2026-11-11:
+    # raised from 150 s after CI #409, where single captures
+    # blocked longer than the hold). quality24's READY-only
     # version still drifted (CI #232: 7 of 16 spots at their
     # labelled positions, three black frames, six duplicates of
     # one stretch of coast) because the app teleported on its own
@@ -174,13 +185,16 @@ PYEOF
     # per simctl screenshot: by the time a capture executed, the
     # train had moved on. Now the train cannot move on. Each shot
     # below waits for its spot's READY (per-spot cap 300 s, tour
-    # cap 2,400 s), settles 5 s, shoots, then writes the ACK that
-    # releases the app to the next spot. If a READY never comes,
-    # the shot is taken anyway with a warning (the app times out
-    # and advances on its own; the ACK write below is still
-    # attempted, and later waits drop to the bare settle); if the
-    # log never appears at all, the loop falls back to fixed 35 s
-    # steps and still writes ACKs when the container is known.
+    # cap 2,400 s), settles 5 s, shoots (up to 3 attempts), and
+    # only then writes the ACK that releases the app to the next
+    # spot; a spot whose captures all fail escalates recovery
+    # (app relaunch, then simulator reboot) before one final ACK
+    # releases the app anyway. If a READY never comes, the shot
+    # is taken anyway with a warning (the app times out and
+    # advances on its own, and later waits drop to the bare
+    # settle); if the log never appears at all, the loop falls
+    # back to fixed 35 s steps and still writes ACKs when the
+    # container is known.
     # Spots (tourSpotsM in SimulatorModel.swift, in order): the
     # quality40 station survey: all 32 stations in route order,
     # each shot 20 m before the station centre (S01 Kaibukuro at
@@ -190,16 +204,34 @@ PYEOF
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
       TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
     fi
-    TOUR_SHOTS="04-st01-kaibukuro 05-st02-asanuma 06-st03-oginuma 07-st04-ohara 08-st05-ishigamiike 09-st06-hibarigaoka 10-st07-akimizu 11-st08-wakakusadai 12-st09-higashimurakawa 13-st10-nishitachikawa 14-st11-hihara 15-st12-tououchihara 16-st13-makufu 17-st14-tsudaike 18-st15-mikkaido 19-st16-misagi 20-st17-touousahara 21-st18-shigeno 22-st19-kazusaninomiya 23-st20-togane 24-st21-katsunuma 25-st22-kisaragawa 26-st23-namihana 27-st24-ohno 28-st25-mihama 29-st26-tatekawa 30-st27-chikura 31-st28-kamogawa 32-st29-kuruno 33-st30-ohbitsu 34-st31-hirayama 35-st32-kazusaryuzan 36-crossing-17965 37-crossing-3605"
+    TOUR_SHOTS="04-st01-kaibukuro 05-st02-asanuma 06-st03-oginuma 07-st04-ohara 08-st05-ishigamiike 09-st06-hibarigaoka 10-st07-akimizu 11-st08-wakakusadai 12-st09-higashimurakawa 13-st10-nishitachikawa 14-st11-hihara 15-st12-tououchihara 16-st13-makufu 17-st14-tsudaike 18-st15-mikkaido 19-st16-misagi 20-st17-touousahara 21-st18-shigeno 22-st19-kazusaninomiya 23-st20-togane 24-st21-katsunuma 25-st22-kisaragawa 26-st23-namihana 27-st24-ohno 28-st25-mihama 29-st26-tatekawa 30-st27-chikura 31-st28-kamogawa 32-st29-kuruno 33-st30-ohbitsu 34-st31-hirayama 35-st32-kazusaryuzan 36-crossing-17965 37-crossing-3605 38-akimizu-fan"
     TOUR_START=$SECONDS
     TOUR_STALLED=0
     TOUR_INDEX=0
-    # quality26 tour-hardening state: consecutive empty captures
-    # and the one-shot relaunch guard used after the screenshot
-    # below (see the comments there).
-    EMPTY_STREAK=0
-    TOUR_RELAUNCHED=0
+    # 2026-11-11 tour-hardening state: recovery escalation stage
+    # for wedged captures (0 = none yet, 1 = app relaunched,
+    # 2 = simulator rebooted). CI #409 attempt 1 lost every shot
+    # from spot 3 onward to persistent 0-byte captures that the
+    # old one-shot app relaunch could not clear.
+    RECOVERY_STAGE=0
     : > screenshots/tour-progress.txt
+    # One capture with up to 3 attempts; sets TOUR_SIZE to the
+    # resulting file size (0 when every attempt came back empty).
+    tour_try_capture() {
+      TOUR_SIZE=0
+      local tries=0
+      while [ "$tries" -lt 3 ]; do
+        xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$1.png" 2>/dev/null || true
+        TOUR_SIZE=0
+        if [ -f "screenshots/$1.png" ]; then
+          TOUR_SIZE=$(stat -f %z "screenshots/$1.png" 2>/dev/null || echo 0)
+        fi
+        if [ "$TOUR_SIZE" -gt 0 ]; then return 0; fi
+        tries=$((tries + 1))
+        if [ "$tries" -lt 3 ]; then sleep 8; fi
+      done
+      return 1
+    }
     for SHOT in $TOUR_SHOTS; do
       SPOT=$TOUR_INDEX
       TOUR_INDEX=$((TOUR_INDEX + 1))
@@ -226,49 +258,43 @@ PYEOF
       else
         sleep 35
       fi
-      xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$SHOT.png" 2>/dev/null || true
-      # quality26: a wedged capture can leave a missing or 0-byte
-      # file — CI #238 lost every shot from spot 8 onward that way
-      # and kept no usable tour log to diagnose it with. Retry an
-      # empty capture once after a short wait, record every shot's
-      # outcome in tour-progress.txt, and snapshot the demo log
-      # after each spot so the freshest partial log survives even
-      # if the run wedges later.
-      SHOT_SIZE=0
-      if [ -f "screenshots/$SHOT.png" ]; then
-        SHOT_SIZE=$(stat -f %z "screenshots/$SHOT.png" 2>/dev/null || echo 0)
-      fi
-      if [ "$SHOT_SIZE" -eq 0 ]; then
-        echo "tour-progress: spot $SPOT $SHOT empty after first attempt; retrying in 10 s" >> screenshots/tour-progress.txt
-        sleep 10
-        xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$SHOT.png" 2>/dev/null || true
-        if [ -f "screenshots/$SHOT.png" ]; then
-          SHOT_SIZE=$(stat -f %z "screenshots/$SHOT.png" 2>/dev/null || echo 0)
+      # 2026-11-11 capture protocol (replaces the quality26
+      # one-retry logic): capture with up to 3 attempts, and write
+      # the ACK ONLY after a non-empty capture. CI #409 showed why
+      # this matters: a wedged simctl screenshot first blocked for
+      # 300-900 s, then returned 0 bytes for the rest of the run,
+      # while the old script ACKed every spot regardless — each
+      # pre-written ACK released the app's hold before it even
+      # arrived, so later "captures" photographed a train that was
+      # teleporting on its own timeout schedule and the filenames
+      # drifted away from the content. The app now holds a spot
+      # for 900 s, far longer than any capture sequence below.
+      tour_try_capture "$SHOT"
+      if [ "$TOUR_SIZE" -eq 0 ] && [ "$RECOVERY_STAGE" -lt 2 ]; then
+        # Escalating recovery: stage 1 relaunches the app, stage 2
+        # reboots the simulator itself (CI #409's wedge survived
+        # an app relaunch — every capture stayed 0 bytes).
+        RECOVERY_STAGE=$((RECOVERY_STAGE + 1))
+        if [ "$RECOVERY_STAGE" -eq 1 ]; then
+          echo "tour-progress: spot $SPOT $SHOT captures failing; relaunching the app (recovery stage 1)" >> screenshots/tour-progress.txt
+          xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+          sleep 3
+          xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
+        else
+          echo "tour-progress: spot $SPOT $SHOT captures still failing; rebooting the simulator (recovery stage 2)" >> screenshots/tour-progress.txt
+          xcrun simctl shutdown "$SIMULATOR_UDID" 2>/dev/null || true
+          sleep 5
+          xcrun simctl boot "$SIMULATOR_UDID" || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b || true
+          APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
+          if [ -n "$APP_DATA" ]; then
+            TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
+          fi
+          xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
         fi
-      fi
-      echo "tour-progress: spot $SPOT $SHOT elapsed=$((SECONDS - TOUR_START))s size=${SHOT_SIZE}B" >> screenshots/tour-progress.txt
-      if [ -n "$TOUR_LOG" ]; then
-        cp "$TOUR_LOG" screenshots/demo-drive-log-snapshot.txt 2>/dev/null || true
-      fi
-      # quality26 recovery: two empty shots in a row mean the app
-      # or the simulator has wedged, not a slow frame. Relaunch
-      # the tour once and pre-ACK every already-photographed spot
-      # (tour-ack-0 .. tour-ack-(SPOT-1)) so the restarted app
-      # races through them — it still spends its ~4 s of sim time
-      # at each — and holds again at the current spot. The normal
-      # ACK write below then releases it onward as usual.
-      if [ "$SHOT_SIZE" -eq 0 ]; then
-        EMPTY_STREAK=$((EMPTY_STREAK + 1))
-      else
-        EMPTY_STREAK=0
-      fi
-      if [ "$EMPTY_STREAK" -ge 2 ] && [ "$TOUR_RELAUNCHED" -eq 0 ]; then
-        TOUR_RELAUNCHED=1
-        EMPTY_STREAK=0
-        echo "tour-progress: spot $SPOT $SHOT two consecutive empty shots; relaunching the app once" >> screenshots/tour-progress.txt
-        xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
-        sleep 3
-        xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
+        # Pre-ACK every already-photographed spot so the restarted
+        # app races through them (it still spends its ~4 s of sim
+        # time at each) and holds again at the current spot.
         if [ -n "$APP_DATA" ]; then
           ACK_SPOT=0
           while [ "$ACK_SPOT" -lt "$SPOT" ]; do
@@ -276,10 +302,30 @@ PYEOF
             ACK_SPOT=$((ACK_SPOT + 1))
           done
         fi
+        # Wait for the restarted app to hold this spot again.
+        WAITED=0
+        while [ "$WAITED" -lt 300 ]; do
+          MAXREADY="$(grep -o 'READY spot=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
+          if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$SPOT" ]; then break; fi
+          sleep 5
+          WAITED=$((WAITED + 5))
+        done
+        sleep 5
+        tour_try_capture "$SHOT"
       fi
-      # Release the app to the next spot (see the tour comment
-      # above). APP_DATA is the app's data container on this host,
-      # so writing the ACK file here is writing into the app's
+      if [ "$TOUR_SIZE" -gt 0 ]; then
+        echo "tour-progress: spot $SPOT $SHOT elapsed=$((SECONDS - TOUR_START))s size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+      else
+        echo "tour-progress: spot $SPOT $SHOT FAILED elapsed=$((SECONDS - TOUR_START))s size=0B" >> screenshots/tour-progress.txt
+      fi
+      if [ -n "$TOUR_LOG" ]; then
+        cp "$TOUR_LOG" screenshots/demo-drive-log-snapshot.txt 2>/dev/null || true
+      fi
+      # Release the app to the next spot. On success this is the
+      # handshake working as designed; on failure it is the final
+      # fallback so one wedged spot cannot stall the whole tour.
+      # APP_DATA is the app's data container on this host, so
+      # writing the ACK file here is writing into the app's
       # Documents, which is exactly where the app polls for it.
       if [ -n "$APP_DATA" ]; then
         printf 'ack %s\n' "$SPOT" > "$APP_DATA/Documents/tour-ack-$SPOT.txt" 2>/dev/null || true
@@ -316,8 +362,8 @@ PYEOF
         else
           sleep 35
         fi
-        xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$SHOT.png" 2>/dev/null || true
-        echo "tour-progress: short $EXTRA_ARG spot $IDX $SHOT" >> screenshots/tour-progress.txt
+        tour_try_capture "$SHOT"
+        echo "tour-progress: short $EXTRA_ARG spot $IDX $SHOT size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
         if [ -n "$APP_DATA" ]; then
           printf 'ack %s\n' "$IDX" > "$APP_DATA/Documents/tour-ack-$IDX.txt" 2>/dev/null || true
         fi
