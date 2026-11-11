@@ -351,6 +351,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var platformPeople: [String: Entity] = [:]
     private var aiTrainEntities: [String: Entity] = [:]
     private var vehicleModels: [RailwayVehicleModel] = []
+    private var glbCarRoots: [Entity] = []
     private var cabModel: RailwayVehicleModel?
     private var highFidelityLeadVehicle: RailwayVehicleHighFidelityModel?
     private var lastHighFidelityUpdateTime: Double?
@@ -383,6 +384,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var sceneFidelityAdapter = RailwayRealityKitSceneAdapter()
     private var sceneFidelityDensity = SceneDensityControls.preset(.balanced)
     private var currentCabDesk = FictionalCabAndSoundCatalog.fieldChopper
+    private var currentServiceCategory: ServiceCategory = .local
     private var lastSceneFidelityBuildChainage = Double.nan
 
     private let ballastMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.74, green: 0.68, blue: 0.62, alpha: 1), roughness: 0.96, textureName: "scenery_ballast", normalName: "normal_ballast")
@@ -468,6 +470,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private let houseFacadeMaterial4 = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_house_facade_4")
     private let houseFacadeMaterial5 = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_house_facade_5")
     private let shopFacadeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.9, textureName: "scenery_shop_facade")
+    /// 2026-11-11 evening (variety pass, user: "同じオブジェクト
+    /// ばっかりでリアルじゃない"): repainted variants derived
+    /// in-house from the existing elevations — a warm-beige and a
+    /// blue-grey house, a re-signed shop, a sand-tinted apartment —
+    /// so neighbouring plots stop repeating the same face.
+    private let houseFacadeMaterial6 = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_house_facade_6")
+    private let houseFacadeMaterial7 = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_house_facade_7")
+    private let shopFacadeMaterial2 = RailwaySceneWorld.texturedPBR(.white, roughness: 0.9, textureName: "scenery_shop_facade_2")
+    private let photoApartmentMaterial3 = RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade_5")
     /// quality41: photoreal storefronts for the procedural
     /// convenience store and supermarket (generated elevations:
     /// glass front with the interior showing, stripe band, blank
@@ -610,6 +621,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         dynamicSignalAspect = nil
         aiTrainEntities.removeAll()
         vehicleModels.removeAll()
+        glbCarRoots.removeAll()
         highFidelityLeadVehicle = nil
         generatedLeadVehicleRoot = nil
         importedStationEntity = nil
@@ -626,8 +638,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         renderQualitySettings = RenderQualityResolver.resolve(profile: quality.profile, thermalCondition: .nominal)
         let safeCarCount = min(max(vehicleCarCount, 1), 12)
         currentCabDesk = cabDesk
+        currentServiceCategory = route.category
         let stationSignature = stationModelPlacements.map { "\($0.stationId):\($0.chainageM):\($0.asset.rawValue)" }.joined(separator: ",")
-        routeSignature = "\(route.lineName)|\(route.distanceM)|\(quality.rawValue)|\(routeVariant.rawValue)|\(travelDirection.rawValue)|cars:\(safeCarCount)|cab:\(cabDesk.family.rawValue)|stations:\(stationSignature)"
+        routeSignature = "\(route.lineName)|\(route.distanceM)|\(quality.rawValue)|\(routeVariant.rawValue)|\(travelDirection.rawValue)|cars:\(safeCarCount)|cab:\(cabDesk.family.rawValue)|svc:\(route.category.rawValue)|stations:\(stationSignature)"
         didBuild = true
         let profileInterval: Double
         switch quality {
@@ -747,6 +760,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             buildTunnels(route: route)
             buildSignals(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildCableTrough(route: route, travelDirection: travelDirection)
+            buildLinesideFence(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildSubstations(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildBillboards(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             buildCatenary(route: route, routeVariant: routeVariant, travelDirection: travelDirection, showcaseSection: travelDirection == .up && (routeVariant == .mainline || routeVariant == .throughBranch))
             if routeVariant != .zooLine && routeVariant != .parkLine {
                 buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
@@ -754,6 +770,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 buildRuralDressing(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 buildTreeLinesAndHills(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 buildStationCharacter(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                buildStationFronts(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                buildStationLandmarks(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 buildSpeedSigns(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                 buildSignCatalog(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             }
@@ -882,6 +900,25 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             )
             // Vehicle meshes face local -Z; negative route yaw aligns that end with route-forward.
             model.root.orientation = simd_quatf(angle: -carSample.heading, axis: SIMD3<Float>(0, 1, 0)) *
+                simd_quatf(angle: carPitch, axis: SIMD3<Float>(1, 0, 0)) *
+                simd_quatf(angle: -carSample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
+        }
+        // GLB consist cars (E231 / 117 exteriors) follow the same
+        // per-car pose as the procedural roots; wrapper index is
+        // the consist index from the front.
+        for (index, wrapper) in glbCarRoots.enumerated() {
+            let chainage = positionM - 9.75 - Double(index) * 19.5
+            let carSample = self.sample(at: chainage)
+            let carLateral = SIMD3<Float>(cos(carSample.heading), 0, sin(carSample.heading))
+            let trackSide: Float = playerTrackLateral(at: chainage)
+            wrapper.position = SIMD3<Float>(
+                carSample.x + trackSide * carLateral.x, carSample.elevationM, carSample.z + trackSide * carLateral.z
+            )
+            let carPitch = RegionalRouteGeometrySampler.carBodyPitchRadians(
+                frontBogieElevationM: self.sample(at: chainage + 6.35).elevationM,
+                rearBogieElevationM: self.sample(at: chainage - 6.35).elevationM
+            )
+            wrapper.orientation = simd_quatf(angle: -carSample.heading, axis: SIMD3<Float>(0, 1, 0)) *
                 simd_quatf(angle: carPitch, axis: SIMD3<Float>(1, 0, 0)) *
                 simd_quatf(angle: -carSample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
         }
@@ -2051,6 +2088,182 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
     /// quality41: the lineside furniture ChatGPT's review and
     /// the photoreal research both rank first: a continuous cable
+    /// Lineside protective fence (2026-11-11 evening, front-view
+    /// survey): the continuous layer of the lineside — cable
+    /// trough, drainage, and this fence — is what makes a stretch
+    /// read as a real railway even where nothing else stands.
+    /// Until now the fence existed only in the 1,856 m showcase
+    /// section. Posts every ~17 m with a top and mid rail at
+    /// +/-5.3 m on both sides of the main line. It breaks where
+    /// the real one does: station platforms, level crossings,
+    /// throat fans (the siding diverges through the fence line),
+    /// tunnels, and high structures, where the ground falls away
+    /// and a ground-anchored fence would float beside the piers.
+    private func buildLinesideFence(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let fanSpans = throatFanSpans()
+        func blocked(_ d: Double) -> Bool {
+            if inStationZone(d, extraMargin: 6) { return true }
+            if nearCrossing(d, margin: 12) { return true }
+            for span in fanSpans where d > span.start - 6 && d < span.end + 6 { return true }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { return true }
+            return false
+        }
+        for side: Float in [-1, 1] {
+            var batch = MeshBatchBuilder()
+            var batchIndex = 0
+            var prevTop: SIMD3<Float>? = nil
+            var prevMid: SIMD3<Float>? = nil
+            var postsInBatch = 0
+            var d = 40.0
+            while d < route.distanceM - 40 {
+                defer { d += 17 }
+                if blocked(d) {
+                    prevTop = nil
+                    prevMid = nil
+                    continue
+                }
+                let s = sample(at: d)
+                let base = groundOffsetPoint(s, lateral: side * 5.3)
+                let postH = (s.elevationM + 0.75) - base.y
+                if postH < 0.8 || postH > 3.5 {
+                    prevTop = nil
+                    prevMid = nil
+                    continue
+                }
+                batch.addBox(center: SIMD3<Float>(base.x, base.y + postH / 2, base.z), size: SIMD3<Float>(0.09, postH, 0.09), yaw: -s.heading)
+                let top = SIMD3<Float>(base.x, base.y + postH, base.z)
+                let mid = SIMD3<Float>(base.x, base.y + postH * 0.55, base.z)
+                if let pt = prevTop, let pm = prevMid {
+                    batch.addSegment(from: pm, to: mid, thickness: 0.04)
+                    batch.addSegment(from: pt, to: top, thickness: 0.05)
+                }
+                prevTop = top
+                prevMid = mid
+                postsInBatch += 1
+                if postsInBatch >= 420 {
+                    if let mesh = batch.build(name: "lineside-fence-\(Int(side))-\(batchIndex)", material: poleMaterial) { world.addChild(mesh) }
+                    batch = MeshBatchBuilder()
+                    batchIndex += 1
+                    postsInBatch = 0
+                    prevTop = nil
+                    prevMid = nil
+                }
+            }
+            if let mesh = batch.build(name: "lineside-fence-\(Int(side))-\(batchIndex)", material: poleMaterial) { world.addChild(mesh) }
+        }
+    }
+
+    /// Substations (2026-11-11 evening, front-view survey): the
+    /// big periodic node of the lineside — a fenced compound with
+    /// transformers, insulator stacks and a gantry, roughly every
+    /// 4 km, alternating sides. The line had none; the survey
+    /// names these compounds as one of the elements that
+    /// punctuate a real line.
+    private func buildSubstations(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let padMat = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_ballast")
+        let boxMat = Self.pbr(UIColor(red: 0.45, green: 0.50, blue: 0.47, alpha: 1), metallic: 0.35, roughness: 0.55)
+        let frameMat = Self.pbr(UIColor(red: 0.40, green: 0.42, blue: 0.44, alpha: 1), metallic: 0.6, roughness: 0.45)
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        var idx = 0
+        var d = 3_900.0
+        while d < route.distanceM - 900 {
+            defer { d += 4_300; idx += 1 }
+            let jitter = Double(stableIndex("substation-\(idx)", count: 9) - 4) * 90
+            let site = d + jitter
+            if inStationZone(site, extraMargin: 260) || nearCrossing(site, margin: 40) || nearThroatFan(site) { continue }
+            if site > 27_400 && site < 28_000 { continue }
+            let centre = chainageFromCenter(distanceM: site, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            var side: Float = idx % 2 == 0 ? 1 : -1
+            if isCoastal(distanceM: site, route: route, routeVariant: routeVariant, travelDirection: travelDirection) { side = -seaSign }
+            let s = sample(at: site)
+            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+            func sp(_ along: Double, _ lateral: Float, _ dy: Float = 0) -> SIMD3<Float> {
+                let p = groundOffsetPoint(self.sample(at: site + along), lateral: lateral)
+                return SIMD3<Float>(p.x, p.y + dy, p.z)
+            }
+            func sbox(_ name: String, _ along: Double, _ lateral: Float, _ size: SIMD3<Float>, _ mat: PhysicallyBasedMaterial, _ dy: Float = 0) {
+                _ = addBox(parent: world, name: "substation-\(idx)-\(name)", size: size, position: sp(along, lateral, dy + size.y / 2), material: mat, orientation: yaw)
+            }
+            let lat = side * 17.5
+            sbox("pad", 0, lat, SIMD3<Float>(11, 0.15, 15), padMat)
+            for ca: Float in [-1, 1] {
+                for cl: Float in [-1, 1] {
+                    sbox("fencepost-\(Int(ca))-\(Int(cl))", Double(ca) * 7.3, lat + cl * 5.3, SIMD3<Float>(0.09, 1.5, 0.09), frameMat)
+                }
+            }
+            for e: Float in [-1, 1] {
+                sbox("fence-along-\(Int(e))", 0, lat + e * 5.3, SIMD3<Float>(0.05, 0.06, 14.6), frameMat, 1.42)
+                sbox("fence-along-mid-\(Int(e))", 0, lat + e * 5.3, SIMD3<Float>(0.05, 0.05, 14.6), frameMat, 0.8)
+                sbox("fence-lat-\(Int(e))", Double(e) * 7.3, lat, SIMD3<Float>(10.6, 0.06, 0.05), frameMat, 1.42)
+                sbox("fence-lat-mid-\(Int(e))", Double(e) * 7.3, lat, SIMD3<Float>(10.6, 0.05, 0.05), frameMat, 0.8)
+            }
+            for t in 0..<2 {
+                let ta = -3.4 + Double(t) * 6.8
+                sbox("transformer-\(t)", ta, lat, SIMD3<Float>(3.4, 2.4, 2.4), boxMat, 0.15)
+                for ins in 0..<3 {
+                    let ip = sp(ta + Double(ins - 1) * 0.8, lat, 2.55)
+                    let insulator = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.55, radius: 0.09), materials: [frameMat])
+                    insulator.name = "substation-\(idx)-insulator-\(t)-\(ins)"
+                    insulator.position = SIMD3<Float>(ip.x, ip.y + 0.27, ip.z)
+                    world.addChild(insulator)
+                }
+            }
+            sbox("control", 5.6, lat + side * 2.8, SIMD3<Float>(1.6, 1.9, 1.1), boxMat, 0.15)
+            for e: Float in [-1, 1] {
+                let gp = sp(Double(e) * 6.4, lat - side * 5.3)
+                let pole = ModelEntity(mesh: FallbackCylinderMesh.make(height: 6.6, radius: 0.13), materials: [frameMat])
+                pole.name = "substation-\(idx)-gantry-\(Int(e))"
+                pole.position = SIMD3<Float>(gp.x, gp.y + 3.3, gp.z)
+                world.addChild(pole)
+            }
+            sbox("gantrybeam", 0, lat - side * 5.3, SIMD3<Float>(0.28, 0.28, 13.6), frameMat, 6.3)
+        }
+    }
+
+    /// Lineside billboards (2026-11-11 evening, front-view
+    /// survey): sparse, set well back (~30 m) in open country,
+    /// with fictional ads drawn in-house. Urban stretches keep
+    /// their continuous building walls instead, and the sea side
+    /// stays open in the coastal windows so the view across the
+    /// water is not sold off.
+    private func buildBillboards(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let mats = [
+            Self.texturedPBR(.white, roughness: 0.7, textureName: "scenery_billboard_1"),
+            Self.texturedPBR(.white, roughness: 0.7, textureName: "scenery_billboard_2"),
+        ]
+        let postMat = Self.pbr(UIColor(red: 0.35, green: 0.36, blue: 0.37, alpha: 1), metallic: 0.5, roughness: 0.5)
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        var idx = 0
+        var d = 2_600.0
+        while d < route.distanceM - 700 {
+            defer { d += 2_300; idx += 1 }
+            if stableIndex("billboard-\(idx)", count: 5) >= 3 { continue }
+            if inStationZone(d, extraMargin: 350) || nearCrossing(d, margin: 60) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0 { continue }
+            var side: Float = stableIndex("billboardside-\(idx)", count: 2) == 0 ? 1 : -1
+            if isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) { side = -seaSign }
+            let s = sample(at: d)
+            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+            let lat = side * 30
+            for e: Float in [-1, 1] {
+                let pp = groundOffsetPoint(self.sample(at: d + Double(e) * 2.6), lateral: lat)
+                let post = ModelEntity(mesh: FallbackCylinderMesh.make(height: 5.4, radius: 0.14), materials: [postMat])
+                post.name = "billboard-\(idx)-post-\(Int(e))"
+                post.position = SIMD3<Float>(pp.x, pp.y + 2.7, pp.z)
+                world.addChild(post)
+            }
+            let pc = groundOffsetPoint(s, lateral: lat)
+            _ = addBox(parent: world, name: "billboard-\(idx)-panel", size: SIMD3<Float>(0.18, 3.2, 7.6), position: SIMD3<Float>(pc.x, pc.y + 5.6, pc.z), material: mats[idx % 2], orientation: yaw)
+        }
+    }
+
     /// trough along the cess and kilometre posts. The trough runs
     /// at route lateral -3.35 (the up side), stepping over every
     /// 8.5 m sample; it breaks at stations, fans, crossings and
@@ -2257,8 +2470,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let hash = stableIndex("rural-\(siteIndex)", count: 1_000)
             defer { siteIndex += 1 }
             let step = 195 + Double(hash % 90)
+            // 2026-11-11 evening: the station exclusion shrinks
+            // from 430 m to 300 m (buildStationFronts now owns the
+            // inner band); in the 300-430 m ring only the flat
+            // field patchwork and hedgerows come in, never the
+            // greenhouse or farmhouse, which could collide with
+            // the station fronts' second row of houses.
+            let nearestStationD = stationModelPlacements.map { abs($0.chainageM - d) }.min() ?? .infinity
             if urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) == 0,
-               !stationModelPlacements.contains(where: { abs($0.chainageM - d) < 430 }),
+               nearestStationD >= 300,
                !isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
                 let s = sample(at: d)
                 let groundY = groundLevelM(at: s)
@@ -2283,7 +2503,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                position: SIMD3<Float>(hp.x, groundY + 0.48, hp.z),
                                material: hedgeMat, orientation: yaw)
                     // Greenhouse on some sites.
-                    if hash % 4 == 1 {
+                    if hash % 4 == 1, nearestStationD >= 430 {
                         let gp2 = groundOffsetPoint(sample(at: d + 22), lateral: baseLat + side * 6)
                         _ = addBox(parent: world, name: "rural-greenhouse-\(siteIndex)-\(Int(side))",
                                    size: SIMD3<Float>(9, 2.9, 17),
@@ -2291,7 +2511,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                    material: greenhouseMat, orientation: yaw)
                     }
                     // Farmhouse + shed on some sites.
-                    if hash % 5 == 2 {
+                    if hash % 5 == 2, nearestStationD >= 430 {
                         addBackRowHouse(at: d - 18, side: side, seed: 40_000 + siteIndex * 2 + (side > 0 ? 1 : 0))
                         let sp = groundOffsetPoint(sample(at: d + 4), lateral: side * 33)
                         _ = addBox(parent: world, name: "rural-shed-\(siteIndex)-\(Int(side))",
@@ -2368,6 +2588,463 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// industrial stations gain warehouses, a tank and containers.
     /// Keyed by station ID, so it is the same place in both
     /// directions and on the through run.
+    /// Per-station signature landmarks (2026-11-11 evening, from
+    /// the real-station survey's "face" notes): buildStationFronts
+    /// made stations differ in density and mix; these one-off
+    /// pieces make them differ in kind. Following the survey's own
+    /// advice, faces that sit far from the real station are
+    /// compressed next to the game station: Chiba's monorail
+    /// viaduct (S12), Tsudanuma's and Mitaka's pedestrian decks
+    /// (S14/S16), Hino's wooden station house (S11), Shakujii's
+    /// pond (S05), Sakura's castle-turret monument (S17), Higashi-
+    /// Murayama's sakura avenue and statue (S09), Chikura's flower
+    /// fields (S27), Kisarazu's port cranes (S22), Kururi's sake
+    /// brewery chimney (B01), Kameyama's red bridge and dam lake
+    /// (B04), and the rest below.
+    private func buildStationLandmarks(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        let whiteWall = Self.pbr(UIColor(red: 0.93, green: 0.92, blue: 0.89, alpha: 1), metallic: 0.02, roughness: 0.85)
+        let darkRoofMat = Self.pbr(UIColor(red: 0.16, green: 0.17, blue: 0.19, alpha: 1), metallic: 0.1, roughness: 0.7)
+        let timberMat = Self.texturedPBR(UIColor(red: 0.72, green: 0.58, blue: 0.44, alpha: 1), roughness: 0.9, textureName: "scenery_timber")
+        let brickMat = Self.texturedPBR(.white, roughness: 0.9, textureName: "scenery_brick_warm")
+        let waterMat = Self.texturedPBR(.white, roughness: 0.4, textureName: "scenery_sea")
+        let sandMat = Self.pbr(UIColor(red: 0.93, green: 0.88, blue: 0.72, alpha: 1), metallic: 0, roughness: 1)
+        let sakuraMat = Self.pbr(UIColor(red: 0.96, green: 0.68, blue: 0.76, alpha: 1), metallic: 0, roughness: 1)
+        let palmMat = Self.pbr(UIColor(red: 0.25, green: 0.55, blue: 0.30, alpha: 1), metallic: 0, roughness: 1)
+        let bronzeMat = Self.pbr(UIColor(red: 0.35, green: 0.30, blue: 0.22, alpha: 1), metallic: 0.6, roughness: 0.5)
+        let redSteel = Self.pbr(UIColor(red: 0.72, green: 0.15, blue: 0.11, alpha: 1), metallic: 0.3, roughness: 0.55)
+        let craneMat = Self.pbr(UIColor(red: 0.30, green: 0.36, blue: 0.42, alpha: 1), metallic: 0.5, roughness: 0.5)
+        let goldMat = Self.pbr(UIColor(red: 0.85, green: 0.68, blue: 0.25, alpha: 1), metallic: 0.8, roughness: 0.35)
+        let beamMat = Self.pbr(UIColor(red: 0.78, green: 0.79, blue: 0.78, alpha: 1), metallic: 0.05, roughness: 0.8)
+        let terraMat = Self.pbr(UIColor(red: 0.72, green: 0.38, blue: 0.24, alpha: 1), metallic: 0.02, roughness: 0.85)
+        let orangeMat = Self.pbr(UIColor(red: 0.90, green: 0.45, blue: 0.10, alpha: 1), metallic: 0.05, roughness: 0.7)
+        let navyMat = Self.pbr(UIColor(red: 0.12, green: 0.23, blue: 0.43, alpha: 1), metallic: 0.1, roughness: 0.6)
+        let lawnMat = Self.pbr(UIColor(red: 0.35, green: 0.55, blue: 0.30, alpha: 1), metallic: 0, roughness: 1)
+        let arcadeMat = Self.pbr(UIColor(red: 0.94, green: 0.85, blue: 0.86, alpha: 1), metallic: 0.05, roughness: 0.6)
+        let flowerMats: [PhysicallyBasedMaterial] = [
+            Self.pbr(UIColor(red: 0.85, green: 0.30, blue: 0.55, alpha: 1), metallic: 0, roughness: 1),
+            Self.pbr(UIColor(red: 0.95, green: 0.80, blue: 0.20, alpha: 1), metallic: 0, roughness: 1),
+            Self.pbr(UIColor(red: 0.95, green: 0.60, blue: 0.70, alpha: 1), metallic: 0, roughness: 1),
+            Self.pbr(UIColor(red: 0.95, green: 0.55, blue: 0.20, alpha: 1), metallic: 0, roughness: 1),
+            Self.pbr(UIColor(red: 0.80, green: 0.70, blue: 0.90, alpha: 1), metallic: 0, roughness: 1),
+        ]
+        for placement in stationModelPlacements {
+            let c = placement.chainageM
+            let cs = sample(at: c)
+            let yaw = simd_quatf(angle: -cs.heading, axis: SIMD3<Float>(0, 1, 0))
+            let backAbs: Float = 2.1 + 1.52 + (placement.archetype == "major_5track_4platform" ? Float(6.0) : Float(4.5))
+            let frontLat = backAbs + (urbanBand(distanceM: c, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0 ? Float(13.2) : Float(15.2))
+            func lp(_ along: Double, _ lateral: Float, _ dy: Float = 0) -> SIMD3<Float> {
+                let p = groundOffsetPoint(self.sample(at: c + along), lateral: lateral)
+                return SIMD3<Float>(p.x, p.y + dy, p.z)
+            }
+            func box(_ name: String, _ along: Double, _ lateral: Float, _ size: SIMD3<Float>, _ mat: PhysicallyBasedMaterial, _ dy: Float = 0) {
+                _ = addBox(parent: world, name: "landmark-\(placement.stationId)-\(name)", size: size, position: lp(along, lateral, dy + size.y / 2), material: mat, orientation: yaw)
+            }
+            func palm(_ name: String, _ along: Double, _ lateral: Float, _ h: Float) {
+                let p = lp(along, lateral)
+                let trunk = ModelEntity(mesh: FallbackCylinderMesh.make(height: h, radius: 0.13), materials: [timberMat])
+                trunk.name = "landmark-\(placement.stationId)-\(name)-trunk"
+                trunk.position = SIMD3<Float>(p.x, p.y + h / 2, p.z)
+                world.addChild(trunk)
+                let crown = ModelEntity(mesh: MeshResource.generateSphere(radius: 1.5), materials: [palmMat])
+                crown.name = "landmark-\(placement.stationId)-\(name)-crown"
+                crown.scale = SIMD3<Float>(1.4, 0.45, 1.4)
+                crown.position = SIMD3<Float>(p.x, p.y + h + 0.25, p.z)
+                world.addChild(crown)
+            }
+            func deck(_ s: Float, _ slabAlong: Float) {
+                box("deck", 0, s * (backAbs + 8), SIMD3<Float>(15, 0.5, slabAlong), beamMat, 4.6)
+                for a: Float in [-1, 1] {
+                    for e: Float in [-1, 1] {
+                        box("deckp-\(Int(a))-\(Int(e))", Double(a) * Double(slabAlong) * 0.36, s * (backAbs + 8 + e * 5.5), SIMD3<Float>(0.5, 4.6, 0.5), beamMat)
+                    }
+                }
+                for e: Float in [-1, 1] {
+                    box("deckrail-\(Int(e))", 0, s * (backAbs + 8 + e * 7.3), SIMD3<Float>(0.12, 0.8, slabAlong), beamMat, 5.1)
+                }
+                box("deckstair", Double(slabAlong) * 0.52, s * (backAbs + 8), SIMD3<Float>(4, 4.6, 5), concreteMaterial)
+            }
+            let id = placement.stationId
+            if id == "S01" {
+                // Ikebukuro: a super-tall tower behind the fronts
+                // and a long department-store wall.
+                box("supertall", -40, -(frontLat + 22), SIMD3<Float>(17, 58, 17), officePhotoFacadeMaterial)
+                box("supertalltop", -40, -(frontLat + 22), SIMD3<Float>(18, 1.2, 18), concreteMaterial, 58)
+                box("dept", 30, frontLat + 10, SIMD3<Float>(13, 16, 34), officePhotoFacadeMaterial)
+            } else if id == "S02" {
+                // Asagaya: the covered shopping arcade over the
+                // front street.
+                box("arcade", 0, backAbs + 6.9, SIMD3<Float>(8.4, 0.35, 130), arcadeMat, 4.3)
+                for along in stride(from: -60.0, through: 60.0, by: 15.0) {
+                    for e: Float in [-1, 1] {
+                        box("arcadepost-\(Int(along))-\(Int(e))", along, backAbs + 6.9 + e * 3.6, SIMD3<Float>(0.28, 4.3, 0.28), beamMat)
+                    }
+                }
+            } else if id == "S03" {
+                // Ogikubo: the big commercial block on the station.
+                box("stacom", 52, frontLat + 17, SIMD3<Float>(15, 17, 20), officePhotoFacadeMaterial)
+            } else if id == "S04" {
+                // Kodaira: the cultural hall facing the rotary.
+                box("hall", -30, frontLat + 18, SIMD3<Float>(15, 8.5, 24), whiteWall)
+                box("hallroof", -30, frontLat + 18, SIMD3<Float>(16.5, 0.4, 25.5), darkRoofMat, 8.5)
+                box("hallcanopy", -30, frontLat + 9, SIMD3<Float>(4, 0.25, 14), beamMat, 3.2)
+            } else if id == "S05" {
+                // Shakujii: the pond on the park side.
+                let pc = lp(10, -(frontLat + 8))
+                let rim = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.1, radius: 9.8), materials: [sandMat])
+                rim.name = "landmark-S05-pondrim"
+                rim.position = SIMD3<Float>(pc.x, pc.y + 0.05, pc.z)
+                world.addChild(rim)
+                let pond = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.12, radius: 8.8), materials: [waterMat])
+                pond.name = "landmark-S05-pond"
+                pond.position = SIMD3<Float>(pc.x, pc.y + 0.07, pc.z)
+                world.addChild(pond)
+                for t in 0..<4 {
+                    let tp = lp(Double(t - 2) * 11 + 5, -(frontLat + 8) + (t % 2 == 0 ? Float(11.5) : Float(-11.5)))
+                    addTree(parent: world, name: "landmark-S05-pondtree-\(t)", x: tp.x, z: tp.z, height: 5.6 + Float(t) * 0.5, material: foliageMaterials[t % foliageMaterials.count], groundY: tp.y)
+                }
+            } else if id == "S06" {
+                // Hibarigaoka: the two big stores before the danchi.
+                box("store-a", -48, frontLat + 19, SIMD3<Float>(13, 12, 16), officePhotoFacadeMaterial)
+                box("store-b", 48, frontLat + 19, SIMD3<Float>(13, 10, 16), officePhotoFacadeMaterial)
+            } else if id == "S09" {
+                // Higashi-Murayama: sakura avenue and the rotary
+                // statue.
+                for i in 0..<6 {
+                    let tp = lp(-62 + Double(i) * 25, backAbs + 4.2)
+                    addTree(parent: world, name: "landmark-S09-sakura-\(i)", x: tp.x, z: tp.z, height: 5.4, material: sakuraMat, groundY: tp.y)
+                    let tp2 = lp(-50 + Double(i) * 25, backAbs + 9.6)
+                    addTree(parent: world, name: "landmark-S09-sakura-b-\(i)", x: tp2.x, z: tp2.z, height: 5.0, material: sakuraMat, groundY: tp2.y)
+                }
+                box("statuebase", 0, backAbs + 6.9, SIMD3<Float>(1.1, 1.1, 1.1), concreteMaterial)
+                let sb = lp(0, backAbs + 6.9)
+                let fig = ModelEntity(mesh: FallbackCylinderMesh.make(height: 1.05, radius: 0.17), materials: [bronzeMat])
+                fig.name = "landmark-S09-statue"
+                fig.position = SIMD3<Float>(sb.x, sb.y + 1.62, sb.z)
+                world.addChild(fig)
+                let head = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.21), materials: [bronzeMat])
+                head.name = "landmark-S09-statue-head"
+                head.position = SIMD3<Float>(sb.x, sb.y + 2.4, sb.z)
+                world.addChild(head)
+            } else if id == "S10" {
+                // Nishi-Tachikawa: the park gate and lawn.
+                for e: Float in [-1, 1] {
+                    box("gatepost-\(Int(e))", Double(e) * 3.2, frontLat + 1, SIMD3<Float>(0.5, 3.4, 0.5), concreteMaterial)
+                }
+                box("gatebeam", 0, frontLat + 1, SIMD3<Float>(0.6, 0.55, 7.4), darkRoofMat, 3.4)
+                box("lawn", 0, frontLat + 11, SIMD3<Float>(20, 0.06, 44), lawnMat, 0.02)
+                for t in 0..<3 {
+                    let tp = lp(Double(t - 1) * 15, frontLat + 13)
+                    addTree(parent: world, name: "landmark-S10-parktree-\(t)", x: tp.x, z: tp.z, height: 6.2, material: foliageMaterials[t % foliageMaterials.count], groundY: tp.y)
+                }
+            } else if id == "S11" {
+                // Hino: the 1937 wooden station house.
+                box("woodhouse", -18, backAbs + 11.5, SIMD3<Float>(7.5, 3.6, 13), timberMat)
+                box("woodroof", -18, backAbs + 11.5, SIMD3<Float>(9, 0.35, 14.5), darkRoofMat, 3.6)
+            } else if id == "S12" {
+                // Chiba: the monorail viaduct along the front, with
+                // a train standing on it.
+                box("monobeam", 0, backAbs + 10.5, SIMD3<Float>(1.1, 1.3, 330), beamMat, 6.9)
+                for along in stride(from: -150.0, through: 150.0, by: 30.0) {
+                    box("monopier-\(Int(along))", along, backAbs + 10.5, SIMD3<Float>(0.9, 6.9, 0.9), beamMat)
+                }
+                box("monotrain", 55, backAbs + 10.5, SIMD3<Float>(2.6, 2.9, 13), whiteWall, 7.6)
+                box("monotrainband", 55, backAbs + 10.5, SIMD3<Float>(2.7, 0.7, 13.1), navyMat, 8.6)
+            } else if id == "S13" {
+                // Makuhari: the distant new-town towers.
+                for i in 0..<3 {
+                    box("fartower-\(i)", Double(i - 1) * 85, -(frontLat + 52), SIMD3<Float>(15, 24 + Float(i) * 3, 15), officePhotoFacadeMaterial)
+                }
+            } else if id == "S14" {
+                deck(1, 26)
+            } else if id == "S15" {
+                // Yotsukaido: the clock tower in the park rotary.
+                box("clockbase", 0, backAbs + 6.9, SIMD3<Float>(1.0, 7.6, 1.0), concreteMaterial)
+                box("clockbox", 0, backAbs + 6.9, SIMD3<Float>(1.7, 1.7, 1.7), whiteWall, 7.6)
+                box("clockface", 0, backAbs + 6.9 - 0.9, SIMD3<Float>(0.08, 1.1, 1.1), darkRoofMat, 7.95)
+                let cap = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.7, radius: 1.15), materials: [darkRoofMat])
+                let cp = lp(0, backAbs + 6.9, 9.65)
+                cap.name = "landmark-S15-clockcap"
+                cap.position = cp
+                world.addChild(cap)
+            } else if id == "S16" {
+                deck(-1, 20)
+            } else if id == "S17" {
+                // Sakura: the castle-turret monument.
+                box("tbase", 28, frontLat + 15, SIMD3<Float>(7.5, 3.2, 7.5), concreteMaterial)
+                box("ttier1", 28, frontLat + 15, SIMD3<Float>(5.8, 2.9, 5.8), whiteWall, 3.2)
+                box("troof1", 28, frontLat + 15, SIMD3<Float>(6.9, 0.35, 6.9), darkRoofMat, 6.1)
+                box("ttier2", 28, frontLat + 15, SIMD3<Float>(4.3, 2.5, 4.3), whiteWall, 6.45)
+                box("troof2", 28, frontLat + 15, SIMD3<Float>(5.3, 0.35, 5.3), darkRoofMat, 8.95)
+                let gb = lp(28, frontLat + 15, 9.7)
+                let ball = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.42), materials: [goldMat])
+                ball.name = "landmark-S17-goldball"
+                ball.position = gb
+                world.addChild(ball)
+            } else if id == "S18" {
+                // Mobara: the old department store at the front.
+                box("dept", 22, -(frontLat + 17), SIMD3<Float>(12, 11, 17), officePhotoFacadeMaterial)
+            } else if id == "S19" {
+                // Kazusa-Ichinomiya: the surf-town station house
+                // with long flat eaves.
+                box("surfhouse", 14, backAbs + 10.5, SIMD3<Float>(8, 3.3, 13), whiteWall)
+                box("surfroof", 14, backAbs + 10.5, SIMD3<Float>(10.5, 0.3, 15), darkRoofMat, 3.3)
+            } else if id == "S20" {
+                // Togane: the big shopping centre and its sign band.
+                box("sc", 0, frontLat + 19, SIMD3<Float>(16, 9.5, 30), officePhotoFacadeMaterial)
+                box("scsign", 0, frontLat + 10.6, SIMD3<Float>(0.5, 1.7, 26), orangeMat, 7.6)
+            } else if id == "S21" {
+                // Katsuura: the morning-market stalls.
+                for i in 0..<5 {
+                    let along = -36.0 + Double(i) * 18
+                    box("stall-\(i)", along, backAbs + 5.4, SIMD3<Float>(2.7, 2.3, 3.6), whiteWall)
+                    box("stallawning-\(i)", along, backAbs + 5.4, SIMD3<Float>(3.4, 0.14, 4.4), roofMaterials[i % roofMaterials.count], 2.35)
+                }
+            } else if id == "S22" {
+                // Kisarazu: the port cranes on the sea side.
+                for k in 0..<2 {
+                    let along = -75.0 + Double(k) * 150
+                    for da: Float in [-1, 1] {
+                        for dl: Float in [-1, 1] {
+                            box("craneleg-\(k)-\(Int(da))-\(Int(dl))", along + Double(da) * 5, seaSign * (64 + dl * 7), SIMD3<Float>(0.9, 15, 0.9), craneMat)
+                        }
+                    }
+                    box("cranetop-\(k)", along, seaSign * 64, SIMD3<Float>(15, 1.6, 12), craneMat, 15)
+                    box("craneboom-\(k)", along, seaSign * 82, SIMD3<Float>(30, 1.1, 2.2), craneMat, 15.4)
+                }
+            } else if id == "S25" {
+                // Onjuku: the white sand beach and palms.
+                box("sand", 0, seaSign * 36, SIMD3<Float>(13, 0.07, 210), sandMat, 0.02)
+                for i in 0..<3 {
+                    palm("palm-\(i)", Double(i - 1) * 60, seaSign * 29, 5.2)
+                }
+            } else if id == "S26" {
+                // Tateyama: palms on the sea-side street and the
+                // terracotta-roofed station house inland.
+                for i in 0..<5 {
+                    palm("palm-\(i)", -52 + Double(i) * 26, seaSign * (backAbs + 11), 5.6)
+                }
+                box("terrahouse", 26, -seaSign * (frontLat + 3), SIMD3<Float>(9, 4.4, 12), whiteWall)
+                box("terraroof", 26, -seaSign * (frontLat + 3), SIMD3<Float>(10.5, 0.35, 13.5), terraMat, 4.4)
+            } else if id == "S27" {
+                // Chikura: the flower fields inland.
+                for i in 0..<5 {
+                    let along = -72.0 + Double(i) * 36 + Double(i % 2) * 8
+                    box("flower-\(i)", along, -seaSign * (30 + Float(i % 3) * 9), SIMD3<Float>(11, 0.07, 15), flowerMats[i], 0.02)
+                }
+            } else if id == "B01" {
+                // Kururi: the sake brewery and its brick chimney.
+                box("brewery", 20, frontLat + 13, SIMD3<Float>(8, 4.6, 11), whiteWall)
+                let ch = lp(34, frontLat + 13)
+                let chimney = ModelEntity(mesh: FallbackCylinderMesh.make(height: 14.5, radius: 1.05), materials: [brickMat])
+                chimney.name = "landmark-B01-chimney"
+                chimney.position = SIMD3<Float>(ch.x, ch.y + 7.25, ch.z)
+                world.addChild(chimney)
+            } else if id == "B04" {
+                // Kazusa-Kameyama: the red bridge over the line and
+                // the dam lake beside the terminus.
+                for e: Float in [-1, 1] {
+                    box("bpier-\(Int(e))", 150, e * 7.5, SIMD3<Float>(1.6, 6.4, 1.6), concreteMaterial)
+                }
+                box("bbeam", 150, 0, SIMD3<Float>(17.5, 1.2, 3.2), redSteel, 6.4)
+                box("brail-a", 148.55, 0, SIMD3<Float>(17.5, 0.85, 0.14), redSteel, 7.6)
+                box("brail-b", 151.45, 0, SIMD3<Float>(17.5, 0.85, 0.14), redSteel, 7.6)
+                box("lake", -60, 46, SIMD3<Float>(26, 0.07, 40), waterMat, 0.02)
+            }
+        }
+    }
+
+    /// Station fronts (2026-11-11 evening, user directive after
+    /// the Akimizu photo verdict): until now a station's whole
+    /// frontage was the two office slabs in buildStationSurroundings
+    /// plus small life (car park, bus stop), the rural dressing
+    /// stepped aside for +/-430 m around every station, and the
+    /// fan guard deleted the suburb builder's houses and station
+    /// apartments across the passing stations' +/-445 m spans —
+    /// so a suburban station stood in open fields, the exact
+    /// opposite of its real counterpart (Akitsu: 78k passengers a
+    /// day, no plaza, a 400 m shopping street packed on both
+    /// sides). This pass fills the band BEHIND the forecourt road
+    /// (lateral ~21-26 m, clear of the fan deck edge at 12.5 m)
+    /// with a front row whose density and mix come from the
+    /// real-station survey in
+    /// workspace/analysis/station_real_profiles/, plus a second
+    /// row of houses behind it away from the urban core. S28
+    /// (Kamogawa) is left to buildTouristTerminus.
+    private func buildStationFronts(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
+        let table: [String: (Int, String)] = [
+            "S01": (5, "terminal"), "S02": (4, "shopping"), "S03": (4, "rotary"),
+            "S04": (3, "rotary"), "S05": (4, "park"), "S06": (4, "danchi"),
+            "S07": (4, "shopping"), "S08": (2, "houses"), "S09": (3, "rotary"),
+            "S10": (2, "park"), "S11": (3, "shopping"), "S12": (5, "terminal"),
+            "S13": (3, "shopping"), "S14": (4, "terminal"), "S15": (4, "rotary"),
+            "S16": (5, "terminal"), "S17": (3, "rotary"), "S18": (3, "rotary"),
+            "S19": (2, "resort"), "S20": (3, "rotary"), "S21": (2, "port"),
+            "S22": (4, "port"), "S23": (1, "rural"), "S24": (2, "port"),
+            "S25": (2, "resort"), "S26": (3, "port"), "S27": (2, "resort"),
+            "B01": (2, "shopping"), "B02": (1, "rural"), "B03": (1, "rural"),
+            "B04": (1, "resort"),
+        ]
+        let parkSide: [String: Float] = ["S05": -1, "S10": 1]
+        let shopMats = [shopFacadeMaterial, cafeFacadeMaterial, shopFacadeMaterial2, konbiniFacadeMaterial]
+        let houseMats = [houseFacadeMaterial, houseFacadeMaterial2, houseFacadeMaterial3, houseFacadeMaterial4, houseFacadeMaterial5, houseFacadeMaterial6, houseFacadeMaterial7, houseFacadeMaterialGrimed]
+        let aptMats = [photoApartmentMaterial, photoApartmentMaterial2, danchiFacadeMaterial, photoApartmentMaterial3]
+        var shopBatches = shopMats.map { _ in MeshBatchBuilder() }
+        var houseBatches = houseMats.map { _ in MeshBatchBuilder() }
+        var aptBatches = aptMats.map { _ in MeshBatchBuilder() }
+        var blockBatches = buildingMaterials.map { _ in MeshBatchBuilder() }
+        var officeBatch = MeshBatchBuilder()
+        var roofBatch = MeshBatchBuilder()
+
+        for placement in stationModelPlacements {
+            guard let spec = table[placement.stationId] else { continue }
+            let density = spec.0
+            let kind = spec.1
+            let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
+            let half = length / 2
+            let wide = placement.archetype.contains("terminal") || placement.archetype.contains("major") || placement.archetype == "junction_3platform"
+            let platWidth: Float = wide ? 6.0 : 4.5
+            let backAbs: Float = 2.1 + 1.52 + platWidth
+            let urban = urbanBand(distanceM: placement.chainageM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
+            let frontLat = backAbs + (urban ? 13.2 : 15.2)
+            let extent = half + (density >= 3 ? 95 : 65)
+            var pitch = 11.5
+            if kind == "terminal" { pitch = 17 }
+            if kind == "danchi" { pitch = 16 }
+            var skipPct = 20
+            if kind == "terminal" { skipPct = 12 }
+            else if kind == "shopping" { skipPct = density >= 4 ? 8 : 15 }
+            else if kind == "danchi" { skipPct = 15 }
+            else if kind == "houses" { skipPct = 22 }
+            else if kind == "resort" { skipPct = 25 }
+            else if kind == "port" { skipPct = 28 }
+            else if kind == "rural" { skipPct = 55 }
+
+            for side: Float in [-1, 1] {
+                let isParkSide = parkSide[placement.stationId] == side
+                let seaSide = isCoastal(distanceM: placement.chainageM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                    && side == seaSideSign(travelDirection: travelDirection)
+                var plotIndex = 0
+                var along = -extent
+                while along <= extent {
+                    defer { along += pitch; plotIndex += 1 }
+                    let chainage = placement.chainageM + along
+                    if chainage < 25 || chainage > route.distanceM - 25 { continue }
+                    if seaSide { continue }
+                    if side == -seaSideSign(travelDirection: travelDirection), chainage > 27_540, chainage < 27_860 { continue }
+                    if nearCrossing(chainage, margin: 10) { continue }
+                    if abs(abs(along) - length * 0.58) < 12 { continue }
+                    if placement.stationId == "S27", (along >= -152 && along <= -122) || (along >= 18 && along <= 48) { continue }
+                    if kind == "rural", abs(along) > 55 { continue }
+                    let hash = stableIndex("front-\(placement.stationId)-\(Int(side))-\(plotIndex)", count: 1000)
+                    let s = sample(at: chainage)
+                    let yaw = -s.heading
+                    if isParkSide {
+                        if hash % 3 != 0 {
+                            let tp = groundOffsetPoint(s, lateral: side * (frontLat + 1))
+                            addTree(parent: world, name: "stationfront-park-tree-\(placement.stationId)-\(plotIndex)-\(Int(side))", x: tp.x, z: tp.z, height: 5 + Float(hash % 25) / 10, material: foliageMaterials[hash % foliageMaterials.count], groundY: tp.y)
+                        }
+                        continue
+                    }
+                    if hash % 100 < skipPct { continue }
+                    var cat = "shop"
+                    if kind == "terminal" { cat = "block" }
+                    else if kind == "danchi" { cat = hash % 4 == 0 ? "shop" : "apt" }
+                    else if kind == "rotary" || kind == "park" { cat = hash % 3 == 0 ? "apt" : "shop" }
+                    else if kind == "houses" { cat = hash % 5 == 0 ? "shop" : "house" }
+                    else if kind == "resort" { cat = hash % 3 == 0 ? "shop" : "house" }
+                    else if kind == "port" { cat = hash % 3 == 0 ? "warehouse" : "shop" }
+                    else if kind == "rural" { cat = hash % 4 == 0 ? "shop" : "house" }
+                    let p = groundOffsetPoint(s, lateral: side * frontLat)
+                    if cat == "block" {
+                        let h: Float = 12 + Float(hash % 95) / 10
+                        let w: Float = 13 + Float(hash % 45) / 10
+                        let c = SIMD3<Float>(p.x, p.y + h / 2, p.z)
+                        if hash % 3 == 0 {
+                            officeBatch.addBox(center: c, size: SIMD3<Float>(8.5, h, w), yaw: yaw)
+                        } else {
+                            blockBatches[hash % blockBatches.count].addBox(center: c, size: SIMD3<Float>(8.5, h, w), yaw: yaw)
+                        }
+                        roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + h + 0.13, p.z), size: SIMD3<Float>(8.9, 0.26, w + 0.4), yaw: yaw)
+                    } else if cat == "warehouse" {
+                        let h: Float = 5 + Float(hash % 25) / 10
+                        let c = SIMD3<Float>(p.x, p.y + h / 2, p.z)
+                        blockBatches[hash % blockBatches.count].addBox(center: c, size: SIMD3<Float>(8, h, 12), yaw: yaw)
+                        roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + h + 0.13, p.z), size: SIMD3<Float>(8.4, 0.26, 12.4), yaw: yaw)
+                    } else if cat == "apt" {
+                        let isDanchi = kind == "danchi" && hash % 2 == 0
+                        let matIndex = isDanchi ? 2 : hash % aptMats.count
+                        let h: Float = isDanchi ? 11 + Float(hash % 25) / 10 : 9.5 + Float(hash % 50) / 10
+                        let w: Float = isDanchi ? 15 : 11.5
+                        let d: Float = isDanchi ? 8 : 7.6
+                        aptBatches[matIndex].addBox(center: SIMD3<Float>(p.x, p.y + h / 2, p.z), size: SIMD3<Float>(d, h, w), yaw: yaw)
+                        roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + h + 0.13, p.z), size: SIMD3<Float>(d + 0.4, 0.26, w + 0.4), yaw: yaw)
+                    } else if cat == "shop" {
+                        if hash % 5 == 0 {
+                            shopBatches[3].addBox(center: SIMD3<Float>(p.x, p.y + 2.1, p.z), size: SIMD3<Float>(7, 4.2, 11), yaw: yaw)
+                            roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + 4.33, p.z), size: SIMD3<Float>(7.4, 0.26, 11.4), yaw: yaw)
+                        } else {
+                            let h: Float = 5.5 + Float(hash % 25) / 10
+                            let w: Float = 8.5 + Float(hash % 20) / 10
+                            shopBatches[hash % 3].addBox(center: SIMD3<Float>(p.x, p.y + h / 2, p.z), size: SIMD3<Float>(6.5, h, w), yaw: yaw)
+                            roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + h + 0.13, p.z), size: SIMD3<Float>(6.9, 0.26, w + 0.4), yaw: yaw)
+                        }
+                    } else {
+                        var h: Float = 4.2 + Float(hash % 26) / 10
+                        if kind == "rural" { h = 4 + Float(hash % 15) / 10 }
+                        if kind == "resort" { h = 5 + Float(hash % 20) / 10 }
+                        let w: Float = 8 + Float(hash % 25) / 10
+                        houseBatches[hash % houseMats.count].addBox(center: SIMD3<Float>(p.x, p.y + h / 2, p.z), size: SIMD3<Float>(6.5, h, w), yaw: yaw)
+                        roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + h + 0.13, p.z), size: SIMD3<Float>(6.9, 0.26, w + 0.4), yaw: yaw)
+                    }
+                }
+                // Second row of houses behind the frontage, away
+                // from the urban core (the tower builder owns the
+                // depth there) and never on a park or sea side.
+                if urban || isParkSide || seaSide || kind == "terminal" { continue }
+                var skip2 = 40
+                if density >= 4 { skip2 = 25 }
+                if density == 2 { skip2 = 55 }
+                if density <= 1 { skip2 = 70 }
+                var plot2 = 0
+                var along2 = -extent
+                while along2 <= extent {
+                    defer { along2 += 12.5; plot2 += 1 }
+                    let chainage2 = placement.chainageM + along2
+                    if chainage2 < 25 || chainage2 > route.distanceM - 25 { continue }
+                    if side == -seaSideSign(travelDirection: travelDirection), chainage2 > 27_540, chainage2 < 27_860 { continue }
+                    if nearCrossing(chainage2, margin: 10) { continue }
+                    let hash2 = stableIndex("front2-\(placement.stationId)-\(Int(side))-\(plot2)", count: 1000)
+                    if hash2 % 100 < skip2 { continue }
+                    let s2 = sample(at: chainage2)
+                    let p2 = groundOffsetPoint(s2, lateral: side * (frontLat + 11.5))
+                    let h2: Float = 4 + Float(hash2 % 25) / 10
+                    let w2: Float = 8.5 + Float(hash2 % 20) / 10
+                    houseBatches[hash2 % houseMats.count].addBox(center: SIMD3<Float>(p2.x, p2.y + h2 / 2, p2.z), size: SIMD3<Float>(6.5, h2, w2), yaw: -s2.heading)
+                    roofBatch.addBox(center: SIMD3<Float>(p2.x, p2.y + h2 + 0.13, p2.z), size: SIMD3<Float>(6.9, 0.26, w2 + 0.4), yaw: -s2.heading)
+                }
+            }
+        }
+
+        for (i, b) in shopBatches.enumerated() {
+            if let mesh = b.build(name: "stationfront-shops-\(i)", material: shopMats[i]) { world.addChild(mesh) }
+        }
+        for (i, b) in houseBatches.enumerated() {
+            if let mesh = b.build(name: "stationfront-houses-\(i)", material: houseMats[i]) { world.addChild(mesh) }
+        }
+        for (i, b) in aptBatches.enumerated() {
+            if let mesh = b.build(name: "stationfront-apts-\(i)", material: aptMats[i]) { world.addChild(mesh) }
+        }
+        for (i, b) in blockBatches.enumerated() {
+            if let mesh = b.build(name: "stationfront-blocks-\(i)", material: buildingMaterials[i]) { world.addChild(mesh) }
+        }
+        if let mesh = officeBatch.build(name: "stationfront-office", material: officePhotoFacadeMaterial) { world.addChild(mesh) }
+        if let mesh = roofBatch.build(name: "stationfront-roofs", material: roofMaterials[2]) { world.addChild(mesh) }
+    }
+
     private func buildStationCharacter(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
         let styles: [String: String] = [
@@ -4951,13 +5628,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // quality41: the slabs wear the photoreal apartment
                 // elevations; every third is a wide danchi slab
                 // with open corridors.
-                let aptMaterials = [photoApartmentMaterial, photoApartmentMaterial2, danchiFacadeMaterial]
-                let aptKind = (index / 3) % 3
+                let aptMaterials = [photoApartmentMaterial, photoApartmentMaterial2, danchiFacadeMaterial, photoApartmentMaterial3]
+                let aptKind = stableIndex("aptkind-\(index)", count: aptMaterials.count)
                 let aptHeight: Float = aptKind == 2 ? 12.5 : 9.5 + Float(index % 4) * 2.6
                 let aptWidth: Float = aptKind == 2 ? 17.5 : 11.5
                 let apt = addBox(parent: world, name: "station-apartment-\(index)", size: SIMD3<Float>(aptWidth, aptHeight, 7.6), position: SIMD3<Float>(x, groundY + aptHeight / 2, z), material: aptMaterials[aptKind])
                 apt.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
-                _ = addBox(parent: world, name: "station-apartment-roof-\(index)", size: SIMD3<Float>(aptWidth + 0.4, 0.3, 8.0), position: SIMD3<Float>(x, groundY + aptHeight + 0.15, z), material: roofMaterials[index % roofMaterials.count], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                _ = addBox(parent: world, name: "station-apartment-roof-\(index)", size: SIMD3<Float>(aptWidth + 0.4, 0.3, 8.0), position: SIMD3<Float>(x, groundY + aptHeight + 0.15, z), material: roofMaterials[stableIndex("aptroof-\(index)", count: roofMaterials.count)], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
                 index += 1
                 distance += buildingStep
                 continue
@@ -4983,13 +5660,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // Every third house wears the full photo facade; its windows
             // and door are painted in, so the separate boxes are skipped.
             let useFacadeTexture = !shed && index % 3 == 2
-            let facadeVariants = [houseFacadeMaterial, houseFacadeMaterial2, houseFacadeMaterial3, houseFacadeMaterial4, houseFacadeMaterial5, houseFacadeMaterialGrimed]
-            let bodyMaterial = useFacadeTexture ? facadeVariants[(index / 3) % facadeVariants.count] : sceneryMaterials[index % sceneryMaterials.count]
+            let facadeVariants = [houseFacadeMaterial, houseFacadeMaterial2, houseFacadeMaterial3, houseFacadeMaterial4, houseFacadeMaterial5, houseFacadeMaterialGrimed, houseFacadeMaterial6, houseFacadeMaterial7]
+            // 2026-11-11 evening: hash picks instead of index cycles —
+            // the old (index / 3) % n pattern repeated the same face
+            // every few plots, which read as copy-paste from the cab.
+            let bodyMaterial = useFacadeTexture ? facadeVariants[stableIndex("housefacade-\(index)", count: facadeVariants.count)] : sceneryMaterials[stableIndex("housebody-\(index)", count: sceneryMaterials.count)]
             let building = addBox(parent: world, name: shed ? "fictional-shed-\(index)" : "fictional-home-\(index)", size: SIMD3<Float>(width, height, depth), position: SIMD3<Float>(x, groundY + height / 2, z), material: bodyMaterial)
             building.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
 
             if !index.isMultiple(of: 3) {
-                let roof = addBox(parent: world, name: "roof-\(index)", size: SIMD3<Float>(width + 0.45, 0.24, depth + 0.35), position: SIMD3<Float>(x, groundY + height + 0.14, z), material: roofMaterials[index % roofMaterials.count], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                let roof = addBox(parent: world, name: "roof-\(index)", size: SIMD3<Float>(width + 0.45, 0.24, depth + 0.35), position: SIMD3<Float>(x, groundY + height + 0.14, z), material: roofMaterials[stableIndex("houseroof-\(index)", count: roofMaterials.count)], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
                 roof.orientation = roof.orientation * simd_quatf(angle: Float(index.isMultiple(of: 2) ? 0.04 : -0.04), axis: SIMD3<Float>(0, 0, 1))
             } else {
                 let balconySample = self.sample(at: distance - Double(depth * 0.52))
@@ -4999,7 +5679,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
 
             if !useFacadeTexture {
-                let facadeLateral = offset - sign * (width / 2 + 0.035)
+                // 2026-11-11 lineside pass: about half of the plain
+                // houses turn their BACK to the track, as real
+                // lineside houses do (front-view survey) — windows
+                // and door move to the far side, and the track side
+                // gets the service clutter added below.
+                let backFacing = stableIndex("backfacing-\(index)", count: 2) == 0
+                let facadeLateral = backFacing ? offset + sign * (width / 2 + 0.035) : offset - sign * (width / 2 + 0.035)
                 for window in 0..<2 {
                     let windowSample = self.sample(at: distance + Double((Float(window) - 0.5) * depth * 0.42))
                     let windowPoint = groundOffsetPoint(windowSample, lateral: facadeLateral)
@@ -5007,8 +5693,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     pane.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
                 }
                 let doorPoint = groundOffsetPoint(sample, lateral: facadeLateral)
-                let door = addBox(parent: world, name: "door-\(index)", size: SIMD3<Float>(0.07, 1.8, 0.78), position: SIMD3<Float>(doorPoint.x, doorPoint.y + 0.95, doorPoint.z), material: roofMaterials[(index + 1) % roofMaterials.count])
+                let door = addBox(parent: world, name: "door-\(index)", size: SIMD3<Float>(0.07, 1.8, 0.78), position: SIMD3<Float>(doorPoint.x, doorPoint.y + 0.95, doorPoint.z), material: roofMaterials[stableIndex("housedoor-\(index)", count: roofMaterials.count)])
                 door.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            }
+
+            // 2026-11-11 lineside pass: track-side service clutter
+            // on a share of houses of both kinds — an air-conditioner
+            // outdoor unit against the wall and, where the plot is
+            // deep enough to keep it clear of the cable trough, a
+            // storage box beside the house. A bare wall facing the
+            // track reads as a prop; the backs of houses are what a
+            // driver actually sees (front-view survey).
+            if !shed, stableIndex("backclutter-\(index)", count: 2) == 0 {
+                let acSample = self.sample(at: distance + Double(depth) * 0.22)
+                let acPoint = groundOffsetPoint(acSample, lateral: offset - sign * (width / 2 + 0.28))
+                _ = addBox(parent: world, name: "house-ac-\(index)", size: SIMD3<Float>(0.55, 0.62, 0.85), position: SIMD3<Float>(acPoint.x, groundY + 0.31, acPoint.z), material: concreteMaterial, orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                if abs(offset) - (width / 2 + 0.75) - 0.575 >= 4.6 {
+                    let stSample = self.sample(at: distance - Double(depth) * 0.62)
+                    let stPoint = groundOffsetPoint(stSample, lateral: offset - sign * (width / 2 + 0.75))
+                    _ = addBox(parent: world, name: "house-storage-\(index)", size: SIMD3<Float>(1.15, 1.45, 1.7), position: SIMD3<Float>(stPoint.x, groundY + 0.72, stPoint.z), material: roofMaterials[stableIndex("housestorage-\(index)", count: roofMaterials.count)], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                }
             }
 
             // quality41: the foreground of a Japanese house plot
@@ -5864,6 +6568,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             collectWheelEntities(in: model.root)
             if index == 0 && !useHighFidelityLead { cabModel = model }
         }
+        buildGLBConsist(carCount: count, skipLead: useHighFidelityLead)
         // The cab builder places real gauge needles and lamp overlays
         // inside the interior group; collect them so the per-frame
         // update can drive them from live physics and indicators.
@@ -5871,6 +6576,71 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         cabNeedlePivots = [:]
         cabLampOverlays = [:]
         collectCabInstruments(in: interior)
+    }
+
+    /// Player-train exteriors from the own.guest models (2026-11-11
+    /// integration batch): the E231 for the commuter formations and
+    /// the 117 for the limited express (whose formation is the
+    /// resistance-control 8-car profile, per the user's spec; the
+    /// cab desk itself is always the E231 early desk by an earlier
+    /// decision, so the selection keys off the service category,
+    /// which SimulatorModel.applyFormationProfile ties to the
+    /// resistance formation for limited-express services). Car nodes are
+    /// centred at their own origin with the length along local X,
+    /// the lead cab at -X and the wheel bottoms at y = 0; a
+    /// -90-degree yaw on each node maps that onto the world's
+    /// local -Z forward, and the wrappers are then posed every
+    /// frame exactly like the procedural roots. When a GLB consist
+    /// is active the procedural cars keep only their cab groups
+    /// (cab view, needles, lamps); any load failure leaves the
+    /// procedural exteriors untouched.
+    private func buildGLBConsist(carCount: Int, skipLead: Bool) {
+        let asset: RailwayGenerated3DAsset
+        let nodeNames: [String]
+        if carCount == 8 && currentServiceCategory == .limitedExpress {
+            asset = .too117
+            nodeNames = (1...8).map { "car_\($0)" }
+        } else if carCount == 10 {
+            asset = .tooE231
+            nodeNames = (1...10).map { "car_\($0)" }
+        } else if carCount == 8 {
+            asset = .tooE231
+            nodeNames = (1...7).map { "car_\($0)" } + ["car_10"]
+        } else {
+            return
+        }
+        guard let loaded = try? RailwayGeneratedAssetLoader.loadModel(for: asset) else { return }
+        func findNode(_ entity: Entity, _ name: String) -> Entity? {
+            if entity.name == name { return entity }
+            for child in entity.children {
+                if let found = findNode(child, name) { return found }
+            }
+            return nil
+        }
+        var placed = 0
+        for index in 0..<carCount {
+            let wrapper = Entity()
+            wrapper.name = "glb-car-\(index)"
+            if !(skipLead && index == 0), index < nodeNames.count, let carNode = findNode(loaded, nodeNames[index]) {
+                carNode.removeFromParent()
+                carNode.orientation = simd_quatf(angle: -Float.pi / 2, axis: SIMD3<Float>(0, 1, 0))
+                wrapper.addChild(carNode)
+                placed += 1
+            }
+            world.addChild(wrapper)
+            glbCarRoots.append(wrapper)
+        }
+        guard placed > 0 else {
+            for wrapper in glbCarRoots { wrapper.removeFromParent() }
+            glbCarRoots.removeAll()
+            return
+        }
+        let exteriorGroups: [VehiclePartGroup] = [.carBody, .doors, .glazing, .runningGear, .underfloorEquipment, .roofEquipment, .pantograph, .lighting]
+        for model in vehicleModels {
+            for group in exteriorGroups {
+                model.groups[group]?.isEnabled = false
+            }
+        }
     }
 
     private func collectCabInstruments(in entity: Entity) {
@@ -8297,6 +9067,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let concrete = Self.pbr(UIColor(red: 0.62, green: 0.62, blue: 0.60, alpha: 1), metallic: 0.02, roughness: 0.9)
         let steel = Self.pbr(UIColor(red: 0.23, green: 0.25, blue: 0.26, alpha: 1), metallic: 0.55, roughness: 0.55)
         let porcelain = Self.pbr(UIColor(red: 0.88, green: 0.87, blue: 0.84, alpha: 1), metallic: 0.05, roughness: 0.35)
+        let woodPole = Self.pbr(UIColor(red: 0.36, green: 0.27, blue: 0.19, alpha: 1), metallic: 0.0, roughness: 0.95)
         let landmarks = fictionalCorridorLandmarks(for: route)
         let seaSign = seaSideSign(travelDirection: travelDirection)
         // Urban towers already stand in the world (buildSuburb ran
@@ -8341,6 +9112,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             var concreteBatch = MeshBatchBuilder()
             var steelBatch = MeshBatchBuilder()
             var porcelainBatch = MeshBatchBuilder()
+            var woodBatch = MeshBatchBuilder()
             var chunkIndex = 0
             var chunkStart = spots.first?.chainage ?? 0
             func flush() {
@@ -8348,9 +9120,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 if let e = concreteBatch.build(name: "utility-concrete-\(tag)", material: concrete) { world.addChild(e) }
                 if let e = steelBatch.build(name: "utility-steel-\(tag)", material: steel) { world.addChild(e) }
                 if let e = porcelainBatch.build(name: "utility-porcelain-\(tag)", material: porcelain) { world.addChild(e) }
+                if let e = woodBatch.build(name: "utility-wood-\(tag)", material: woodPole) { world.addChild(e) }
                 concreteBatch = MeshBatchBuilder()
                 steelBatch = MeshBatchBuilder()
                 porcelainBatch = MeshBatchBuilder()
+                woodBatch = MeshBatchBuilder()
                 chunkIndex += 1
             }
             // Wire runs: attach offsets (lateral from pole centre,
@@ -8369,9 +9143,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // ground too).
                 let base = groundOffsetPoint(s, lateral: spot.lateral)
                 let bc = SIMD3<Float>(base.x, base.y, base.z)
-                // Tapered pole: two stacked prisms.
-                concreteBatch.addPrism(baseCenter: bc, radius: 0.17, height: 5.0, yaw: s.heading)
-                concreteBatch.addPrism(baseCenter: bc + SIMD3<Float>(0, 5.0, 0), radius: 0.125, height: 4.0, yaw: s.heading)
+                // Tapered pole: two stacked prisms. Shaft
+                // material varies by pole (2026-11-11 lineside
+                // pass): most are concrete, about a quarter are
+                // older wooden poles — real pole lines mix
+                // materials section by section instead of running
+                // 60 km of identical concrete.
+                if stableIndex("utilitypole-\(index)-\(sideSign > 0 ? "r" : "l")", count: 4) == 0 {
+                    woodBatch.addPrism(baseCenter: bc, radius: 0.17, height: 5.0, yaw: s.heading)
+                    woodBatch.addPrism(baseCenter: bc + SIMD3<Float>(0, 5.0, 0), radius: 0.125, height: 4.0, yaw: s.heading)
+                } else {
+                    concreteBatch.addPrism(baseCenter: bc, radius: 0.17, height: 5.0, yaw: s.heading)
+                    concreteBatch.addPrism(baseCenter: bc + SIMD3<Float>(0, 5.0, 0), radius: 0.125, height: 4.0, yaw: s.heading)
+                }
                 // Crossarms across the line of the street.
                 // (quality25: batch yaw convention — see
                 // MeshBatchBuilder.addBox — takes -heading for the
