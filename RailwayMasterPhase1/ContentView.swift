@@ -121,6 +121,10 @@ struct ContentView: View {
                                 Text(model.telemetry.isWheelSlipActive && model.telemetry.isBrakeSlipActive ? "空転・滑走" : (model.telemetry.isWheelSlipActive ? "空転" : "滑走"))
                                     .foregroundStyle(.orange)
                             }
+                            if let passingWaitMessage = model.passingWaitMessage {
+                                Text(passingWaitMessage)
+                                    .foregroundStyle(.yellow)
+                            }
                         }
                         .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.85))
