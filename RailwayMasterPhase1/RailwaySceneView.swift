@@ -30,6 +30,7 @@ struct RealityTrackView: View {
     let environmentSelection: EnvironmentQualitySelection
     var vehicleCarCount: Int = 4
     var cabDesk: FictionalCabDesk = FictionalCabAndSoundCatalog.fieldChopper
+    var serviceCategory: ServiceCategory = .local
     let stationModelPlacements: [RailwayGeneratedStationPlacement]
     let nextStopName: String
     let distanceToNextStopM: Double
@@ -64,6 +65,7 @@ struct RealityTrackView: View {
                 environmentSelection: environmentSelection,
                 vehicleCarCount: vehicleCarCount,
                 cabDesk: cabDesk,
+                serviceCategory: serviceCategory,
                 stationModelPlacements: stationModelPlacements,
                 signalPositionM: signalPositionM,
                 signalAspect: signalAspect
@@ -128,6 +130,7 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
     let environmentSelection: EnvironmentQualitySelection
     let vehicleCarCount: Int
     let cabDesk: FictionalCabDesk
+    let serviceCategory: ServiceCategory
     let stationModelPlacements: [RailwayGeneratedStationPlacement]
     var signalPositionM: Double? = nil
     var signalAspect: ThreeAspectSignal? = nil
@@ -148,6 +151,7 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
             route: route, quality: environmentSelection.renderQuality,
             trafficScenario: trafficScenario, routeVariant: routeVariant,
             travelDirection: travelDirection, vehicleCarCount: vehicleCarCount, cabDesk: cabDesk,
+            serviceCategory: serviceCategory,
             stationModelPlacements: stationModelPlacements
         )
         view.scene.addAnchor(context.coordinator.scene.root)
@@ -162,7 +166,7 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
             controls: controls, vehicleCabIndicatorState: vehicleCabIndicatorState,
             vehicleMaximumSpeedKmh: vehicleMaximumSpeedKmh,
             environmentSelection: environmentSelection, vehicleCarCount: vehicleCarCount,
-            cabDesk: cabDesk, stationModelPlacements: stationModelPlacements,
+            cabDesk: cabDesk, serviceCategory: serviceCategory, stationModelPlacements: stationModelPlacements,
             signalPositionM: signalPositionM, signalAspect: signalAspect
         )
         return view
@@ -186,7 +190,7 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
             controls: controls, vehicleCabIndicatorState: vehicleCabIndicatorState,
             vehicleMaximumSpeedKmh: vehicleMaximumSpeedKmh,
             environmentSelection: environmentSelection, vehicleCarCount: vehicleCarCount,
-            cabDesk: cabDesk, stationModelPlacements: stationModelPlacements,
+            cabDesk: cabDesk, serviceCategory: serviceCategory, stationModelPlacements: stationModelPlacements,
             signalPositionM: signalPositionM, signalAspect: signalAspect
         )
     }
@@ -583,12 +587,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         travelDirection: RegionalTravelDirection,
         vehicleCarCount: Int,
         cabDesk: FictionalCabDesk,
+        serviceCategory: ServiceCategory = .local,
         stationModelPlacements: [RailwayGeneratedStationPlacement]
     ) {
         rebuild(
             route: route, quality: quality, trafficScenario: trafficScenario,
             routeVariant: routeVariant, travelDirection: travelDirection, vehicleCarCount: vehicleCarCount,
-            cabDesk: cabDesk, stationModelPlacements: stationModelPlacements
+            cabDesk: cabDesk, serviceCategory: serviceCategory, stationModelPlacements: stationModelPlacements
         )
     }
 
@@ -600,6 +605,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         travelDirection: RegionalTravelDirection = .up,
         vehicleCarCount: Int = 4,
         cabDesk: FictionalCabDesk = FictionalCabAndSoundCatalog.fieldChopper,
+        serviceCategory: ServiceCategory = .local,
         stationModelPlacements: [RailwayGeneratedStationPlacement]
     ) {
         for child in Array(root.children) { child.removeFromParent() }
@@ -638,9 +644,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         renderQualitySettings = RenderQualityResolver.resolve(profile: quality.profile, thermalCondition: .nominal)
         let safeCarCount = min(max(vehicleCarCount, 1), 12)
         currentCabDesk = cabDesk
-        currentServiceCategory = route.category
+        currentServiceCategory = serviceCategory
         let stationSignature = stationModelPlacements.map { "\($0.stationId):\($0.chainageM):\($0.asset.rawValue)" }.joined(separator: ",")
-        routeSignature = "\(route.lineName)|\(route.distanceM)|\(quality.rawValue)|\(routeVariant.rawValue)|\(travelDirection.rawValue)|cars:\(safeCarCount)|cab:\(cabDesk.family.rawValue)|svc:\(route.category.rawValue)|stations:\(stationSignature)"
+        routeSignature = "\(route.lineName)|\(route.distanceM)|\(quality.rawValue)|\(routeVariant.rawValue)|\(travelDirection.rawValue)|cars:\(safeCarCount)|cab:\(cabDesk.family.rawValue)|svc:\(serviceCategory.rawValue)|stations:\(stationSignature)"
         didBuild = true
         let profileInterval: Double
         switch quality {
@@ -826,19 +832,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         environmentSelection: EnvironmentQualitySelection,
         vehicleCarCount: Int,
         cabDesk: FictionalCabDesk,
+        serviceCategory: ServiceCategory = .local,
         stationModelPlacements: [RailwayGeneratedStationPlacement],
         signalPositionM: Double? = nil,
         signalAspect: ThreeAspectSignal? = nil
     ) {
         let safeCarCount = min(max(vehicleCarCount, 1), 12)
         let stationSignature = stationModelPlacements.map { "\($0.stationId):\($0.chainageM):\($0.asset.rawValue)" }.joined(separator: ",")
-        let signature = "\(route.lineName)|\(route.distanceM)|\(environmentSelection.renderQuality.rawValue)|\(routeVariant.rawValue)|\(travelDirection.rawValue)|cars:\(safeCarCount)|cab:\(cabDesk.family.rawValue)|stations:\(stationSignature)"
+        let signature = "\(route.lineName)|\(route.distanceM)|\(environmentSelection.renderQuality.rawValue)|\(routeVariant.rawValue)|\(travelDirection.rawValue)|cars:\(safeCarCount)|cab:\(cabDesk.family.rawValue)|svc:\(serviceCategory.rawValue)|stations:\(stationSignature)"
         if !didBuild || routeSignature != signature {
             rebuild(
                 route: route, quality: environmentSelection.renderQuality,
                 trafficScenario: trafficScenario, routeVariant: routeVariant,
                 travelDirection: travelDirection, vehicleCarCount: safeCarCount,
-                cabDesk: cabDesk, stationModelPlacements: stationModelPlacements
+                cabDesk: cabDesk, serviceCategory: serviceCategory, stationModelPlacements: stationModelPlacements
             )
         }
         guard !samples.isEmpty else { return }
