@@ -6900,7 +6900,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 chainageM: chainage, lateralOffsetM: track.lateralOffsetM,
                 headingRadians: actor.serviceDirection == serviceDirection ? 0 : .pi,
                 speedMps: pose.speedMps, lengthM: plan.lengthM, isVisible: pose.isVisible,
-                wheelRotationRadians: pose.wheelRotationRadians
+                wheelRotationRadians: pose.wheelRotationRadians,
+                trainServiceRawValue: plan.serviceType.rawValue
             ))
         }
 
