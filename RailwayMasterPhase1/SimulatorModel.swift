@@ -405,6 +405,17 @@ final class SimulatorModel: ObservableObject {
         driveDemoIfEnabled()
         fixedStepAccumulator += realDelta
         let fixedStep = TrainPhysics.PhysicsConstants.fixedTimeStepSeconds
+        // Cap the catch-up work per frame (2026-11-12, CI #412):
+        // every substep runs the whole simulation (traffic,
+        // signals, coordinators), so after any stall the old
+        // unbounded loop demanded more work than the frame that
+        // triggered it and simulation time fell behind wall time
+        // without limit. At most 24 substeps (0.2 s of simulation)
+        // run per frame and any larger backlog is dropped: under
+        // overload the simulation degrades to slow motion instead
+        // of spiralling, and the runloop keeps presenting frames.
+        let maxSubstepsPerFrame = 24
+        fixedStepAccumulator = min(fixedStepAccumulator, Double(maxSubstepsPerFrame) * fixedStep)
         while fixedStepAccumulator + 1e-12 >= fixedStep, runPhase == .running {
             fixedStepAccumulator -= fixedStep
             simulationTime += fixedStep
@@ -696,8 +707,22 @@ final class SimulatorModel: ObservableObject {
 
     private func advanceTrafficAtCurrentTick() {
         guard var traffic = trafficEngine else { return }
+        // The zoo and theme park shuttles run alone by design: the
+        // regional traffic scenario has no zoo/park tracks, so
+        // advancing it with the player on those lines throws on
+        // every tick and pinned a permanent "AI sync failed"
+        // warning on those routes (CI #412). Skip traffic there.
+        guard routeVariant != .zooLine, routeVariant != .parkLine else { return }
         let step = TrainPhysics.PhysicsConstants.fixedTimeStepSeconds
         let tick = UInt64(max(0, (simulationTime / step).rounded()))
+        // Advance traffic at 30 Hz of simulation time rather than
+        // on every 120 Hz physics tick (2026-11-12): the engine
+        // catches up internally in one call, and snapshot
+        // construction plus the downstream scene updates cost a
+        // quarter as much.
+        if let snapshot = trafficSnapshot, tick > snapshot.fixedTick, tick - snapshot.fixedTick < 4 {
+            return
+        }
         let clock = SharedSimulationClock(
             simulationTimeSeconds: Double(tick) * step,
             fixedTick: tick,
@@ -1539,8 +1564,13 @@ final class SimulatorModel: ObservableObject {
         // the model and the view share the main runloop, so sim
         // time advancing means frames at the new location have been
         // presented — with the train standing at the spot.
+        // 2026-11-12: a 60 s wall-clock fallback joins the gate —
+        // on a loaded CI runner simulation time can advance far
+        // slower than wall time (CI #412), and 60 s of presented
+        // frames is more than enough for the new location to be
+        // on screen.
         if tourEnabled, tourReadyPendingIndex >= 0,
-           simulationTime >= tourTeleportSimTime + 4,
+           simulationTime >= tourTeleportSimTime + 4 || wall - tourTeleportWallTime >= 60,
            abs(engine.positionM - tourSpots[tourReadyPendingIndex]) < 5 {
             let line = "READY spot=\(tourReadyPendingIndex) pos=\(Int(engine.positionM))\n"
             if let data = line.data(using: .utf8) { handle.write(data) }
@@ -1586,10 +1616,18 @@ final class SimulatorModel: ObservableObject {
     /// grounds, terminal).
     private var tourSpots: [Double] {
         if ProcessInfo.processInfo.arguments.contains("-RMZooTour") {
-            return [80, 620, 1_030, 1_520, 1_760, 2_430]
+            // 2026-11-12: spots sit BEFORE each enclosure (penguins
+            // 560, lion 990, tiger 1,490, elephant 1,710) so the
+            // paddocks are inside the forward view. CI #412's spots
+            // were just past each paddock, so the photographs showed
+            // empty fields and no animals.
+            return [80, 505, 935, 1_435, 1_655, 2_430]
         }
         if ProcessInfo.processInfo.arguments.contains("-RMParkTour") {
-            return [120, 900, 1_300, 1_930]
+            // 2026-11-12: the ferris wheel (centre 1,280) is shot
+            // from 1,080 so it stands ahead in the frame; from the
+            // old 1,300 spot it was behind the camera (CI #412).
+            return [120, 900, 1_080, 1_930]
         }
         return Self.tourSpotsM
     }
@@ -1605,6 +1643,7 @@ final class SimulatorModel: ObservableObject {
     // photographs on READY instead of on a timer.
     private var tourReadyPendingIndex = -1
     private var tourTeleportSimTime = 0.0
+    private var tourTeleportWallTime: TimeInterval = -1
     // quality25 (E): READY alone did not fix the drift (CI #232:
     // only 7 of 16 spots photographed at their labelled positions,
     // three pure black, six the same stretch of coast). The app
@@ -1636,12 +1675,17 @@ final class SimulatorModel: ObservableObject {
             // build: wall 25 s AND simulation time 15 s (the
             // black frames in CI #232 were early spots photographed
             // while the first build was still presenting nothing).
-            if elapsed >= 25, simulationTime >= 15 {
+            // 2026-11-12: the wall-150 s alternative keeps the tour
+            // moving when simulation time advances far slower than
+            // wall time on a loaded runner (CI #412 waited 422 s
+            // for simulation time 15).
+            if elapsed >= 25, simulationTime >= 15 || elapsed >= 150 {
                 tourSpotIndex = 0
                 teleportForTour(to: tourSpots[0])
                 logTourTeleport(to: tourSpots[0], spotIndex: 0)
                 tourReadyPendingIndex = 0
                 tourTeleportSimTime = simulationTime
+                tourTeleportWallTime = now
             }
         } else if tourAwaitingAckIndex == tourSpotIndex, tourReadyWallTime >= 0 {
             // READY is out for the current spot: wait for the
@@ -1663,6 +1707,7 @@ final class SimulatorModel: ObservableObject {
                         logTourTeleport(to: tourSpots[next], spotIndex: next)
                         tourReadyPendingIndex = next
                         tourTeleportSimTime = simulationTime
+                        tourTeleportWallTime = now
                     }
                 }
             }
