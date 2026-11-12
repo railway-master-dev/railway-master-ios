@@ -139,6 +139,18 @@ PYEOF
     # consumed all of it and the short tours and cab check
     # never ran. Later stages below check this clock and skip
     # themselves (logged) instead of being cut off mid-flight.
+    # batch9 (CI #415): the stakes are higher than a skipped
+    # stage — when the job hit its 60-minute timeout in #415
+    # the runner was torn down BEFORE the workflow's
+    # always() upload step ran, so the entire tour's evidence
+    # (photos, progress log, demo log) was lost even though
+    # the script had been working for over an hour. The stage
+    # budgets are therefore retuned so this script RETURNS
+    # with minutes to spare in the worst case: main tour cap
+    # 1,500 s, short tours start only before 1,800 s and abort
+    # at 2,100 s, cab check starts only before 2,100 s. Note
+    # JOB_START is set after this script's own build phase
+    # (~15 min of the job), which the margins absorb.
     JOB_START=$SECONDS
     xcrun simctl boot "$SIMULATOR_UDID" || true
     xcrun simctl bootstatus "$SIMULATOR_UDID" -b
@@ -376,7 +388,7 @@ SWIFT_EOF
     }
     # 2026-11-12: wait until the demo log shows READY for spot $1
     # (or a later one), up to $2 seconds; also stops at the
-    # 1,800 s tour cap (batch7). Sets READY_SEEN, and LOG_GREW
+    # 1,500 s tour cap (batch9; 1,800 in batch7/8). Sets READY_SEEN, and LOG_GREW
     # (batch8: 1 when the log's simulation time advanced during
     # the wait — the app is alive, just slow; CI #414's spots
     # 2-3 each burned ~490 s on relaunch cycles against an app
@@ -398,7 +410,7 @@ SWIFT_EOF
           local T_NOW="$(grep -o '^t=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
           if [ -n "$T_NOW" ] && [ -n "$T_START" ] && [ "$T_NOW" -gt "$T_START" ]; then LOG_GREW=1; fi
         fi
-        if [ $((SECONDS - TOUR_START)) -ge 1800 ]; then return 0; fi
+        if [ $((SECONDS - TOUR_START)) -ge 1500 ]; then return 0; fi
         sleep 5
         WAITED=$((WAITED + 5))
       done
@@ -453,7 +465,7 @@ SWIFT_EOF
       if [ -n "$TOUR_LOG" ]; then
         tour_wait_ready "$SPOT" 240
       fi
-      if [ "$READY_SEEN" -eq 0 ] && [ "$LOG_GREW" -eq 1 ] && [ $((SECONDS - TOUR_START)) -lt 1800 ]; then
+      if [ "$READY_SEEN" -eq 0 ] && [ "$LOG_GREW" -eq 1 ] && [ $((SECONDS - TOUR_START)) -lt 1500 ]; then
         # batch8 (CI #414): the app is alive — its log advanced
         # during the wait — it is simply slow (and after a
         # relaunch it needs minutes to boot and race through
@@ -462,7 +474,7 @@ SWIFT_EOF
         echo "tour-progress: spot $SPOT no-ready yet but log advancing; extending the wait" >> screenshots/tour-progress.txt
         tour_wait_ready "$SPOT" 240
       fi
-      if [ "$READY_SEEN" -eq 0 ] && [ $((SECONDS - TOUR_START)) -lt 1800 ]; then
+      if [ "$READY_SEEN" -eq 0 ] && [ $((SECONDS - TOUR_START)) -lt 1500 ]; then
         echo "READY for tour spot $SPOT did not appear; recovering once before skipping the spot."
         tour_do_recovery "$SPOT"
       fi
@@ -526,6 +538,14 @@ SWIFT_EOF
       done
       local IDX=0
       for SHOT in $SHOTS; do
+        # batch9: hard deadline inside the short tour — stop
+        # starting new spots once the script is 2,100 s in, so
+        # this function returns in time for the job's upload
+        # step (see the JOB_START note).
+        if [ $((SECONDS - JOB_START)) -ge 2100 ]; then
+          echo "tour-progress: short $EXTRA_ARG aborted at spot $IDX (job budget)" >> screenshots/tour-progress.txt
+          break
+        fi
         # 2026-11-12: same rule as the main tour — no READY, no
         # photograph; the spot is logged FAILED and skipped (the
         # ACK below still releases the app). When the log never
@@ -559,15 +579,15 @@ SWIFT_EOF
       sleep 3
     }
     # batch7: each short tour starts only while the job still
-    # has budget (elapsed < 2,400 s); a skipped tour is logged
+    # has budget (elapsed < 1,800 s, batch9); a skipped tour is logged
     # instead of being cut off by the 60-minute job cap.
     if [ -n "$APP_DATA" ]; then
-      if [ $((SECONDS - JOB_START)) -lt 2400 ]; then
+      if [ $((SECONDS - JOB_START)) -lt 1800 ]; then
         run_short_tour -RMZooTour 40-zoo-approach 41-zoo-penguins 42-zoo-lion 43-zoo-tiger 44-zoo-elephant 45-zoo-terminal
       else
         echo "tour-progress: zoo short tour SKIPPED (job budget)" >> screenshots/tour-progress.txt
       fi
-      if [ $((SECONDS - JOB_START)) -lt 2400 ]; then
+      if [ $((SECONDS - JOB_START)) -lt 1800 ]; then
         run_short_tour -RMParkTour 46-park-entrance 47-park-grounds 48-park-wheel 49-park-terminal
       else
         echo "tour-progress: park short tour SKIPPED (job budget)" >> screenshots/tour-progress.txt
@@ -580,14 +600,14 @@ SWIFT_EOF
     # pos 335 m — it never got near the station, and the station
     # stop-margin question stayed unverifiable. Now the arrival
     # shot waits until the cab log (demo-drive-log-cab.txt) reports
-    # pos >= 1,850, capped at 420 s (batch7; was 900 s) so the job
+    # pos >= 1,850, capped at 300 s (batch9; 420 in batch7/8, 900 before) so the job
     # keeps a total budget; if it never arrives, the shot is taken
     # anyway with a warning and the log copied below shows how
     # far it got.
     # batch7: the whole cab check runs only while the job still
-    # has budget (elapsed < 2,700 s); otherwise it is skipped and
+    # has budget (elapsed < 2,100 s, batch9); otherwise it is skipped and
     # logged, instead of being cut off by the 60-minute cap.
-    if [ $((SECONDS - JOB_START)) -lt 2700 ]; then
+    if [ $((SECONDS - JOB_START)) -lt 2100 ]; then
     sleep 3
     xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMCabView
     CAB_LOG=""
@@ -623,7 +643,7 @@ SWIFT_EOF
     capture_still 20-cab-running
     CAB_WAITED=0
     CAB_ARRIVED=0
-    while [ "$CAB_WAITED" -lt 420 ]; do
+    while [ "$CAB_WAITED" -lt 300 ]; do
       if [ -n "$CAB_LOG" ]; then
         CAB_POS="$(grep -o ' pos=[0-9.]*' "$CAB_LOG" 2>/dev/null | tail -1 | grep -o '[0-9.]*$')"
         CAB_POS_INT="${CAB_POS%.*}"
@@ -633,7 +653,7 @@ SWIFT_EOF
       CAB_WAITED=$((CAB_WAITED + 10))
     done
     if [ "$CAB_ARRIVED" -eq 0 ]; then
-      echo "Cab drive did not reach Matsubaracho (pos >= 1850) within 420 s; shooting anyway."
+      echo "Cab drive did not reach Matsubaracho (pos >= 1850) within 300 s; shooting anyway."
     fi
     sleep 5
     capture_still 21-cab-station
