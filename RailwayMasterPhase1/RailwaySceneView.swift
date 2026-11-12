@@ -4704,7 +4704,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             addPerson(position: pos, yaw: atan2(face.x, -face.z), role: p == 1 ? 1 : 3, mode: 0, routeDistanceM: c, walkAxis: SIMD3<Float>(1, 0, 0), range: 0, seedKey: "parkstation-\(p)")
         }
         let house = gp(1_940, sideSign * 13.5)
-        _ = addBox(parent: world, name: "park-station-house", size: SIMD3<Float>(12, 4.6, 6.5), position: SIMD3<Float>(house.x, house.y + 2.3, house.z), material: Self.pbr(pastels[0], roughness: 0.85), orientation: yawAt(1_940))
+        // 2026-11-12: the flat pastel material read as an
+        // untextured pink slab in the CI #412 terminal photograph.
+        // Keep the fairy-tale pink as a tint over the house facade
+        // texture (windows and door included), like the zoo
+        // line's station house.
+        _ = addBox(parent: world, name: "park-station-house", size: SIMD3<Float>(12, 4.6, 6.5), position: SIMD3<Float>(house.x, house.y + 2.3, house.z), material: Self.texturedPBR(UIColor(red: 0.96, green: 0.80, blue: 0.85, alpha: 1), roughness: 0.85, textureName: "scenery_house_facade_5"), orientation: yawAt(1_940))
         let houseRoof = addBox(parent: world, name: "park-station-roof", size: SIMD3<Float>(9.4, 9.4, 7.3), position: SIMD3<Float>(house.x, house.y + 4.6 + 2.2, house.z), material: Self.pbr(pastels[2], roughness: 0.7), orientation: yawAt(1_940))
         houseRoof.orientation = houseRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
         let endSample = sample(at: 2_000)
