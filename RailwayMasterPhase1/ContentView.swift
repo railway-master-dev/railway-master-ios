@@ -596,8 +596,6 @@ struct ContentView: View {
                         .foregroundStyle(signalTint(reading.aspect))
                     Text("信号 \(signalName(reading.aspect))")
                         .foregroundStyle(.white)
-                    Text(reading.blockID)
-                        .foregroundStyle(.white.opacity(0.65))
                 }
                 .font(.system(size: 10, weight: .bold, design: .rounded).monospacedDigit())
             } else {
