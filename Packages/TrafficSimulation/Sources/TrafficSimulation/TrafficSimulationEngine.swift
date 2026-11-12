@@ -474,10 +474,143 @@ public struct TrafficSimulationEngine: Sendable {
     }
 
     private func makeSnapshot(playerTrain: SharedTrainState?) -> TrafficSnapshot {
-        let trainSnapshots = trains.map { runtime -> AITrainSnapshot in
-            let track = scenario.tracks.first { $0.id == runtime.plan.trackID }!
-            let nearestClearance = nearestTrainClearance(for: runtime, playerTrain: playerTrain)
-            let isPassing = isPassing(runtime)
+        // Performance (2026-11-12, CI #412): this used to rescan
+        // every train for every train (nearestTrainClearance and
+        // isPassing were O(n) per train), making snapshot
+        // construction O(n^2). With the diagram's 798 trains and a
+        // snapshot built on every 120 Hz physics tick, the host's
+        // main thread saturated and simulation time dilated to a
+        // small fraction of real time on loaded CI runners: the
+        // screenshot tour's READY/ACK handshake desynchronised and
+        // the demo drive could not even depart. Clearances and
+        // passing flags are now derived from position-sorted
+        // occupant lists in O(n log n). Each outward scan stops
+        // only once every train further away is provably unable to
+        // beat the best value found (position gaps grow
+        // monotonically while the length term is bounded by the
+        // longest train in the group), so the values produced are
+        // identical to the full scan.
+        let tracksByID = Dictionary(scenario.tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        struct SnapshotOccupant {
+            let positionM: Double
+            let lengthM: Double
+            let trainIndex: Int?
+        }
+        // Active (non-scheduled) occupants per track, sorted by
+        // position, with the player inserted on its own track.
+        var occupantsByTrack: [String: [SnapshotOccupant]] = [:]
+        for (index, runtime) in trains.enumerated() where runtime.phase != .scheduled {
+            occupantsByTrack[runtime.plan.trackID, default: []].append(
+                SnapshotOccupant(positionM: runtime.positionM, lengthM: runtime.plan.lengthM, trainIndex: index)
+            )
+        }
+        if let playerTrain {
+            occupantsByTrack[playerTrain.trackID, default: []].append(
+                SnapshotOccupant(positionM: playerTrain.positionM, lengthM: playerTrain.lengthM, trainIndex: nil)
+            )
+        }
+        for trackID in Array(occupantsByTrack.keys) {
+            occupantsByTrack[trackID]?.sort { $0.positionM < $1.positionM }
+        }
+        let maxOccupantLengthByTrack: [String: Double] = occupantsByTrack.mapValues { occupants in
+            occupants.map(\.lengthM).max() ?? 0
+        }
+
+        func nearestClearance(trackID: String, positionM: Double, lengthM: Double, selfIndex: Int) -> Double? {
+            guard let occupants = occupantsByTrack[trackID], !occupants.isEmpty else { return nil }
+            let maxLength = maxOccupantLengthByTrack[trackID] ?? 0
+            var lo = 0
+            var hi = occupants.count
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                if occupants[mid].positionM < positionM { lo = mid + 1 } else { hi = mid }
+            }
+            var best: Double? = nil
+            var j = lo - 1
+            while j >= 0 {
+                let other = occupants[j]
+                let gap = positionM - other.positionM
+                if let best, gap - (lengthM + maxLength) * 0.5 >= best { break }
+                if other.trainIndex != selfIndex {
+                    let clearance = gap - (lengthM + other.lengthM) * 0.5
+                    if best == nil || clearance < best! { best = clearance }
+                }
+                j -= 1
+            }
+            var k = lo
+            while k < occupants.count {
+                let other = occupants[k]
+                let gap = other.positionM - positionM
+                if let best, gap - (lengthM + maxLength) * 0.5 >= best { break }
+                if other.trainIndex != selfIndex {
+                    let clearance = gap - (lengthM + other.lengthM) * 0.5
+                    if best == nil || clearance < best! { best = clearance }
+                }
+                k += 1
+            }
+            return best
+        }
+
+        // Passing flags: group the tracks by parallel group and
+        // route path; inside a group, a train is passing when an
+        // active train on an opposite-direction track is within
+        // the visualisation distance (plus half of each length).
+        var passingByTrainIndex: [Int: Bool] = [:]
+        var tracksByGroup: [String: [TrafficTrackDefinition]] = [:]
+        for track in scenario.tracks {
+            tracksByGroup["\(track.parallelGroupID)|\(track.routePathID)", default: []].append(track)
+        }
+        struct GroupOccupant {
+            let positionM: Double
+            let lengthM: Double
+            let trainIndex: Int
+            let direction: TrafficDirection
+        }
+        for groupTracks in tracksByGroup.values {
+            var groupOccupants: [GroupOccupant] = []
+            for track in groupTracks {
+                for occupant in occupantsByTrack[track.id] ?? [] {
+                    if let trainIndex = occupant.trainIndex {
+                        groupOccupants.append(GroupOccupant(positionM: occupant.positionM, lengthM: occupant.lengthM, trainIndex: trainIndex, direction: track.direction))
+                    }
+                }
+            }
+            guard groupOccupants.count > 1 else { continue }
+            groupOccupants.sort { $0.positionM < $1.positionM }
+            let maxGroupLength = groupOccupants.map(\.lengthM).max() ?? 0
+            for (i, entry) in groupOccupants.enumerated() {
+                if passingByTrainIndex[entry.trainIndex] == true { continue }
+                var found = false
+                var j = i - 1
+                while j >= 0, !found {
+                    let other = groupOccupants[j]
+                    let gap = entry.positionM - other.positionM
+                    if gap - (entry.lengthM + maxGroupLength) * 0.5 > scenario.passingVisualizationDistanceM { break }
+                    if other.direction != entry.direction,
+                       gap - (entry.lengthM + other.lengthM) * 0.5 <= scenario.passingVisualizationDistanceM {
+                        found = true
+                    }
+                    j -= 1
+                }
+                var k = i + 1
+                while k < groupOccupants.count, !found {
+                    let other = groupOccupants[k]
+                    let gap = other.positionM - entry.positionM
+                    if gap - (entry.lengthM + maxGroupLength) * 0.5 > scenario.passingVisualizationDistanceM { break }
+                    if other.direction != entry.direction,
+                       gap - (entry.lengthM + other.lengthM) * 0.5 <= scenario.passingVisualizationDistanceM {
+                        found = true
+                    }
+                    k += 1
+                }
+                passingByTrainIndex[entry.trainIndex] = found
+            }
+        }
+
+        let trainSnapshots = trains.enumerated().map { (index, runtime) -> AITrainSnapshot in
+            let track = tracksByID[runtime.plan.trackID]!
+            let clearance = nearestClearance(trackID: runtime.plan.trackID, positionM: runtime.positionM, lengthM: runtime.plan.lengthM, selfIndex: index)
             return AITrainSnapshot(
                 id: runtime.plan.id,
                 trackID: runtime.plan.trackID,
@@ -493,8 +626,8 @@ public struct TrafficSimulationEngine: Sendable {
                 headingRadians: track.direction == .increasing ? 0 : Double.pi,
                 phase: runtime.phase,
                 isHeldForSeparation: runtime.isHeldForSeparation,
-                nearestTrainClearanceM: nearestClearance,
-                isPassing: isPassing
+                nearestTrainClearanceM: clearance,
+                isPassing: passingByTrainIndex[index] ?? false
             )
         }
         let roadSnapshots = roadVehicles.map { runtime -> RoadVehicleSnapshot in
@@ -539,34 +672,6 @@ public struct TrafficSimulationEngine: Sendable {
             roadVehicles: roadSnapshots,
             passengers: passengerSnapshots
         )
-    }
-
-    private func nearestTrainClearance(for runtime: TrainRuntime, playerTrain: SharedTrainState?) -> Double? {
-        var clearances: [Double] = trains.compactMap { other in
-            guard other.plan.id != runtime.plan.id,
-                  other.plan.trackID == runtime.plan.trackID,
-                  other.phase != .scheduled else { return nil }
-            return abs(other.positionM - runtime.positionM) - (other.plan.lengthM + runtime.plan.lengthM) * 0.5
-        }
-        if let playerTrain, playerTrain.trackID == runtime.plan.trackID {
-            clearances.append(abs(playerTrain.positionM - runtime.positionM) - (playerTrain.lengthM + runtime.plan.lengthM) * 0.5)
-        }
-        return clearances.min()
-    }
-
-    private func isPassing(_ runtime: TrainRuntime) -> Bool {
-        guard runtime.phase != .scheduled,
-              let ownTrack = scenario.tracks.first(where: { $0.id == runtime.plan.trackID }) else { return false }
-        let threshold = scenario.passingVisualizationDistanceM + runtime.plan.lengthM * 0.5
-        return trains.contains { other in
-            guard other.plan.id != runtime.plan.id,
-                  other.phase != .scheduled,
-                  let otherTrack = scenario.tracks.first(where: { $0.id == other.plan.trackID }),
-                  otherTrack.parallelGroupID == ownTrack.parallelGroupID,
-                  otherTrack.routePathID == ownTrack.routePathID,
-                  otherTrack.direction != ownTrack.direction else { return false }
-            return abs(other.positionM - runtime.positionM) <= threshold + other.plan.lengthM * 0.5
-        }
     }
 
     private func nearestRoadVehicleClearance(for runtime: RoadVehicleRuntime) -> Double? {
