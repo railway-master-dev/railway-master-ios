@@ -205,16 +205,70 @@ PYEOF
       fi
       rm -f "screenshots/$NAME.tmp.png"
     }
+    # batch8 (2026-11-12, CI #414): stills are extracted from
+    # VIDEO frames. simctl screenshots returned 0 bytes for
+    # every single capture in #414 (fast 2 s empties after the
+    # first two 45 s timeouts), while recordVideo worked in
+    # both #413 and #414 — under runner starvation the video
+    # path keeps streaming frames that the one-shot capture
+    # path cannot composite. extract_frame <mov> <png> <sec>
+    # tries, in order: ffmpeg, qlmanage (first frame), and a
+    # small AVFoundation script (written below, last resort).
+    # If all three fail the caller keeps the .mov in the
+    # artifact so frames can be extracted after the run.
+    cat > screenshots/extract_frame.swift << 'SWIFT_EOF'
+import AVFoundation
+import Foundation
+import ImageIO
+
+let args = CommandLine.arguments
+guard args.count >= 4 else { exit(2) }
+let asset = AVURLAsset(url: URL(fileURLWithPath: args[1]))
+let generator = AVAssetImageGenerator(asset: asset)
+generator.appliesPreferredTrackTransform = true
+let seconds = Double(args[3]) ?? 1.0
+let time = CMTime(seconds: seconds, preferredTimescale: 600)
+var actualTime = CMTime.zero
+do {
+    let image = try generator.copyCGImage(at: time, actualTime: &actualTime)
+    let outURL = URL(fileURLWithPath: args[2]) as CFURL
+    guard let dest = CGImageDestinationCreateWithURL(outURL, "public.png" as CFString, 1, nil) else { exit(3) }
+    CGImageDestinationAddImage(dest, image, nil)
+    if !CGImageDestinationFinalize(dest) { exit(4) }
+} catch {
+    exit(1)
+}
+SWIFT_EOF
+    extract_frame() {
+      local MOV="$1"; local PNG="$2"; local SEC="$3"
+      rm -f "$PNG"
+      if command -v ffmpeg >/dev/null 2>&1; then
+        ffmpeg -y -v error -ss "$SEC" -i "$MOV" -frames:v 1 "$PNG" 2>/dev/null || true
+      fi
+      if [ ! -s "$PNG" ]; then
+        local QD="$(mktemp -d)"
+        qlmanage -t -s 1600 -o "$QD" "$MOV" >/dev/null 2>&1 || true
+        local QF="$(ls "$QD"/*.png 2>/dev/null | head -n 1)"
+        if [ -n "$QF" ]; then cp "$QF" "$PNG" 2>/dev/null || true; fi
+        rm -rf "$QD"
+      fi
+      if [ ! -s "$PNG" ] && [ -f screenshots/extract_frame.swift ]; then
+        xcrun swift screenshots/extract_frame.swift "$MOV" "$PNG" "$SEC" 2>/dev/null || true
+      fi
+      [ -s "$PNG" ]
+    }
     xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 screenshots/launch-video.mov &
     VIDEO_PID=$!
     sleep 4
-    shot_with_timeout 01-launch 60
     sleep 8
-    shot_with_timeout 02-main 60
     sleep 14
-    shot_with_timeout 03-settled 60
     kill -INT "$VIDEO_PID" 2>/dev/null || true
     wait "$VIDEO_PID" 2>/dev/null || true
+    # batch8: the launch stills are frames of the launch video
+    # (at ~4 s, ~12 s and ~24 s), not separate screenshot calls.
+    extract_frame screenshots/launch-video.mov screenshots/01-launch.png 4 || true
+    extract_frame screenshots/launch-video.mov screenshots/02-main.png 12 || true
+    extract_frame screenshots/launch-video.mov screenshots/03-settled.png 24 || true
     # Diagnostics: is the app process alive? did it crash? what did it log?
     {
       echo '== app process (launchctl) =='
@@ -285,35 +339,64 @@ PYEOF
     # now, and every capture is individually timed instead.
     RECOVERY_STAGE=0
     : > screenshots/tour-progress.txt
-    # One capture = at most 2 timed attempts (45 s each, 5 s
-    # apart) via shot_with_timeout; every attempt's duration
-    # and size are logged to tour-progress.txt. Sets TOUR_SIZE
-    # (0 when every attempt came back empty).
-    tour_try_capture() {
+    # batch8 (CI #414): one capture = one 8 s video clip of the
+    # held spot plus a frame extraction (see extract_frame).
+    # simctl screenshots are demoted to a last-resort fallback:
+    # in #414 every screenshot attempt came back 0 bytes while
+    # recordVideo worked. On extraction success the clip is
+    # deleted; if extraction fails the clip stays in the
+    # artifact so the frame can still be recovered after the
+    # run. Sets TOUR_SIZE (0 when nothing usable was captured).
+    capture_still() {
       TOUR_SIZE=0
-      local tries=0
-      while [ "$tries" -lt 2 ]; do
-        shot_with_timeout "$1" 45
-        tries=$((tries + 1))
-        if [ "$SHOT_OK" -eq 1 ]; then
-          TOUR_SIZE=$(stat -f %z "screenshots/$1.png" 2>/dev/null || echo 0)
+      local NAME="$1"
+      rm -f "screenshots/$NAME.png" "screenshots/$NAME.mov"
+      xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 "screenshots/$NAME.mov" 2>/dev/null &
+      local RPID=$!
+      sleep 8
+      kill -INT "$RPID" 2>/dev/null || true
+      wait "$RPID" 2>/dev/null || true
+      if [ -s "screenshots/$NAME.mov" ]; then
+        if extract_frame "screenshots/$NAME.mov" "screenshots/$NAME.png" 5; then
+          TOUR_SIZE=$(stat -f %z "screenshots/$NAME.png" 2>/dev/null || echo 0)
+          rm -f "screenshots/$NAME.mov"
+          echo "tour-progress: capture $NAME via video ok size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+          return 0
         fi
-        echo "tour-progress: capture $1 attempt $tries took ${SHOT_SECONDS}s size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
-        if [ "$SHOT_OK" -eq 1 ]; then return 0; fi
-        if [ "$tries" -lt 2 ]; then sleep 5; fi
-      done
+        echo "tour-progress: capture $NAME video kept, frame extraction failed" >> screenshots/tour-progress.txt
+      fi
+      shot_with_timeout "$NAME" 45
+      if [ "$SHOT_OK" -eq 1 ]; then
+        TOUR_SIZE=$(stat -f %z "screenshots/$NAME.png" 2>/dev/null || echo 0)
+        echo "tour-progress: capture $NAME via screenshot fallback size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+        return 0
+      fi
+      echo "tour-progress: capture $NAME FAILED (video and screenshot)" >> screenshots/tour-progress.txt
       return 1
     }
     # 2026-11-12: wait until the demo log shows READY for spot $1
     # (or a later one), up to $2 seconds; also stops at the
-    # 1,800 s tour cap (batch7). Sets READY_SEEN.
+    # 1,800 s tour cap (batch7). Sets READY_SEEN, and LOG_GREW
+    # (batch8: 1 when the log's simulation time advanced during
+    # the wait — the app is alive, just slow; CI #414's spots
+    # 2-3 each burned ~490 s on relaunch cycles against an app
+    # that was still booting and racing through pre-ACKed
+    # spots, which a "log still advancing" signal distinguishes
+    # from a genuinely wedged app).
     tour_wait_ready() {
       READY_SEEN=0
+      LOG_GREW=0
       local WANT="$1"; local CAP="$2"; local WAITED=0
+      local T_START=""
+      if [ -n "$TOUR_LOG" ]; then
+        T_START="$(grep -o '^t=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
+      fi
       while [ "$WAITED" -lt "$CAP" ]; do
         if [ -n "$TOUR_LOG" ]; then
           local MAXREADY="$(grep -o 'READY spot=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
           if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$WANT" ]; then READY_SEEN=1; return 0; fi
+          local T_NOW="$(grep -o '^t=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
+          if [ -n "$T_NOW" ] && [ -n "$T_START" ] && [ "$T_NOW" -gt "$T_START" ]; then LOG_GREW=1; fi
         fi
         if [ $((SECONDS - TOUR_START)) -ge 1800 ]; then return 0; fi
         sleep 5
@@ -323,10 +406,13 @@ PYEOF
     # batch7: recovery for a wedged tour is an app relaunch
     # ONLY, at most twice per tour (CI #413's simulator-reboot
     # stage cost ~10 minutes and cleared nothing), then wait
-    # for the current spot's READY again (240 s cap). Even once
-    # the relaunch budget is spent, earlier spots are still
-    # pre-ACKed so a restarted app races through them and
-    # holds at the current one, and the wait still runs.
+    # for the current spot's READY again. batch8: the re-wait
+    # is 420 s — a relaunched app on the starved runner needs
+    # minutes just to boot and race through the pre-ACKed
+    # spots (CI #414). Even once the relaunch budget is spent,
+    # earlier spots are still pre-ACKed so a restarted app
+    # races through them and holds at the current one, and
+    # the wait still runs.
     tour_do_recovery() {
       local SPOT="$1"
       if [ "$RECOVERY_STAGE" -lt 2 ]; then
@@ -343,7 +429,7 @@ PYEOF
           ACK_SPOT=$((ACK_SPOT + 1))
         done
       fi
-      tour_wait_ready "$SPOT" 240
+      tour_wait_ready "$SPOT" 420
     }
     PREV_MD5=""
     PREV_SHOT=""
@@ -363,7 +449,17 @@ PYEOF
       # shooting without READY is just as destructive. The app
       # holds a spot for 900 s, far longer than any sequence here.
       READY_SEEN=0
+      LOG_GREW=0
       if [ -n "$TOUR_LOG" ]; then
+        tour_wait_ready "$SPOT" 240
+      fi
+      if [ "$READY_SEEN" -eq 0 ] && [ "$LOG_GREW" -eq 1 ] && [ $((SECONDS - TOUR_START)) -lt 1800 ]; then
+        # batch8 (CI #414): the app is alive — its log advanced
+        # during the wait — it is simply slow (and after a
+        # relaunch it needs minutes to boot and race through
+        # the pre-ACKed spots). One extended wait instead of a
+        # relaunch the app does not need.
+        echo "tour-progress: spot $SPOT no-ready yet but log advancing; extending the wait" >> screenshots/tour-progress.txt
         tour_wait_ready "$SPOT" 240
       fi
       if [ "$READY_SEEN" -eq 0 ] && [ $((SECONDS - TOUR_START)) -lt 1800 ]; then
@@ -372,14 +468,14 @@ PYEOF
       fi
       if [ "$READY_SEEN" -eq 1 ]; then
         sleep 5
-        tour_try_capture "$SHOT"
+        capture_still "$SHOT"
         if [ "$TOUR_SIZE" -eq 0 ]; then
-          # Capture wedge (CI #409): recover and try once more.
-          tour_do_recovery "$SPOT"
-          if [ "$READY_SEEN" -eq 1 ]; then
-            sleep 5
-            tour_try_capture "$SHOT"
-          fi
+          # batch8: a failed capture no longer triggers a
+          # relaunch — CI #414 showed relaunches cannot fix a
+          # broken capture path, and each one cost minutes of
+          # tour budget. One plain retry, then skip the spot.
+          sleep 10
+          capture_still "$SHOT"
         fi
         if [ "$TOUR_SIZE" -gt 0 ]; then
           SHOT_MD5="$(md5 -q "screenshots/$SHOT.png" 2>/dev/null || md5sum "screenshots/$SHOT.png" 2>/dev/null | awk '{print $1}')"
@@ -449,7 +545,7 @@ PYEOF
           sleep 35
         fi
         if [ "$SHORT_READY" -eq 1 ]; then
-          tour_try_capture "$SHOT"
+          capture_still "$SHOT"
           echo "tour-progress: short $EXTRA_ARG spot $IDX $SHOT size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
         else
           echo "tour-progress: short $EXTRA_ARG spot $IDX $SHOT FAILED no-ready" >> screenshots/tour-progress.txt
@@ -524,7 +620,7 @@ PYEOF
     if [ "$CAB_MOVING" -eq 0 ]; then
       echo "Cab drive did not start moving (pos > 30) within 240 s; shooting the running shot anyway."
     fi
-    shot_with_timeout 20-cab-running 60
+    capture_still 20-cab-running
     CAB_WAITED=0
     CAB_ARRIVED=0
     while [ "$CAB_WAITED" -lt 420 ]; do
@@ -540,7 +636,7 @@ PYEOF
       echo "Cab drive did not reach Matsubaracho (pos >= 1850) within 420 s; shooting anyway."
     fi
     sleep 5
-    shot_with_timeout 21-cab-station 60
+    capture_still 21-cab-station
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     else
       echo "tour-progress: cab check SKIPPED (job budget)" >> screenshots/tour-progress.txt
@@ -560,7 +656,7 @@ PYEOF
       cp "$APP_DATA/Documents/rm-crossings.txt" screenshots/ || true
     fi
     sleep 3
-    shot_with_timeout 22-home 60
+    capture_still 22-home
     # quality26: capture the device log once more at the very
     # end. The device-log.txt capture near the top only covers
     # the first minutes of the run; in CI #238 everything
