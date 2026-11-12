@@ -400,7 +400,7 @@ final class SimulatorModel: ObservableObject {
         lastFrameTime = time
         logDemoStateIfDue(wall: time)
         guard !isPaused, runPhase == .running else { return }
-        let realDelta = min(max(time - previous, 0), 0.5)
+        let realDelta = min(max(time - previous, 0), 1.0)
         guard realDelta > 0 else { return }
         driveDemoIfEnabled()
         fixedStepAccumulator += realDelta
@@ -410,11 +410,22 @@ final class SimulatorModel: ObservableObject {
         // signals, coordinators), so after any stall the old
         // unbounded loop demanded more work than the frame that
         // triggered it and simulation time fell behind wall time
-        // without limit. At most 24 substeps (0.2 s of simulation)
-        // run per frame and any larger backlog is dropped: under
-        // overload the simulation degrades to slow motion instead
-        // of spiralling, and the runloop keeps presenting frames.
-        let maxSubstepsPerFrame = 24
+        // without limit. The backlog beyond the cap is dropped:
+        // under overload the simulation degrades to slow motion
+        // instead of spiralling, and the runloop keeps presenting
+        // frames.
+        // batch7 (2026-11-12, CI #413): the 24-substep cap was
+        // itself the ceiling that pinned the CI tour — frames on
+        // the runner took ~7.5 s of wall time while the cap
+        // allowed only 0.2 s of simulation per frame, a hard
+        // 1/37 speed limit no tick optimisation could lift. The
+        // cap is now 120 substeps with a 1.0 s input clamp (at
+        // most 1.0 s of simulation per frame): on a healthy
+        // 60 fps device realDelta is ~0.017 s and the cap never
+        // binds; on the starved CI runner the ceiling rises to
+        // ~1/7.5. The batch6 tick diet (O(n log n) snapshots at
+        // 30 Hz) keeps a 120-substep frame bounded.
+        let maxSubstepsPerFrame = 120
         fixedStepAccumulator = min(fixedStepAccumulator, Double(maxSubstepsPerFrame) * fixedStep)
         while fixedStepAccumulator + 1e-12 >= fixedStep, runPhase == .running {
             fixedStepAccumulator -= fixedStep

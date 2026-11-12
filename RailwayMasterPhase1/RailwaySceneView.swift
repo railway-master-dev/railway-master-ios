@@ -396,7 +396,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private let railMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.48, green: 0.54, blue: 0.55, alpha: 1), metallic: 0.82, roughness: 0.27)
     private let concreteMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.87, textureName: "scenery_concrete", normalName: "normal_concrete")
     private let poleMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.55, green: 0.58, blue: 0.58, alpha: 1), metallic: 0.30, roughness: 0.55, textureName: "scenery_steel")
-    private let wireMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.68, green: 0.66, blue: 0.57, alpha: 1), metallic: 0.84, roughness: 0.24)
+    // batch7 (2026-11-12, user photo verdict): the old wire
+    // material (pale beige, metallic 0.84, roughness 0.24) caught
+    // the sun and drew the contact/messenger pair as two thick
+    // cream straps across the sky. Real trolley and messenger
+    // wires are weathered copper/bronze and read from the cab as
+    // thin near-black lines, so the material is now dark and
+    // comparatively matte.
+    private let wireMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.16, green: 0.14, blue: 0.12, alpha: 1), metallic: 0.55, roughness: 0.5)
     private let roadMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.78, textureName: "scenery_asphalt", normalName: "normal_asphalt")
     private let glassMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.12, green: 0.26, blue: 0.31, alpha: 1), metallic: 0.18, roughness: 0.20)
     private let roofMaterials = [
@@ -2984,7 +2991,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     } else if cat == "apt" {
                         let isDanchi = kind == "danchi" && hash % 2 == 0
                         let matIndex = isDanchi ? 2 : hash % aptMats.count
-                        let h: Float = isDanchi ? 11 + Float(hash % 25) / 10 : 9.5 + Float(hash % 50) / 10
+                        // batch7: with per-face UVs the facade now
+                        // maps once per face, so the box height
+                        // must match the floors the texture
+                        // depicts (real station-front mansions:
+                        // ~3 m per floor, danchi ~5 floors,
+                        // apartment facades ~5-7 floors) instead
+                        // of squashing 8-10 floors into 3.
+                        let h: Float = isDanchi ? 14 + Float(hash % 30) / 10 : 13 + Float(hash % 60) / 10
                         let w: Float = isDanchi ? 15 : 11.5
                         let d: Float = isDanchi ? 8 : 7.6
                         aptBatches[matIndex].addBox(center: SIMD3<Float>(p.x, p.y + h / 2, p.z), size: SIMD3<Float>(d, h, w), yaw: yaw)
@@ -8968,6 +8982,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private struct MeshBatchBuilder {
         var positions: [SIMD3<Float>] = []
         var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
         var indices: [UInt32] = []
 
         mutating func addBoxAxes(center: SIMD3<Float>, size: SIMD3<Float>, ax: SIMD3<Float>, ay: SIMD3<Float>, az: SIMD3<Float>) {
@@ -8984,11 +8999,30 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 (az, [corner(-1, -1, 1), corner(1, -1, 1), corner(1, 1, 1), corner(-1, 1, 1)]),
                 (-az, [corner(1, -1, -1), corner(-1, -1, -1), corner(-1, 1, -1), corner(1, 1, -1)])
             ]
-            for (normal, corners) in faces {
+            // batch7 (2026-11-12, user photo verdict): batched
+            // boxes used to carry NO texture coordinates, so a
+            // whole-building photo facade (cafe / konbini / shop /
+            // house portraits) came out as a dense grid of tiny
+            // repeats on station-front buildings — the "集合模様"
+            // the user flagged as creepy next to Asanuma. Every
+            // face now maps its texture exactly once, 0..1, with
+            // the U direction chosen per face so lettering reads
+            // correctly from outside (+ax and -az faces run U
+            // toward the viewer's right, the others standard).
+            let faceUVs: [[SIMD2<Float>]] = [
+                [SIMD2<Float>(1, 0), SIMD2<Float>(0, 0), SIMD2<Float>(0, 1), SIMD2<Float>(1, 1)],
+                [SIMD2<Float>(0, 0), SIMD2<Float>(1, 0), SIMD2<Float>(1, 1), SIMD2<Float>(0, 1)],
+                [SIMD2<Float>(0, 0), SIMD2<Float>(1, 0), SIMD2<Float>(1, 1), SIMD2<Float>(0, 1)],
+                [SIMD2<Float>(0, 0), SIMD2<Float>(1, 0), SIMD2<Float>(1, 1), SIMD2<Float>(0, 1)],
+                [SIMD2<Float>(0, 0), SIMD2<Float>(1, 0), SIMD2<Float>(1, 1), SIMD2<Float>(0, 1)],
+                [SIMD2<Float>(1, 0), SIMD2<Float>(0, 0), SIMD2<Float>(0, 1), SIMD2<Float>(1, 1)]
+            ]
+            for (faceIndex, (normal, corners)) in faces.enumerated() {
                 let base = UInt32(positions.count)
-                for c in corners {
+                for (cornerIndex, c) in corners.enumerated() {
                     positions.append(c)
                     normals.append(normal)
+                    uvs.append(faceUVs[faceIndex][cornerIndex])
                 }
                 indices.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
             }
@@ -9031,6 +9065,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let base = UInt32(positions.count)
                 positions.append(contentsOf: [ringBottom[i], ringBottom[j], ringTop[j], ringTop[i]])
                 for _ in 0..<4 { normals.append(normal) }
+                uvs.append(contentsOf: [SIMD2<Float>(0, 0), SIMD2<Float>(1, 0), SIMD2<Float>(1, 1), SIMD2<Float>(0, 1)])
                 indices.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
             }
             // Top cap as a fan.
@@ -9040,6 +9075,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let base = UInt32(positions.count)
                 positions.append(contentsOf: [capCenter, ringTop[j], ringTop[i]])
                 for _ in 0..<3 { normals.append(SIMD3<Float>(0, 1, 0)) }
+                uvs.append(contentsOf: [SIMD2<Float>(0.5, 0.5), SIMD2<Float>(1, 1), SIMD2<Float>(0, 1)])
                 indices.append(contentsOf: [base, base + 1, base + 2])
             }
         }
@@ -9062,6 +9098,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             var descriptor = MeshDescriptor(name: name)
             descriptor.positions = MeshBuffers.Positions(positions)
             descriptor.normals = MeshBuffers.Normals(normals)
+            // batch7: every builder path above now appends UVs in
+            // step with positions, so textured batch materials map
+            // once per face (see addBoxAxes).
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
             descriptor.primitives = .triangles(indices)
             guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
             var material = material

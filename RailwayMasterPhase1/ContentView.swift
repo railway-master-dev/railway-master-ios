@@ -141,7 +141,7 @@ struct ContentView: View {
 
                     HStack(spacing: 7) {
                         Image(systemName: "viewfinder")
-                        Text("\(model.route.lineName) · \(model.route.dataStatus.rawValue)")
+                        Text("\(model.route.lineName)")
                         Text("·")
                         Text(model.telemetry.currentGradientPermille == 0 ? "平坦" : String(format: "%+.0f‰", model.telemetry.currentGradientPermille))
                     }
