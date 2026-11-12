@@ -50,8 +50,15 @@ enum StopScoringRouteAdapter {
             } else if trip.variant == .zooLine || trip.variant == .parkLine {
                 // The zoo / theme park terminals are synthetic stops
                 // outside the canonical plan; score them against a
-                // 120 m terminal platform zone.
-                platformBounds = (max(0, routeLengthM - 120), routeLengthM)
+                // 200 m terminal platform zone, the same length as
+                // every canonical platform on the network.
+                // batch9 (2026-11-12, static test audit bycatch):
+                // this zone used to be 120 m, but the consist rule
+                // fixes zoo / park services at 8 cars = 156 m, so
+                // the fit guard below threw for every legal
+                // consist and stop scoring silently disabled
+                // itself (stopScoringError) on both lines.
+                platformBounds = (max(0, routeLengthM - 200), routeLengthM)
             } else if trip.variant == .branchShuttle,
                       stop.stationID == plan.network.branchJunctionStationID {
                 // The junction's canonical platform is on the main line; project its PLACEHOLDER length
