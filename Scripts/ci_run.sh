@@ -46,7 +46,11 @@ case "$mode" in
       -project RailwayMasterPhase1.xcodeproj \
       -scheme RailwayMasterPhase1
     set -o pipefail
-    xcodebuild build \
+    # 2026-11-12: build-for-testing + test-without-building run
+    # ONE build pass instead of two. CI #412's build job hit the
+    # 60-minute job cap during the test phase after a full second
+    # build; the tests themselves are unchanged.
+    xcodebuild build-for-testing \
       -project RailwayMasterPhase1.xcodeproj \
       -scheme RailwayMasterPhase1 \
       -configuration Debug \
@@ -55,7 +59,7 @@ case "$mode" in
       | tee build.log
     build_status=$?
     if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
-    xcodebuild test \
+    xcodebuild test-without-building \
       -project RailwayMasterPhase1.xcodeproj \
       -scheme RailwayMasterPhase1 \
       -configuration Debug \
@@ -150,6 +154,16 @@ PYEOF
     # so one launch photographs sixteen different places along the
     # line (the showcase section's P1-P7 points, then line-wide).
     xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour
+    # 2026-11-12: wait until the app is actually ticking (its
+    # demo log has state lines) before the launch shots and the
+    # video. On a loaded runner the first frame can take minutes;
+    # CI #412's 01-03 were one identical black frame because they
+    # were taken on fixed sleeps while the app was still starting.
+    APP_TICK_WAIT=0
+    while [ "$APP_TICK_WAIT" -lt 240 ]; do
+      if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ] && grep -q '^t=' "$APP_DATA/Documents/demo-drive-log.txt" 2>/dev/null; then break; fi
+      sleep 5; APP_TICK_WAIT=$((APP_TICK_WAIT + 5))
+    done
     xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 screenshots/launch-video.mov &
     VIDEO_PID=$!
     sleep 4
@@ -184,17 +198,25 @@ PYEOF
     # 35 s schedule while a loaded simulator took tens of seconds
     # per simctl screenshot: by the time a capture executed, the
     # train had moved on. Now the train cannot move on. Each shot
-    # below waits for its spot's READY (per-spot cap 300 s, tour
+    # below waits for its spot's READY (per-spot cap 420 s, tour
     # cap 2,400 s), settles 5 s, shoots (up to 3 attempts), and
     # only then writes the ACK that releases the app to the next
     # spot; a spot whose captures all fail escalates recovery
     # (app relaunch, then simulator reboot) before one final ACK
-    # releases the app anyway. If a READY never comes, the shot
-    # is taken anyway with a warning (the app times out and
-    # advances on its own, and later waits drop to the bare
-    # settle); if the log never appears at all, the loop falls
-    # back to fixed 35 s steps and still writes ACKs when the
-    # container is known.
+    # releases the app anyway.
+    # 2026-11-12 (CI #412): the old "if a READY never comes, shoot
+    # anyway" fallback is REMOVED. With the app starved to ~1/30
+    # of real time it fired on spot 2 and the script then raced
+    # ahead writing ACKs, producing 32 station files containing
+    # three scenes. A spot is now photographed ONLY after its
+    # READY has been seen. On a READY timeout or a failed capture
+    # the recovery escalates once and the wait/capture is
+    # retried; a spot that still fails is logged FAILED and
+    # SKIPPED (the ACK is still written so the tour continues,
+    # and the app's 900 s hold also releases itself). An honest
+    # gap in the set, never a photograph of the wrong place under
+    # the right name. If the log never appears at all, spots fail
+    # the same way instead of falling back to blind fixed steps.
     # Spots (tourSpotsM in SimulatorModel.swift, in order): the
     # quality40 station survey: all 32 stations in route order,
     # each shot 20 m before the station centre (S01 Kaibukuro at
@@ -206,7 +228,6 @@ PYEOF
     fi
     TOUR_SHOTS="04-st01-kaibukuro 05-st02-asanuma 06-st03-oginuma 07-st04-ohara 08-st05-ishigamiike 09-st06-hibarigaoka 10-st07-akimizu 11-st08-wakakusadai 12-st09-higashimurakawa 13-st10-nishitachikawa 14-st11-hihara 15-st12-tououchihara 16-st13-makufu 17-st14-tsudaike 18-st15-mikkaido 19-st16-misagi 20-st17-touousahara 21-st18-shigeno 22-st19-kazusaninomiya 23-st20-togane 24-st21-katsunuma 25-st22-kisaragawa 26-st23-namihana 27-st24-ohno 28-st25-mihama 29-st26-tatekawa 30-st27-chikura 31-st28-kamogawa 32-st29-kuruno 33-st30-ohbitsu 34-st31-hirayama 35-st32-kazusaryuzan 36-crossing-17965 37-crossing-3605 38-akimizu-fan"
     TOUR_START=$SECONDS
-    TOUR_STALLED=0
     TOUR_INDEX=0
     # 2026-11-11 tour-hardening state: recovery escalation stage
     # for wedged captures (0 = none yet, 1 = app relaunched,
@@ -232,56 +253,38 @@ PYEOF
       done
       return 1
     }
-    for SHOT in $TOUR_SHOTS; do
-      SPOT=$TOUR_INDEX
-      TOUR_INDEX=$((TOUR_INDEX + 1))
-      if [ -z "$TOUR_LOG" ] && [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
-        TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
-      fi
-      if [ -n "$TOUR_LOG" ] && [ "$TOUR_STALLED" -eq 0 ]; then
-        WAITED=0
-        READY_SEEN=0
-        while [ "$WAITED" -lt 300 ]; do
-          MAXREADY="$(grep -o 'READY spot=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
-          if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$SPOT" ]; then READY_SEEN=1; break; fi
-          if [ $((SECONDS - TOUR_START)) -ge 2400 ]; then break; fi
-          sleep 5
-          WAITED=$((WAITED + 5))
-        done
-        if [ "$READY_SEEN" -eq 0 ]; then
-          echo "READY for tour spot $SPOT never appeared in the demo log; shooting anyway and shortening later waits."
-          TOUR_STALLED=1
+    # 2026-11-12: wait until the demo log shows READY for spot $1
+    # (or a later one), up to $2 seconds; also stops at the
+    # 2,400 s tour cap. Sets READY_SEEN.
+    tour_wait_ready() {
+      READY_SEEN=0
+      local WANT="$1"; local CAP="$2"; local WAITED=0
+      while [ "$WAITED" -lt "$CAP" ]; do
+        if [ -n "$TOUR_LOG" ]; then
+          local MAXREADY="$(grep -o 'READY spot=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
+          if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$WANT" ]; then READY_SEEN=1; return 0; fi
         fi
+        if [ $((SECONDS - TOUR_START)) -ge 2400 ]; then return 0; fi
         sleep 5
-      elif [ "$TOUR_STALLED" -eq 1 ]; then
-        sleep 5
-      else
-        sleep 35
-      fi
-      # 2026-11-11 capture protocol (replaces the quality26
-      # one-retry logic): capture with up to 3 attempts, and write
-      # the ACK ONLY after a non-empty capture. CI #409 showed why
-      # this matters: a wedged simctl screenshot first blocked for
-      # 300-900 s, then returned 0 bytes for the rest of the run,
-      # while the old script ACKed every spot regardless — each
-      # pre-written ACK released the app's hold before it even
-      # arrived, so later "captures" photographed a train that was
-      # teleporting on its own timeout schedule and the filenames
-      # drifted away from the content. The app now holds a spot
-      # for 900 s, far longer than any capture sequence below.
-      tour_try_capture "$SHOT"
-      if [ "$TOUR_SIZE" -eq 0 ] && [ "$RECOVERY_STAGE" -lt 2 ]; then
-        # Escalating recovery: stage 1 relaunches the app, stage 2
-        # reboots the simulator itself (CI #409's wedge survived
-        # an app relaunch — every capture stayed 0 bytes).
+        WAITED=$((WAITED + 5))
+      done
+    }
+    # 2026-11-12: escalating recovery for a wedged tour (app
+    # relaunch, then simulator reboot — CI #409's wedge survived
+    # a relaunch), then wait for the current spot's READY again.
+    # Pre-ACKs every earlier spot so the restarted app races
+    # through them and holds at the current one.
+    tour_do_recovery() {
+      local SPOT="$1"
+      if [ "$RECOVERY_STAGE" -lt 2 ]; then
         RECOVERY_STAGE=$((RECOVERY_STAGE + 1))
         if [ "$RECOVERY_STAGE" -eq 1 ]; then
-          echo "tour-progress: spot $SPOT $SHOT captures failing; relaunching the app (recovery stage 1)" >> screenshots/tour-progress.txt
+          echo "tour-progress: spot $SPOT recovery stage 1: relaunching the app" >> screenshots/tour-progress.txt
           xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
           sleep 3
           xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
         else
-          echo "tour-progress: spot $SPOT $SHOT captures still failing; rebooting the simulator (recovery stage 2)" >> screenshots/tour-progress.txt
+          echo "tour-progress: spot $SPOT recovery stage 2: rebooting the simulator" >> screenshots/tour-progress.txt
           xcrun simctl shutdown "$SIMULATOR_UDID" 2>/dev/null || true
           sleep 5
           xcrun simctl boot "$SIMULATOR_UDID" || true
@@ -292,38 +295,74 @@ PYEOF
           fi
           xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
         fi
-        # Pre-ACK every already-photographed spot so the restarted
-        # app races through them (it still spends its ~4 s of sim
-        # time at each) and holds again at the current spot.
-        if [ -n "$APP_DATA" ]; then
-          ACK_SPOT=0
-          while [ "$ACK_SPOT" -lt "$SPOT" ]; do
-            printf 'ack %s\n' "$ACK_SPOT" > "$APP_DATA/Documents/tour-ack-$ACK_SPOT.txt" 2>/dev/null || true
-            ACK_SPOT=$((ACK_SPOT + 1))
-          done
-        fi
-        # Wait for the restarted app to hold this spot again.
-        WAITED=0
-        while [ "$WAITED" -lt 300 ]; do
-          MAXREADY="$(grep -o 'READY spot=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
-          if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$SPOT" ]; then break; fi
-          sleep 5
-          WAITED=$((WAITED + 5))
+      fi
+      if [ -n "$APP_DATA" ]; then
+        local ACK_SPOT=0
+        while [ "$ACK_SPOT" -lt "$SPOT" ]; do
+          printf 'ack %s\n' "$ACK_SPOT" > "$APP_DATA/Documents/tour-ack-$ACK_SPOT.txt" 2>/dev/null || true
+          ACK_SPOT=$((ACK_SPOT + 1))
         done
+      fi
+      tour_wait_ready "$SPOT" 420
+    }
+    PREV_MD5=""
+    PREV_SHOT=""
+    for SHOT in $TOUR_SHOTS; do
+      SPOT=$TOUR_INDEX
+      TOUR_INDEX=$((TOUR_INDEX + 1))
+      if [ -z "$TOUR_LOG" ] && [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
+        TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
+      fi
+      # 2026-11-12 capture protocol: a spot is photographed ONLY
+      # after its READY has been seen in the demo log, and the ACK
+      # is written only after a non-empty capture (or as the final
+      # fallback for a skipped spot, below). CI #409 showed why
+      # ACK discipline matters — each pre-written ACK released the
+      # app's hold before it even arrived, and the filenames
+      # drifted away from the content — and CI #412 showed that
+      # shooting without READY is just as destructive. The app
+      # holds a spot for 900 s, far longer than any sequence here.
+      READY_SEEN=0
+      if [ -n "$TOUR_LOG" ]; then
+        tour_wait_ready "$SPOT" 420
+      fi
+      if [ "$READY_SEEN" -eq 0 ] && [ $((SECONDS - TOUR_START)) -lt 2400 ]; then
+        echo "READY for tour spot $SPOT did not appear; recovering once before skipping the spot."
+        tour_do_recovery "$SPOT"
+      fi
+      if [ "$READY_SEEN" -eq 1 ]; then
         sleep 5
         tour_try_capture "$SHOT"
-      fi
-      if [ "$TOUR_SIZE" -gt 0 ]; then
-        echo "tour-progress: spot $SPOT $SHOT elapsed=$((SECONDS - TOUR_START))s size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+        if [ "$TOUR_SIZE" -eq 0 ]; then
+          # Capture wedge (CI #409): recover and try once more.
+          tour_do_recovery "$SPOT"
+          if [ "$READY_SEEN" -eq 1 ]; then
+            sleep 5
+            tour_try_capture "$SHOT"
+          fi
+        fi
+        if [ "$TOUR_SIZE" -gt 0 ]; then
+          SHOT_MD5="$(md5 -q "screenshots/$SHOT.png" 2>/dev/null || md5sum "screenshots/$SHOT.png" 2>/dev/null | awk '{print $1}')"
+          DUP_NOTE=""
+          if [ -n "$SHOT_MD5" ] && [ "$SHOT_MD5" = "$PREV_MD5" ]; then
+            DUP_NOTE=" DUPLICATE-CONTENT of $PREV_SHOT"
+          fi
+          PREV_MD5="$SHOT_MD5"
+          PREV_SHOT="$SHOT"
+          echo "tour-progress: spot $SPOT $SHOT elapsed=$((SECONDS - TOUR_START))s size=${TOUR_SIZE}B$DUP_NOTE" >> screenshots/tour-progress.txt
+        else
+          echo "tour-progress: spot $SPOT $SHOT FAILED capture elapsed=$((SECONDS - TOUR_START))s size=0B" >> screenshots/tour-progress.txt
+        fi
+        if [ -n "$TOUR_LOG" ]; then
+          cp "$TOUR_LOG" screenshots/demo-drive-log-snapshot.txt 2>/dev/null || true
+        fi
       else
-        echo "tour-progress: spot $SPOT $SHOT FAILED elapsed=$((SECONDS - TOUR_START))s size=0B" >> screenshots/tour-progress.txt
-      fi
-      if [ -n "$TOUR_LOG" ]; then
-        cp "$TOUR_LOG" screenshots/demo-drive-log-snapshot.txt 2>/dev/null || true
+        echo "tour-progress: spot $SPOT $SHOT FAILED no-ready elapsed=$((SECONDS - TOUR_START))s" >> screenshots/tour-progress.txt
       fi
       # Release the app to the next spot. On success this is the
-      # handshake working as designed; on failure it is the final
-      # fallback so one wedged spot cannot stall the whole tour.
+      # handshake working as designed; for a skipped spot it is
+      # the final fallback so one failure cannot stall the tour
+      # (the app's own 900 s hold also releases itself).
       # APP_DATA is the app's data container on this host, so
       # writing the ACK file here is writing into the app's
       # Documents, which is exactly where the app polls for it.
@@ -351,19 +390,30 @@ PYEOF
       done
       local IDX=0
       for SHOT in $SHOTS; do
+        # 2026-11-12: same rule as the main tour — no READY, no
+        # photograph; the spot is logged FAILED and skipped (the
+        # ACK below still releases the app). When the log never
+        # appeared at all, fall back to the fixed step and shoot,
+        # since there is nothing to verify against.
+        local SHORT_READY=1
         if [ -n "$SLOG" ]; then
+          SHORT_READY=0
           local WAITED=0
           while [ "$WAITED" -lt 240 ]; do
             local MAXREADY="$(grep -o 'READY spot=[0-9]*' "$SLOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
-            if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$IDX" ]; then break; fi
+            if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$IDX" ]; then SHORT_READY=1; break; fi
             sleep 5; WAITED=$((WAITED + 5))
           done
           sleep 5
         else
           sleep 35
         fi
-        tour_try_capture "$SHOT"
-        echo "tour-progress: short $EXTRA_ARG spot $IDX $SHOT size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+        if [ "$SHORT_READY" -eq 1 ]; then
+          tour_try_capture "$SHOT"
+          echo "tour-progress: short $EXTRA_ARG spot $IDX $SHOT size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+        else
+          echo "tour-progress: short $EXTRA_ARG spot $IDX $SHOT FAILED no-ready" >> screenshots/tour-progress.txt
+        fi
         if [ -n "$APP_DATA" ]; then
           printf 'ack %s\n' "$IDX" > "$APP_DATA/Documents/tour-ack-$IDX.txt" 2>/dev/null || true
         fi
@@ -388,15 +438,37 @@ PYEOF
     # warning and the log copied below shows how far it got.
     sleep 3
     xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMCabView
-    # CI #199: 55 s left the cab shot black (scene still loading on
-    # the simulator); wait 90 s so the cab has rendered and the
-    # train is under way.
-    sleep 90
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/20-cab-running.png 2>/dev/null || true
     CAB_LOG=""
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log-cab.txt" ]; then
       CAB_LOG="$APP_DATA/Documents/demo-drive-log-cab.txt"
     fi
+    # CI #199: 55 s left the cab shot black (scene still loading on
+    # the simulator). 2026-11-12: instead of the old fixed 90 s
+    # sleep, wait until the cab log shows the demo drive actually
+    # moving (pos > 30 m), capped at 420 s. In CI #412 the fixed
+    # sleep photographed a train that had not departed — and
+    # barely ever did within the job — so both cab shots were
+    # void. The shot is still taken after the cap with a warning:
+    # the cab check is diagnostic, and the copied log shows how
+    # far the drive actually got.
+    CAB_MOVE_WAITED=0
+    CAB_MOVING=0
+    while [ "$CAB_MOVE_WAITED" -lt 420 ]; do
+      if [ -z "$CAB_LOG" ] && [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log-cab.txt" ]; then
+        CAB_LOG="$APP_DATA/Documents/demo-drive-log-cab.txt"
+      fi
+      if [ -n "$CAB_LOG" ]; then
+        CAB_NOW_POS="$(grep -o ' pos=[0-9.]*' "$CAB_LOG" 2>/dev/null | tail -1 | grep -o '[0-9.]*$')"
+        CAB_NOW_INT="${CAB_NOW_POS%.*}"
+        if [ -n "$CAB_NOW_INT" ] && [ "$CAB_NOW_INT" -gt 30 ]; then CAB_MOVING=1; break; fi
+      fi
+      sleep 10
+      CAB_MOVE_WAITED=$((CAB_MOVE_WAITED + 10))
+    done
+    if [ "$CAB_MOVING" -eq 0 ]; then
+      echo "Cab drive did not start moving (pos > 30) within 420 s; shooting the running shot anyway."
+    fi
+    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/20-cab-running.png 2>/dev/null || true
     CAB_WAITED=0
     CAB_ARRIVED=0
     while [ "$CAB_WAITED" -lt 900 ]; do
