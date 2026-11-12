@@ -134,6 +134,12 @@ PYEOF
     BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
     echo "Bundle ID: $BUNDLE_ID"
     mkdir -p screenshots
+    # batch7 (2026-11-12): overall job budget clock. The
+    # screenshots job is capped at 60 minutes; CI #413's tour
+    # consumed all of it and the short tours and cab check
+    # never ran. Later stages below check this clock and skip
+    # themselves (logged) instead of being cut off mid-flight.
+    JOB_START=$SECONDS
     xcrun simctl boot "$SIMULATOR_UDID" || true
     xcrun simctl bootstatus "$SIMULATOR_UDID" -b
     xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
@@ -164,14 +170,49 @@ PYEOF
       if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ] && grep -q '^t=' "$APP_DATA/Documents/demo-drive-log.txt" 2>/dev/null; then break; fi
       sleep 5; APP_TICK_WAIT=$((APP_TICK_WAIT + 5))
     done
+    # batch7 (2026-11-12, CI #413): every screenshot runs
+    # under a hard timeout. In #413 single simctl screenshot
+    # calls blocked for 5-14 minutes (inferred afterwards from
+    # file timestamps) and returned 0 bytes; nothing in the
+    # script could see it happening. shot_with_timeout <name>
+    # <timeout-seconds> captures to a temp file in the
+    # background, kills the call past the timeout, and moves
+    # only a non-empty result into place. Sets SHOT_OK (1/0)
+    # and SHOT_SECONDS.
+    shot_with_timeout() {
+      local NAME="$1"; local LIMIT="${2:-45}"
+      SHOT_OK=0; SHOT_SECONDS=0
+      rm -f "screenshots/$NAME.tmp.png"
+      local T0=$SECONDS
+      xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$NAME.tmp.png" 2>/dev/null &
+      local PID=$!
+      while kill -0 "$PID" 2>/dev/null; do
+        if [ $((SECONDS - T0)) -ge "$LIMIT" ]; then
+          kill -9 "$PID" 2>/dev/null || true
+          break
+        fi
+        sleep 2
+      done
+      wait "$PID" 2>/dev/null || true
+      SHOT_SECONDS=$((SECONDS - T0))
+      if [ -f "screenshots/$NAME.tmp.png" ]; then
+        local SZ=0
+        SZ=$(stat -f %z "screenshots/$NAME.tmp.png" 2>/dev/null || echo 0)
+        if [ "$SZ" -gt 0 ]; then
+          mv "screenshots/$NAME.tmp.png" "screenshots/$NAME.png"
+          SHOT_OK=1
+        fi
+      fi
+      rm -f "screenshots/$NAME.tmp.png"
+    }
     xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 screenshots/launch-video.mov &
     VIDEO_PID=$!
     sleep 4
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/01-launch.png || true
+    shot_with_timeout 01-launch 60
     sleep 8
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/02-main.png || true
+    shot_with_timeout 02-main 60
     sleep 14
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/03-settled.png || true
+    shot_with_timeout 03-settled 60
     kill -INT "$VIDEO_PID" 2>/dev/null || true
     wait "$VIDEO_PID" 2>/dev/null || true
     # Diagnostics: is the app process alive? did it crash? what did it log?
@@ -201,9 +242,16 @@ PYEOF
     # below waits for its spot's READY (per-spot cap 420 s, tour
     # cap 2,400 s), settles 5 s, shoots (up to 3 attempts), and
     # only then writes the ACK that releases the app to the next
-    # spot; a spot whose captures all fail escalates recovery
-    # (app relaunch, then simulator reboot) before one final ACK
-    # releases the app anyway.
+    # spot; a spot whose captures all fail triggers recovery
+    # (app relaunch) before one final ACK releases the app
+    # anyway.
+    # batch7 (2026-11-12, CI #413): the numbers below are the
+    # batch7 budgets — per-spot READY cap 240 s, tour cap
+    # 1,800 s, captures are timed (shot_with_timeout, 2 attempts
+    # of 45 s) with every attempt's duration and size logged to
+    # tour-progress.txt, and recovery is an app relaunch only
+    # (at most twice per tour). #413's stage-2 simulator reboot
+    # cost ~10 minutes and cleared nothing, so it is gone.
     # 2026-11-12 (CI #412): the old "if a READY never comes, shoot
     # anyway" fallback is REMOVED. With the app starved to ~1/30
     # of real time it fired on spot 2 and the script then raced
@@ -229,33 +277,36 @@ PYEOF
     TOUR_SHOTS="04-st01-kaibukuro 05-st02-asanuma 06-st03-oginuma 07-st04-ohara 08-st05-ishigamiike 09-st06-hibarigaoka 10-st07-akimizu 11-st08-wakakusadai 12-st09-higashimurakawa 13-st10-nishitachikawa 14-st11-hihara 15-st12-tououchihara 16-st13-makufu 17-st14-tsudaike 18-st15-mikkaido 19-st16-misagi 20-st17-touousahara 21-st18-shigeno 22-st19-kazusaninomiya 23-st20-togane 24-st21-katsunuma 25-st22-kisaragawa 26-st23-namihana 27-st24-ohno 28-st25-mihama 29-st26-tatekawa 30-st27-chikura 31-st28-kamogawa 32-st29-kuruno 33-st30-ohbitsu 34-st31-hirayama 35-st32-kazusaryuzan 36-crossing-17965 37-crossing-3605 38-akimizu-fan"
     TOUR_START=$SECONDS
     TOUR_INDEX=0
-    # 2026-11-11 tour-hardening state: recovery escalation stage
-    # for wedged captures (0 = none yet, 1 = app relaunched,
-    # 2 = simulator rebooted). CI #409 attempt 1 lost every shot
-    # from spot 3 onward to persistent 0-byte captures that the
-    # old one-shot app relaunch could not clear.
+    # batch7: count of app-relaunch recoveries used so far in
+    # this tour (at most 2). CI #409 attempt 1 lost every shot
+    # from spot 3 onward to persistent 0-byte captures, and CI
+    # #413 showed the follow-up reboot stage costs ~10 minutes
+    # without clearing the wedge — so recovery is relaunch-only
+    # now, and every capture is individually timed instead.
     RECOVERY_STAGE=0
     : > screenshots/tour-progress.txt
-    # One capture with up to 3 attempts; sets TOUR_SIZE to the
-    # resulting file size (0 when every attempt came back empty).
+    # One capture = at most 2 timed attempts (45 s each, 5 s
+    # apart) via shot_with_timeout; every attempt's duration
+    # and size are logged to tour-progress.txt. Sets TOUR_SIZE
+    # (0 when every attempt came back empty).
     tour_try_capture() {
       TOUR_SIZE=0
       local tries=0
-      while [ "$tries" -lt 3 ]; do
-        xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$1.png" 2>/dev/null || true
-        TOUR_SIZE=0
-        if [ -f "screenshots/$1.png" ]; then
+      while [ "$tries" -lt 2 ]; do
+        shot_with_timeout "$1" 45
+        tries=$((tries + 1))
+        if [ "$SHOT_OK" -eq 1 ]; then
           TOUR_SIZE=$(stat -f %z "screenshots/$1.png" 2>/dev/null || echo 0)
         fi
-        if [ "$TOUR_SIZE" -gt 0 ]; then return 0; fi
-        tries=$((tries + 1))
-        if [ "$tries" -lt 3 ]; then sleep 8; fi
+        echo "tour-progress: capture $1 attempt $tries took ${SHOT_SECONDS}s size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+        if [ "$SHOT_OK" -eq 1 ]; then return 0; fi
+        if [ "$tries" -lt 2 ]; then sleep 5; fi
       done
       return 1
     }
     # 2026-11-12: wait until the demo log shows READY for spot $1
     # (or a later one), up to $2 seconds; also stops at the
-    # 2,400 s tour cap. Sets READY_SEEN.
+    # 1,800 s tour cap (batch7). Sets READY_SEEN.
     tour_wait_ready() {
       READY_SEEN=0
       local WANT="$1"; local CAP="$2"; local WAITED=0
@@ -264,37 +315,26 @@ PYEOF
           local MAXREADY="$(grep -o 'READY spot=[0-9]*' "$TOUR_LOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
           if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$WANT" ]; then READY_SEEN=1; return 0; fi
         fi
-        if [ $((SECONDS - TOUR_START)) -ge 2400 ]; then return 0; fi
+        if [ $((SECONDS - TOUR_START)) -ge 1800 ]; then return 0; fi
         sleep 5
         WAITED=$((WAITED + 5))
       done
     }
-    # 2026-11-12: escalating recovery for a wedged tour (app
-    # relaunch, then simulator reboot — CI #409's wedge survived
-    # a relaunch), then wait for the current spot's READY again.
-    # Pre-ACKs every earlier spot so the restarted app races
-    # through them and holds at the current one.
+    # batch7: recovery for a wedged tour is an app relaunch
+    # ONLY, at most twice per tour (CI #413's simulator-reboot
+    # stage cost ~10 minutes and cleared nothing), then wait
+    # for the current spot's READY again (240 s cap). Even once
+    # the relaunch budget is spent, earlier spots are still
+    # pre-ACKed so a restarted app races through them and
+    # holds at the current one, and the wait still runs.
     tour_do_recovery() {
       local SPOT="$1"
       if [ "$RECOVERY_STAGE" -lt 2 ]; then
         RECOVERY_STAGE=$((RECOVERY_STAGE + 1))
-        if [ "$RECOVERY_STAGE" -eq 1 ]; then
-          echo "tour-progress: spot $SPOT recovery stage 1: relaunching the app" >> screenshots/tour-progress.txt
-          xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
-          sleep 3
-          xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
-        else
-          echo "tour-progress: spot $SPOT recovery stage 2: rebooting the simulator" >> screenshots/tour-progress.txt
-          xcrun simctl shutdown "$SIMULATOR_UDID" 2>/dev/null || true
-          sleep 5
-          xcrun simctl boot "$SIMULATOR_UDID" || true
-          xcrun simctl bootstatus "$SIMULATOR_UDID" -b || true
-          APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
-          if [ -n "$APP_DATA" ]; then
-            TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
-          fi
-          xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
-        fi
+        echo "tour-progress: spot $SPOT recovery relaunch $RECOVERY_STAGE of 2" >> screenshots/tour-progress.txt
+        xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+        sleep 3
+        xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMTour || true
       fi
       if [ -n "$APP_DATA" ]; then
         local ACK_SPOT=0
@@ -303,7 +343,7 @@ PYEOF
           ACK_SPOT=$((ACK_SPOT + 1))
         done
       fi
-      tour_wait_ready "$SPOT" 420
+      tour_wait_ready "$SPOT" 240
     }
     PREV_MD5=""
     PREV_SHOT=""
@@ -324,9 +364,9 @@ PYEOF
       # holds a spot for 900 s, far longer than any sequence here.
       READY_SEEN=0
       if [ -n "$TOUR_LOG" ]; then
-        tour_wait_ready "$SPOT" 420
+        tour_wait_ready "$SPOT" 240
       fi
-      if [ "$READY_SEEN" -eq 0 ] && [ $((SECONDS - TOUR_START)) -lt 2400 ]; then
+      if [ "$READY_SEEN" -eq 0 ] && [ $((SECONDS - TOUR_START)) -lt 1800 ]; then
         echo "READY for tour spot $SPOT did not appear; recovering once before skipping the spot."
         tour_do_recovery "$SPOT"
       fi
@@ -399,7 +439,7 @@ PYEOF
         if [ -n "$SLOG" ]; then
           SHORT_READY=0
           local WAITED=0
-          while [ "$WAITED" -lt 240 ]; do
+          while [ "$WAITED" -lt 150 ]; do
             local MAXREADY="$(grep -o 'READY spot=[0-9]*' "$SLOG" 2>/dev/null | grep -o '[0-9]*$' | sort -n | tail -1)"
             if [ -n "$MAXREADY" ] && [ "$MAXREADY" -ge "$IDX" ]; then SHORT_READY=1; break; fi
             sleep 5; WAITED=$((WAITED + 5))
@@ -422,9 +462,20 @@ PYEOF
       xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
       sleep 3
     }
+    # batch7: each short tour starts only while the job still
+    # has budget (elapsed < 2,400 s); a skipped tour is logged
+    # instead of being cut off by the 60-minute job cap.
     if [ -n "$APP_DATA" ]; then
-      run_short_tour -RMZooTour 40-zoo-approach 41-zoo-penguins 42-zoo-lion 43-zoo-tiger 44-zoo-elephant 45-zoo-terminal
-      run_short_tour -RMParkTour 46-park-entrance 47-park-grounds 48-park-wheel 49-park-terminal
+      if [ $((SECONDS - JOB_START)) -lt 2400 ]; then
+        run_short_tour -RMZooTour 40-zoo-approach 41-zoo-penguins 42-zoo-lion 43-zoo-tiger 44-zoo-elephant 45-zoo-terminal
+      else
+        echo "tour-progress: zoo short tour SKIPPED (job budget)" >> screenshots/tour-progress.txt
+      fi
+      if [ $((SECONDS - JOB_START)) -lt 2400 ]; then
+        run_short_tour -RMParkTour 46-park-entrance 47-park-grounds 48-park-wheel 49-park-terminal
+      else
+        echo "tour-progress: park short tour SKIPPED (job budget)" >> screenshots/tour-progress.txt
+      fi
     fi
     # Cab check: relaunch in the cab view and let the demo drive the
     # showcase section (origin to Matsubaracho, 1,856 m) so the
@@ -433,9 +484,14 @@ PYEOF
     # pos 335 m — it never got near the station, and the station
     # stop-margin question stayed unverifiable. Now the arrival
     # shot waits until the cab log (demo-drive-log-cab.txt) reports
-    # pos >= 1,850, capped at 900 s so the job keeps a total
-    # budget; if it never arrives, the shot is taken anyway with a
-    # warning and the log copied below shows how far it got.
+    # pos >= 1,850, capped at 420 s (batch7; was 900 s) so the job
+    # keeps a total budget; if it never arrives, the shot is taken
+    # anyway with a warning and the log copied below shows how
+    # far it got.
+    # batch7: the whole cab check runs only while the job still
+    # has budget (elapsed < 2,700 s); otherwise it is skipped and
+    # logged, instead of being cut off by the 60-minute cap.
+    if [ $((SECONDS - JOB_START)) -lt 2700 ]; then
     sleep 3
     xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMCabView
     CAB_LOG=""
@@ -445,7 +501,7 @@ PYEOF
     # CI #199: 55 s left the cab shot black (scene still loading on
     # the simulator). 2026-11-12: instead of the old fixed 90 s
     # sleep, wait until the cab log shows the demo drive actually
-    # moving (pos > 30 m), capped at 420 s. In CI #412 the fixed
+    # moving (pos > 30 m), capped at 240 s (batch7). In CI #412 the fixed
     # sleep photographed a train that had not departed — and
     # barely ever did within the job — so both cab shots were
     # void. The shot is still taken after the cap with a warning:
@@ -453,7 +509,7 @@ PYEOF
     # far the drive actually got.
     CAB_MOVE_WAITED=0
     CAB_MOVING=0
-    while [ "$CAB_MOVE_WAITED" -lt 420 ]; do
+    while [ "$CAB_MOVE_WAITED" -lt 240 ]; do
       if [ -z "$CAB_LOG" ] && [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log-cab.txt" ]; then
         CAB_LOG="$APP_DATA/Documents/demo-drive-log-cab.txt"
       fi
@@ -466,12 +522,12 @@ PYEOF
       CAB_MOVE_WAITED=$((CAB_MOVE_WAITED + 10))
     done
     if [ "$CAB_MOVING" -eq 0 ]; then
-      echo "Cab drive did not start moving (pos > 30) within 420 s; shooting the running shot anyway."
+      echo "Cab drive did not start moving (pos > 30) within 240 s; shooting the running shot anyway."
     fi
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/20-cab-running.png 2>/dev/null || true
+    shot_with_timeout 20-cab-running 60
     CAB_WAITED=0
     CAB_ARRIVED=0
-    while [ "$CAB_WAITED" -lt 900 ]; do
+    while [ "$CAB_WAITED" -lt 420 ]; do
       if [ -n "$CAB_LOG" ]; then
         CAB_POS="$(grep -o ' pos=[0-9.]*' "$CAB_LOG" 2>/dev/null | tail -1 | grep -o '[0-9.]*$')"
         CAB_POS_INT="${CAB_POS%.*}"
@@ -481,11 +537,14 @@ PYEOF
       CAB_WAITED=$((CAB_WAITED + 10))
     done
     if [ "$CAB_ARRIVED" -eq 0 ]; then
-      echo "Cab drive did not reach Matsubaracho (pos >= 1850) within 900 s; shooting anyway."
+      echo "Cab drive did not reach Matsubaracho (pos >= 1850) within 420 s; shooting anyway."
     fi
     sleep 5
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/21-cab-station.png 2>/dev/null || true
+    shot_with_timeout 21-cab-station 60
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+    else
+      echo "tour-progress: cab check SKIPPED (job budget)" >> screenshots/tour-progress.txt
+    fi
     # Demo-drive state log (the app writes it in -RMDemoDrive mode).
     APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
@@ -501,7 +560,7 @@ PYEOF
       cp "$APP_DATA/Documents/rm-crossings.txt" screenshots/ || true
     fi
     sleep 3
-    xcrun simctl io "$SIMULATOR_UDID" screenshot screenshots/22-home.png 2>/dev/null || true
+    shot_with_timeout 22-home 60
     # quality26: capture the device log once more at the very
     # end. The device-log.txt capture near the top only covers
     # the first minutes of the run; in CI #238 everything
