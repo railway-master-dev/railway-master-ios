@@ -26,9 +26,9 @@
     { "id": "road-down", "routePathID": "mainline", "parallelGroupID": "parallel-road", "direction": -1, "lateralOffsetM": 7 }
   ],
   "platforms": [
-    { "id": "mid-platform-up", "stationID": "placeholder-mid-station", "trackID": "main-up", "chainageM": 30000, "lengthM": 220, "lateralOffsetM": -4.4 },
-    { "id": "mid-platform-down", "stationID": "placeholder-mid-station", "trackID": "main-down", "chainageM": 30000, "lengthM": 220, "lateralOffsetM": 4.4 },
-    { "id": "branch-platform", "stationID": "placeholder-branch-station", "trackID": "branch-up", "chainageM": 4000, "lengthM": 140, "lateralOffsetM": -4.4 }
+    { "id": "mid-platform-up", "stationID": "placeholder-mid-station", "trackID": "main-up", "chainageM": 30677, "lengthM": 220, "lateralOffsetM": -4.4 },
+    { "id": "mid-platform-down", "stationID": "placeholder-mid-station", "trackID": "main-down", "chainageM": 30677, "lengthM": 220, "lateralOffsetM": 4.4 },
+    { "id": "branch-platform", "stationID": "placeholder-branch-station", "trackID": "branch-up", "chainageM": 4000, "lengthM": 200, "lateralOffsetM": -4.4 }
   ],
   "trains": [
     {
