@@ -86,6 +86,49 @@ final class RegionalIntegrationTests: XCTestCase {
         }
     }
 
+    /// batch98: the generated profiles must carry exactly the
+    /// canonical TunnelSpans tunnels — no more, no fewer. The
+    /// expected built spans are literals on purpose: the factory
+    /// quantizes the design spans onto its 250 m section grid by
+    /// section midpoint (design 17,800–19,250 builds as
+    /// 17,750–19,250; design 42,100–43,600 as 42,000–43,500;
+    /// branch-local design 3,500–4,050 as 3,500–4,000), so an
+    /// edit to the canonical table, the factory's region wiring
+    /// or the section grid fails here until the literals are
+    /// updated deliberately.
+    func testTunnelSectionsMatchCanonicalSpans() throws {
+        let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
+        let seed = RegionalRouteFactory.defaultGeometrySeed
+
+        func builtSpans(_ variant: RegionalRouteVariant, _ direction: RegionalTravelDirection = .up) throws -> [(startM: Double, endM: Double)] {
+            let route = try RegionalRouteFactory.make(plan: plan, variant: variant, direction: direction, geometrySeed: seed)
+            return TunnelSpans.builtSpans(in: route.profile)
+        }
+        func assertSpans(_ actual: [(startM: Double, endM: Double)], _ expected: [(Double, Double)], file: StaticString = #filePath, line: UInt = #line) {
+            XCTAssertEqual(actual.count, expected.count, "tunnel span count", file: file, line: line)
+            for (actualSpan, expectedSpan) in zip(actual, expected) {
+                XCTAssertEqual(actualSpan.startM, expectedSpan.0, accuracy: 0.001, file: file, line: line)
+                XCTAssertEqual(actualSpan.endM, expectedSpan.1, accuracy: 0.001, file: file, line: line)
+            }
+        }
+
+        // Mainline up: both design tunnels, grid-quantized.
+        assertSpans(try builtSpans(.mainline), [(17_750, 19_250), (42_000, 43_500)])
+        // Mainline down: the same physical tunnels, mirrored
+        // into down-profile coordinates.
+        assertSpans(try builtSpans(.mainline, .down), [(16_500, 18_000), (40_750, 42_250)])
+        // Through-branch: the mainline tunnels plus the branch
+        // tunnel (branch-local built 3,500–4,000 → axis
+        // 63,500–64,000).
+        assertSpans(try builtSpans(.throughBranch), [(17_750, 19_250), (42_000, 43_500), (63_500, 64_000)])
+        // Branch shuttle: the branch tunnel in local coordinates.
+        assertSpans(try builtSpans(.branchShuttle), [(3_500, 4_000)])
+        // Depot / zoo / park: no tunnels by design.
+        assertSpans(try builtSpans(.depotTransfer), [])
+        assertSpans(try builtSpans(.zooLine), [])
+        assertSpans(try builtSpans(.parkLine), [])
+    }
+
     func testDownDirectionMirrorsMainlineGeometryWithoutDiscontinuities() throws {
         let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
         let seed = RegionalRouteFactory.defaultGeometrySeed
