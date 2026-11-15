@@ -6,9 +6,9 @@
       "fictionalNotice": "全諸元はゲーム用の架空値。実車安全計算・運行判断・訓練には使用不可。",
       "rotationalInertiaFactor": 1.08,
       "davisResistance": {
-        "aNPerTonne": 12.75,
-        "bNSecondPerMeterPerTonne": 0.294,
-        "cNSecondSquaredPerMeterSquared": 2.2
+        "aNPerTonne": 19.5,
+        "bNSecondPerMeterPerTonne": 0.11,
+        "cNSecondSquaredPerMeterSquared": 20.8
       },
       "curveResistanceNPerKNAtOnePerM": 600,
       "brakeSystem": {
@@ -123,9 +123,9 @@
       "fictionalNotice": "全諸元はゲーム用の架空値。実車安全計算・運行判断・訓練には使用不可。",
       "rotationalInertiaFactor": 1.08,
       "davisResistance": {
-        "aNPerTonne": 12.75,
-        "bNSecondPerMeterPerTonne": 0.294,
-        "cNSecondSquaredPerMeterSquared": 2.2
+        "aNPerTonne": 19.5,
+        "bNSecondPerMeterPerTonne": 0.11,
+        "cNSecondSquaredPerMeterSquared": 27
       },
       "curveResistanceNPerKNAtOnePerM": 600,
       "brakeSystem": {
@@ -272,9 +272,9 @@
       "fictionalNotice": "全諸元はゲーム用の架空値。実車安全計算・運行判断・訓練には使用不可。",
       "rotationalInertiaFactor": 1.08,
       "davisResistance": {
-        "aNPerTonne": 12.75,
-        "bNSecondPerMeterPerTonne": 0.294,
-        "cNSecondSquaredPerMeterSquared": 2.2
+        "aNPerTonne": 19.5,
+        "bNSecondPerMeterPerTonne": 0.11,
+        "cNSecondSquaredPerMeterSquared": 24
       },
       "curveResistanceNPerKNAtOnePerM": 600,
       "brakeSystem": {
@@ -420,9 +420,9 @@
       "fictionalNotice": "全諸元はゲーム用の架空値。実車安全計算・運行判断・訓練には使用不可。",
       "rotationalInertiaFactor": 1.08,
       "davisResistance": {
-        "aNPerTonne": 12.75,
-        "bNSecondPerMeterPerTonne": 0.294,
-        "cNSecondSquaredPerMeterSquared": 2.2
+        "aNPerTonne": 19.5,
+        "bNSecondPerMeterPerTonne": 0.11,
+        "cNSecondSquaredPerMeterSquared": 32
       },
       "curveResistanceNPerKNAtOnePerM": 600,
       "brakeSystem": {
@@ -601,9 +601,9 @@
       "fictionalNotice": "全諸元はゲーム用の架空値。実車安全計算・運行判断・訓練には使用不可。",
       "rotationalInertiaFactor": 1.08,
       "davisResistance": {
-        "aNPerTonne": 12.75,
-        "bNSecondPerMeterPerTonne": 0.294,
-        "cNSecondSquaredPerMeterSquared": 2.2
+        "aNPerTonne": 19.5,
+        "bNSecondPerMeterPerTonne": 0.11,
+        "cNSecondSquaredPerMeterSquared": 32
       },
       "curveResistanceNPerKNAtOnePerM": 600,
       "brakeSystem": {
