@@ -194,7 +194,19 @@ public struct FictionalLiveProtectionSession {
     public init(routeLengthM: Double) throws {
         let network = try FictionalLiveProtectionLayout.network(routeLengthM: routeLengthM)
         let configuration = try ProtectionEngineConfiguration(
-            atcSpeedCommandsByClearBlocks: [0: 0, 1: 45, 2: 75, 3: 120]
+            // batch71: the package defaults for the EB vigilance
+            // (driver-activity) timer — warn at 8 s, emergency-brake
+            // latch at 12 s without a handle operation — stop ANY
+            // steady notch hold. On a terminal departure the latch
+            // lands about 12 s after the driver's last notch input,
+            // which at real acceleration is roughly 25 km/h, so it
+            // read on device as "ATS stops me above 25 km/h" even
+            // with a green signal and a 55 km/h displayed limit.
+            // Real EB vigilance intervals are about a minute and
+            // reset on any operation; use 50 s warn / 60 s brake.
+            atcSpeedCommandsByClearBlocks: [0: 0, 1: 45, 2: 75, 3: 120],
+            driverActivityWarningSeconds: 50,
+            driverActivityBrakeSeconds: 60
         )
         self.routeLengthM = routeLengthM
         self.engine = ProtectionSystemEngine(
