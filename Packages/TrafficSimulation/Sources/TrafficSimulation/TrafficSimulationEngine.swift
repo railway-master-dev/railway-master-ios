@@ -49,6 +49,12 @@ public struct TrafficSimulationEngine: Sendable {
     public init(scenario: TrafficScenario) throws {
         let issues = scenario.validate()
         guard issues.isEmpty else { throw TrafficSimulationError.invalidScenario(issues) }
+        // batch64: building an engine is how a scenario gets
+        // installed in the running process, so installing one
+        // advances the scenario generation. The pose caches
+        // key on it instead of deep-comparing whole scenarios
+        // on every frame (see TrafficScenarioGeneration).
+        TrafficScenarioGeneration.advance()
         self.scenario = scenario
         self.trains = scenario.trains.map { TrainRuntime(plan: $0, positionM: $0.startPositionM) }
         self.roadVehicles = scenario.roadVehicles.map { RoadVehicleRuntime(plan: $0, positionM: $0.startPositionM) }
@@ -648,12 +654,37 @@ public struct TrafficSimulationEngine: Sendable {
         let passengerSnapshots = passengers.map { runtime -> PlatformPassengerSnapshot in
             let platform = scenario.platforms.first { $0.id == runtime.trip.platformID }!
             let delta = runtime.trip.destinationOffsetM - runtime.trip.startOffsetM
+            let headingRadians: Double
+            if runtime.phase == .waiting,
+               let track = tracksByID[platform.trackID],
+               platform.lateralOffsetM != track.lateralOffsetM {
+                // batch60: a waiting passenger faces the track
+                // they are waiting for, not the platform's long
+                // axis. Platform and track laterals share the
+                // route-centreline convention, so their order
+                // tells which side of the track the platform is
+                // on. In the renderer's heading convention
+                // (0 = increasing chainage, positive angles
+                // rotating toward the negative-lateral side), a
+                // platform on the positive-lateral side of its
+                // track faces the track at +pi/2, and one on the
+                // negative side at -pi/2. Equal laterals cannot
+                // tell the side, so those keep the walking
+                // heading below.
+                if platform.lateralOffsetM > track.lateralOffsetM {
+                    headingRadians = Double.pi / 2
+                } else {
+                    headingRadians = -Double.pi / 2
+                }
+            } else {
+                headingRadians = delta < 0 ? Double.pi : 0
+            }
             return PlatformPassengerSnapshot(
                 id: runtime.trip.id,
                 platformID: runtime.trip.platformID,
                 alongPlatformM: runtime.alongPlatformM,
                 lateralOffsetM: platform.lateralOffsetM,
-                headingRadians: delta < 0 ? Double.pi : 0,
+                headingRadians: headingRadians,
                 phase: runtime.phase
             )
         }
