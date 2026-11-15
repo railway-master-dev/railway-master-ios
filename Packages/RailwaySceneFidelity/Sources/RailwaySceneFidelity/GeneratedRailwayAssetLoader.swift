@@ -376,6 +376,25 @@ public enum RailwayGeneratedAssetLoader {
     private static var meshes: [String: MeshResource] = [:]
     private static var glbTextures: [String: TextureResource] = [:]
 
+    // batch58: load diagnostics, drained by the app into the
+    // pulled demo-drive log (GLB_LOAD / GLB_TEX_FAIL /
+    // GLB_MAT_FALLBACK / GLB_LOAD_FAIL). Measurement only —
+    // batch56's parked train rendered plain white while every
+    // failure path below was silent, so whether a texture
+    // decode actually failed at runtime was unprovable.
+    private static var diagnostics: [String] = []
+    private static var primitiveStats: (pbr: Int, color0: Int) = (0, 0)
+
+    public static func drainDiagnostics() -> [String] {
+        let lines = diagnostics
+        diagnostics.removeAll()
+        return lines
+    }
+
+    static func recordDiagnostic(_ line: String) {
+        diagnostics.append(line)
+    }
+
     /// The glTF PBR material of a primitive, when it carries one
     /// with a base color (texture or factor). Returns nil for the
     /// material-less bundled models, which keep the COLOR_0 path.
@@ -398,6 +417,13 @@ public enum RailwayGeneratedAssetLoader {
         } else if hasFactor {
             material.baseColor = .init(tint: tint, texture: nil)
         } else {
+            // batch58: a declared baseColorTexture that could
+            // not be decoded, with no factor to fall back on,
+            // drops the primitive to the flat COLOR_0 default —
+            // the suspected white-train path. Record it.
+            if pbr["baseColorTexture"] != nil {
+                recordDiagnostic("GLB_MAT_FALLBACK asset=\(asset.rawValue) mat=\(materialIndex) reason=texture-unavailable-no-factor")
+            }
             return nil
         }
         let roughness = (pbr["roughnessFactor"] as? NSNumber)?.floatValue ?? 0.6
@@ -415,14 +441,22 @@ public enum RailwayGeneratedAssetLoader {
               let imageIndex = textures[textureIndex]["source"] as? Int,
               let data = document.imageData(at: imageIndex),
               let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
-              let texture = try? TextureResource.generate(from: image, options: .init(semantic: .color)) else { return nil }
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            // batch58: was a silent nil — see drainDiagnostics.
+            recordDiagnostic("GLB_TEX_FAIL asset=\(asset.rawValue) tex=\(textureIndex) stage=lookup")
+            return nil
+        }
+        guard let texture = try? TextureResource.generate(from: image, options: .init(semantic: .color)) else {
+            recordDiagnostic("GLB_TEX_FAIL asset=\(asset.rawValue) tex=\(textureIndex) stage=generate")
+            return nil
+        }
         glbTextures[key] = texture
         return texture
     }
 
     public static func loadModel(for asset: RailwayGenerated3DAsset) throws -> Entity {
         let document = try parsedDocument(for: asset)
+        primitiveStats = (0, 0)
         let result = Entity()
         result.name = "Generated3D_\(asset.rawValue)"
         let sceneIndex = document.json["scene"] as? Int ?? 0
@@ -437,6 +471,11 @@ public enum RailwayGeneratedAssetLoader {
         for nodeIndex in roots {
             result.addChild(try makeNode(nodeIndex, asset: asset, document: document, activePath: &activePath))
         }
+        // batch58: one summary line per load — how many
+        // primitives took the textured PBR path vs the flat
+        // COLOR_0 fallback. A vehicle asset reading pbr=0 is
+        // the white-train signature.
+        recordDiagnostic("GLB_LOAD asset=\(asset.rawValue) pbr=\(primitiveStats.pbr) color0=\(primitiveStats.color0)")
         return result
     }
 
@@ -518,8 +557,10 @@ public enum RailwayGeneratedAssetLoader {
                 // the vertex-color path below, unchanged.
                 let model: ModelEntity
                 if let pbrMaterial = Self.gltfMaterial(asset: asset, document: document, primitive: primitive) {
+                    primitiveStats.pbr += 1
                     model = ModelEntity(mesh: meshResource, materials: [pbrMaterial])
                 } else {
+                    primitiveStats.color0 += 1
                     let color = try document.colorAccessor(attributes["COLOR_0"])
                     var material = SimpleMaterial(
                         color: UIColor(red: CGFloat(color.x), green: CGFloat(color.y), blue: CGFloat(color.z), alpha: CGFloat(color.w)),
@@ -598,7 +639,7 @@ public enum RailwayGeneratedAssetLoader {
             case "fictional_concrete": return "scenery_concrete"
             case "fictional_gravel": return "scenery_trackbed"
             case "fictional_sleeper": return "scenery_timber"
-            case "fictional_building": return "scenery_brick_warm"
+            case "fictional_building": return "scenery_apartment_facade_3"
             case "fictional_canopy", "fictional_roof": return "scenery_canopy"
             case "fictional_rail": return "scenery_steel"
             default: return nil
@@ -618,7 +659,12 @@ public enum RailwayGeneratedAssetLoader {
         if name.hasPrefix("footbridge_deck") { return "scenery_steel" }
         if name.hasPrefix("footbridge_stair") { return "scenery_concrete" }
         if name.hasPrefix("bench_") && (name.contains("_seat") || name.contains("_back")) { return "scenery_timber" }
-        if name.hasPrefix("station_main_building") { return "scenery_brick_warm" }
+        // batch19: the station building wore plain brick on
+        // every face, so approaching trains met a tall windowless
+        // wall (Mac loop-2 photos at Kisaragawa / Katsunuma).
+        // A windowed apartment-style facade reads as a station
+        // building instead; the brick stays on warehouses.
+        if name.hasPrefix("station_main_building") { return "scenery_apartment_facade_3" }
         if name.hasPrefix("rail_") { return "scenery_steel" }
         return nil
     }

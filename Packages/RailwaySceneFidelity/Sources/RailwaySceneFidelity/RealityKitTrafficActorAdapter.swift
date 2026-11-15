@@ -99,6 +99,10 @@ public final class RailwayTrafficActorRealityKitAdapter {
             return ordered.count == nodeNames.count ? ordered : nil
         }
         guard let loaded = try? RailwayGeneratedAssetLoader.loadModel(for: asset) else {
+            // batch58: was silent — the caller falls back to a
+            // box train. Recorded into the pulled log via the
+            // loader's diagnostics channel.
+            RailwayGeneratedAssetLoader.recordDiagnostic("GLB_LOAD_FAIL asset=\(key) reason=load-threw")
             glbFailedAssets.insert(key)
             return nil
         }
@@ -118,6 +122,8 @@ public final class RailwayTrafficActorRealityKitAdapter {
         glbPrototypeCars[key] = cars
         let ordered = nodeNames.compactMap { cars[$0] }
         guard ordered.count == nodeNames.count else {
+            // batch58: recorded like the load failure above.
+            RailwayGeneratedAssetLoader.recordDiagnostic("GLB_LOAD_FAIL asset=\(key) reason=car-nodes-missing found=\(ordered.count) want=\(nodeNames.count)")
             glbFailedAssets.insert(key)
             return nil
         }
