@@ -99,7 +99,15 @@ public enum FictionalTrackImpactSchedule {
             span("branch-junction-main", .main, .branchJunction, 59_974, 60_000),
             span("branch-junction-branch", .branch, .branchJunction, 0, 28),
             span("zoo-junction", .zoo, .branchJunction, 0, 28),
-            span("park-junction", .park, .branchJunction, 0, 28)
+            span("park-junction", .park, .branchJunction, 0, 28),
+            // batch78: the drawn terminal crossovers
+            // (buildTerminalThroats) — switch toes 560–690 m
+            // from each line end, so the S-curve the bogies
+            // traverse spans that whole length at both
+            // terminals. Until now these were drawn but had
+            // no span, so trains crossed them in silence.
+            span("S01-crossover", .main, .stationConnection, 560, 690),
+            span("S28-crossover", .main, .stationConnection, 59_310, 59_440)
 
         ]
         let loops: [(String, FictionalTrackLine, Double)] = [
@@ -114,6 +122,56 @@ public enum FictionalTrackImpactSchedule {
             spans.append(span("\(loop.0)-entry", loop.1, .stationConnection, loop.2 - 186, loop.2 - 162))
             spans.append(span("\(loop.0)-exit", loop.1, .stationConnection, loop.2 + 148, loop.2 + 174))
         }
+        // batch89: the drawn throat fans at the diagram v4
+        // passing stations (the scene builder's
+        // throatFanSpecs set: PassingWaitPlanner's 15 plus
+        // the two terminals). Each fan is a 340 m easement
+        // on a throat of the canonical 200 m platform span
+        // (centre C, half 100): the "in" fan leaves the
+        // running line at C - 440 and reaches the loop line
+        // 240 m along; the "out" fan holds the loop line
+        // for 40 m and converges over the last 300 m
+        // (throatFanLateral). The registered span is that
+        // transition — the chainage where a bogie is
+        // physically on the switch — not the parallel tail,
+        // where the loop is plain separate track. S15 is
+        // the one fan station the placeholder loop spans
+        // above already reach (its exit span sits inside
+        // the transition, its entry span in the parallel
+        // tail just past it), so S15 is not silent today;
+        // registering its transitions too would make every
+        // bogie fire twice per fan (a nest on the exit
+        // side, a second span on the entry side), so S15
+        // stays as it was.
+        // The terminals fan on one side only: S01's in-fan
+        // and S28's out-fan fall outside the line ends and
+        // are never drawn, so each terminal gets the single
+        // fan span its geometry allows, keyed on the
+        // canonical centres (100 / 59,900 — the head-end
+        // platforms sit fully inside the line, so there the
+        // centre is not the station chainage).
+        let fans: [(String, Double)] = [
+            ("S03", 3_871),
+            ("S04", 6_000),
+            ("S06", 10_355),
+            ("S07", 12_387),
+            ("S09", 16_935),
+            ("S11", 21_290),
+            ("S12", 24_194),
+            ("S14", 28_452),
+            ("S17", 35_129),
+            ("S19", 39_581),
+            ("S22", 46_258),
+            ("S23", 48_484),
+            ("S24", 50_710),
+            ("S27", 57_387)
+        ]
+        for fan in fans {
+            spans.append(span("\(fan.0)-entry", .main, .stationConnection, fan.1 - 440, fan.1 - 200))
+            spans.append(span("\(fan.0)-exit", .main, .stationConnection, fan.1 + 140, fan.1 + 440))
+        }
+        spans.append(span("S01-exit", .main, .stationConnection, 240, 540))
+        spans.append(span("S28-entry", .main, .stationConnection, 59_460, 59_700))
         return spans
     }()
 
