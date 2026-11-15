@@ -23,6 +23,18 @@ struct RegionalGameModeContext {
     let routeID: String
     let route: RailwayRouteProfile
     let stops: [RegionalRouteStop]
+    /// The selected route variant, when the host knows it. Used
+    /// only for validity rules whose expectation differs by
+    /// variant (the depot yard zone in validOrderedStops).
+    let variant: RegionalRouteVariant?
+    /// batch74 follow-up: the prepared front stop target at the
+    /// run origin (StopScoringRouteAdapter's originTargetM). The
+    /// origin stop plan carries this position so the game layer
+    /// works entirely in the physics route frame: the snapshot
+    /// position is the raw leading-end chainage, every stop plan
+    /// is a front stop target, and the full-line origin check
+    /// anchors on this value instead of ~0.
+    let originTargetM: Double
     let timetableByStationID: [String: RegionalGameModeTimetableEvent]
     let trains: [RegionalGameModeTrainState]
     let availableTrainingPromptIDs: Set<String>
@@ -31,6 +43,8 @@ struct RegionalGameModeContext {
         routeID: String,
         route: RailwayRouteProfile,
         stops: [RegionalRouteStop],
+        variant: RegionalRouteVariant? = nil,
+        originTargetM: Double = 0,
         timetableByStationID: [String: RegionalGameModeTimetableEvent] = [:],
         trains: [RegionalGameModeTrainState] = [],
         availableTrainingPromptIDs: Set<String> = []
@@ -38,6 +52,8 @@ struct RegionalGameModeContext {
         self.routeID = routeID
         self.route = route
         self.stops = stops
+        self.variant = variant
+        self.originTargetM = originTargetM
         self.timetableByStationID = timetableByStationID
         self.trains = trains
         self.availableTrainingPromptIDs = availableTrainingPromptIDs
@@ -167,10 +183,48 @@ enum RegionalGameModeAdapter {
                 blockingMessages: ["このプレイスタイルは対応するフリー/異常対応モードでのみ使えます。"]
             )
         }
-        guard validOrderedStops(context.stops, routeLengthM: context.route.distanceM) else {
+        guard validOrderedStops(context.stops, routeLengthM: context.route.distanceM, variant: context.variant) else {
             return RegionalGameModeScenarioBuildResult(
                 scenario: nil, blockingReason: .missingStops,
                 blockingMessages: ["現在の路線に有効な始発・順序付き停車駅データがありません。"]
+            )
+        }
+        // batch103: the depot transfer's yard is a single zone.
+        // StopScoringRouteAdapter bounds every depot stop by the
+        // whole 2 km spur and centres both the origin placement
+        // target and the final stop's target on that one zone, so
+        // the origin stop plan and the final stop plan sit at
+        // exactly the position the consist is placed at on reset
+        // (originTargetM == the final stop's adjusted position).
+        // The driver and full-line modes judge a run purely by
+        // stop visits and the service-end position, so on this
+        // variant both would certify a run that never moved: the
+        // only required stop is recorded as visited from the
+        // start position and every finish gate is already met.
+        // Intermediate targets cannot fix this from the adapter:
+        // the host reports station IDs only for activeStops
+        // entries (SimulatorModel's target-stop tracking and
+        // landmark visibility both key off that list), so a plan
+        // invented here could never be visited and would make
+        // the session unfinishable; and the depot route data
+        // itself has no intermediate stops or yard-feature
+        // chainages to project (the plan carries only the depot
+        // station and the 2 km spur length). The scored-run
+        // modes are therefore honestly unavailable on this
+        // variant instead of presenting one co-located target
+        // as a scored run. The guard keys on the co-location
+        // itself, so it lifts on its own if a future depot
+        // layout ever gives the origin a distinct target.
+        // Conductor mode stays available: its scored content is
+        // the door procedure performed at the yard target, not
+        // travel between targets.
+        if context.variant == .depotTransfer,
+           let finalStop = context.stops.last,
+           abs(context.originTargetM - finalStop.positionM) <= 0.1,
+           mode == .driver || mode == .fullLine {
+            return RegionalGameModeScenarioBuildResult(
+                scenario: nil, blockingReason: nil,
+                blockingMessages: ["車庫入出庫はヤード全体が単一ゾーンで、始発目標と終着目標が同じ地点に重なるため、停車位置で判定する運転士・全線モードでは走行を判定できません。"]
             )
         }
 
@@ -218,8 +272,8 @@ enum RegionalGameModeAdapter {
             if requiredNativeStops.isEmpty {
                 blockers.append("全線モードには始発以外の実停車駅が必要です。")
                 packageBlock = .missingStops
-            } else if snapshot.positionM > 0.1 {
-                blockers.append("全線モードは現在の路線始発位置（0 m）からのみ開始できます。")
+            } else if snapshot.positionM > context.originTargetM + 0.1 {
+                blockers.append("全線モードは現在の路線始発の停車位置からのみ開始できます。")
                 packageBlock = .mustStartAtRouteOrigin
             }
         case .tourism:
@@ -351,10 +405,33 @@ enum RegionalGameModeAdapter {
         }
     }
 
-    private static func validOrderedStops(_ stops: [RegionalRouteStop], routeLengthM: Double) -> Bool {
+    private static func validOrderedStops(_ stops: [RegionalRouteStop], routeLengthM: Double, variant: RegionalRouteVariant?) -> Bool {
         guard stops.count >= 2,
-              abs(stops[0].positionM) <= 0.1,
-              abs(stops[stops.count - 1].positionM - routeLengthM) <= 0.1 else { return false }
+              abs(stops[0].positionM) <= 0.1 else { return false }
+        // Follow-up to batch71: the final stop in the prepared
+        // stop list is the terminal stop TARGET, not the route
+        // end itself. StopScoringRouteAdapter places the front
+        // at platformEnd − platformEndMarginM at the terminal
+        // like every other stop (batch43's restoration of the
+        // terminal position to exactly routeLengthM was
+        // superseded, and GameModeSession.finish now gates on
+        // the final stop's position via serviceEndPositionM).
+        // The terminal platform end coincides with the route
+        // end on every passenger variant, so the legitimate
+        // shortfall is exactly that margin; a larger shortfall
+        // means the stop list does not reach the terminal.
+        // The depot transfer is the one exception: its yard
+        // zone is the whole 2 km spur and the service end is
+        // the zone's centred target (StopScoringRouteAdapter's
+        // depot branch), ~900 m short of the spur end by
+        // design, so the shortfall test carries no validity
+        // signal there and is skipped; the ordering and range
+        // checks below still apply.
+        if variant != .depotTransfer {
+            let terminalShortfallM = routeLengthM - stops[stops.count - 1].positionM
+            guard terminalShortfallM >= -0.1,
+                  terminalShortfallM <= StopScoringRouteAdapter.platformEndMarginM + 0.1 else { return false }
+        }
         for index in stops.indices {
             let stop = stops[index]
             guard !stop.stationID.isEmpty, stop.positionM.isFinite,
@@ -391,7 +468,16 @@ enum RegionalGameModeAdapter {
             return GameModeStopPlan(
                 id: gameID,
                 stationNameAnnouncementID: index == 0 ? nil : "PLACEHOLDER-station-announcement-\(String(format: "%03d", index + 1))",
-                positionM: stop.positionM,
+                // Every stop plan position is the front stop
+                // target in the physics route frame. The origin
+                // stop's context position is the station's raw
+                // route position (0), which is not where the
+                // consist front stands; the origin plan carries
+                // the prepared origin target instead, anchoring
+                // GameModeSession's full-line origin check. The
+                // origin is excluded from the required stops by
+                // list position (first), not by being ~0.
+                positionM: index == 0 ? context.originTargetM : stop.positionM,
                 scheduledArrivalSeconds: schedule.arrivalSeconds,
                 scheduledDepartureSeconds: schedule.departureSeconds,
                 expectedPlatformSide: DoorProcedureScoringRouteAdapter.gameModePlatformSide(routeID: context.routeID, stationID: stop.stationID)
