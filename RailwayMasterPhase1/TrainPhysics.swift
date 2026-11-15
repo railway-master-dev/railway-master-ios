@@ -199,9 +199,13 @@ public struct TrainParameters: Codable, Sendable {
         maximumServiceBrakeDecelerationMps2: 3.5 / 3.6,
         maximumEmergencyBrakeDecelerationMps2: 4.5 / 3.6,
         maximumSpeedKmh: 100,
-        davisA: 1.3,
-        davisBPerMps: 0.03,
-        davisC: 2.2,
+        // batch68: kept equivalent to the TrainPhysics package Davis set
+        // (a = 19.5 N/tonne, b = 0.11 N·s/(m·tonne), c = 4.0 per car) via
+        // this struct's m·g·(A+Bv)/1000 form: A = a/g, B = b/g, and the
+        // 6-car prototype's absolute C = 4.0 × 6.
+        davisA: 1.99,
+        davisBPerMps: 0.0112,
+        davisC: 24.0,
         curveResistanceCoefficient: 600,
         maximumTractionForceN: 210_000,
         maximumTractionPowerW: 2_400_000,

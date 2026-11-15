@@ -74,6 +74,18 @@ struct CreditsSheet: View {
                     Text("This work is based on \"117系 サンライナー | 117 series『Sun Liner』\" (https://sketchfab.com/3d-models/117-117-seriessun-liner-6434932c06974d10927c2fe36c2c7f8e) by own.guest (https://sketchfab.com/own.guest) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)")
                         .font(.footnote)
                 }
+                Section("タイトル写真") {
+                    Text("タイトル写真： JRE Series-E231 K04 — MaedaAkihiko (Wikimedia Commons, CC0)")
+                        .font(.footnote)
+                    Text("タイトル写真： JRE Series-E231-500 A509 A521 — MaedaAkihiko (Wikimedia Commons, CC0)")
+                        .font(.footnote)
+                    Text("タイトル写真： JRE E231-500 series 542 set Yamanote Line train leaving Akihabara — aqz-tmin (Wikimedia Commons, CC0)")
+                        .font(.footnote)
+                    Text("タイトル写真： JRE E231-0 series B31 set Chuo-Sobu Line train at Akihabara Station — aqz-tmin (Wikimedia Commons, CC0)")
+                        .font(.footnote)
+                    Text("タイトル写真： JR East E231 Series Train at Yurakucho Station — Breakover (Wikimedia Commons, CC0)")
+                        .font(.footnote)
+                }
             }
             .navigationTitle("クレジット")
             .navigationBarTitleDisplayMode(.inline)

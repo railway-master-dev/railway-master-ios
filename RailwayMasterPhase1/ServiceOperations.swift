@@ -125,11 +125,24 @@ struct FictionalOperationsPlan: Decodable {
     let timetablePatterns: [TimetablePattern]
     let depotProcedures: [DepotProcedure]
 
+    /// batch93: the bundled plan is immutable for the life of
+    /// the process, so the file read, the JSON decode and the
+    /// full validationIssues sweep run once and the validated
+    /// value is reused. Callers on the launch / route-selection
+    /// path (SimulatorModel.init, generatedDiagramTrains,
+    /// ServicePlanSheet, the regional audit) used to pay the
+    /// whole cost on every call. A nil result is NOT cached
+    /// (the batch66 scenario-cache rule), so a transient load
+    /// failure still retries on the next call.
+    private static var cachedBundledPlan: FictionalOperationsPlan?
+
     static func loadBundled() -> FictionalOperationsPlan? {
+        if let cachedBundledPlan { return cachedBundledPlan }
         guard let url = Bundle.main.url(forResource: "FictionalOperationsPlan", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let plan = try? JSONDecoder().decode(FictionalOperationsPlan.self, from: data),
               plan.validationIssues.isEmpty else { return nil }
+        cachedBundledPlan = plan
         return plan
     }
 

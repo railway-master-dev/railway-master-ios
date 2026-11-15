@@ -142,6 +142,14 @@ final class SimulatorModel: ObservableObject {
     @Published private(set) var completedReview: PostRunReview?
     @Published private(set) var latestSessionURL: URL?
     @Published private(set) var storageNotice: String?
+    /// batch71: staged progress reports from inside selectRoute
+    /// (percent, status). ContentView wires this into the loading
+    /// screen's progress flow so the route-application and
+    /// scenario-reset stages — previously invisible synchronous
+    /// work before the loading screen could appear — report the
+    /// first few percent. Nil in tests and demo launches, where
+    /// the reports are simply skipped.
+    var routeApplyProgressHandler: ((Int, String) -> Void)?
     @Published private(set) var dataValidationIssues: [RouteDataIssue] = []
     @Published private(set) var gameModeSession: GameModeSession?
     @Published private(set) var gameModeHostNotice: String?
@@ -156,6 +164,8 @@ final class SimulatorModel: ObservableObject {
             routeID: routeID,
             route: route,
             stops: activeStops,
+            variant: routeVariant,
+            originTargetM: stopScoringOriginTargetM ?? 0,
             timetableByStationID: RegionalGameModeContext.timetableEvents(
                 from: timetableSelection,
                 activeStops: activeStops
@@ -182,6 +192,51 @@ final class SimulatorModel: ObservableObject {
             route: route,
             stoppingDistance: stoppingDistanceEstimate
         )
+        // Frame unification (follow-up to batch74): the game-mode
+        // layer shares the physics route frame — no offset is
+        // applied here. Every scenario stop plan is a front stop
+        // target in this frame (batch74), and the origin stop
+        // plan carries the origin target itself
+        // (RegionalGameModeAdapter.makeStopPlans), so the
+        // full-line origin check compares the snapshot position
+        // against that anchor instead of ~0. batch60's
+        // −originStartPositionM shift made the snapshot agree
+        // with the origin check while stop plans sat at station
+        // centres, but once batch74 moved the plans to stop
+        // targets the shift left every finish gate short by
+        // exactly the origin target (up to 195 m): a correctly
+        // driven full run could never complete a session.
+        // Only positionM / speedMps / accelerationMps2 /
+        // passengerLoadFactor flow into the game snapshot; the
+        // published telemetry and the scene keep the raw
+        // leading-end chainage.
+        let gameTelemetry = TrainTelemetry(
+            positionM: projected.positionM,
+            speedMps: projected.speedMps,
+            accelerationMps2: projected.accelerationMps2,
+            tractionForceN: projected.tractionForceN,
+            brakingForceN: projected.brakingForceN,
+            regenerativeBrakeForceN: projected.regenerativeBrakeForceN,
+            airBrakeForceN: projected.airBrakeForceN,
+            rollingResistanceN: projected.rollingResistanceN,
+            gradientForceN: projected.gradientForceN,
+            curveResistanceN: projected.curveResistanceN,
+            appliedBrakeFraction: projected.appliedBrakeFraction,
+            brakePipePressureKPa: projected.brakePipePressureKPa,
+            brakeCylinderPressureKPa: projected.brakeCylinderPressureKPa,
+            mainReservoirPressureKPa: projected.mainReservoirPressureKPa,
+            effectiveMassKg: projected.effectiveMassKg,
+            passengerLoadFactor: projected.passengerLoadFactor,
+            currentGradientPermille: projected.currentGradientPermille,
+            currentCantMm: projected.currentCantMm,
+            lateralAccelerationMps2: projected.lateralAccelerationMps2,
+            currentSpeedLimitKmh: projected.currentSpeedLimitKmh,
+            distanceToStopMarkerM: projected.distanceToStopMarkerM,
+            predictedStoppingDistanceM: projected.predictedStoppingDistanceM,
+            isStoppedAtMarker: projected.isStoppedAtMarker,
+            isWheelSlipActive: projected.isWheelSlipActive,
+            isBrakeSlipActive: projected.isBrakeSlipActive
+        )
         let promptID: String?
         if let aspect = latestOperationsSnapshot?.signalReading?.aspect {
             promptID = aspect == .green
@@ -194,7 +249,7 @@ final class SimulatorModel: ObservableObject {
         let stationID = event?.stationID ?? (engine.speedMps <= 0.1 ? gameModeCurrentStationID : nil)
         return try? RegionalGameModeAdapter.makeSimulationSnapshot(
             context: context,
-            telemetry: projected,
+            telemetry: gameTelemetry,
             simulationTimeSeconds: simulationTime,
             fixedTick: UInt64(max(0, (simulationTime / TrainPhysics.PhysicsConstants.fixedTimeStepSeconds).rounded())),
             speedLimitKmh: latestOperationsSnapshot?.permittedSpeedKmh ?? route.condition(at: engine.positionM).speedLimitKmh,
@@ -212,7 +267,12 @@ final class SimulatorModel: ObservableObject {
     }
 
     var timetableDepartureRemainingSeconds: Double {
-        max(0, Double(appliedTimetableDepartureDelaySeconds) - simulationTime)
+        // batch65: 初発ホールドは完全撤廃。ダイヤ遅延
+        // （appliedTimetableDepartureDelaySeconds）は停車評価と
+        // 保存・復元のためだけに保持し、操作系と HUD の待ち時間
+        // 表示には一切影響させない。プレイヤーはドアを閉めれば
+        // 即出発できるため、このプロパティは常に 0 を返す。
+        0
     }
 
     var incidentTick: GameTick { incidentMaintenanceEngine?.state.simulationTick ?? GameTick(0) }
@@ -245,9 +305,22 @@ final class SimulatorModel: ObservableObject {
     private var regionalPlan: FictionalOperationsPlan?
     private var canonicalRoutePackage: RailwayRouteData.RoutePackage?
     private var timetableNetwork: RailwayTimetable.TimetableNetwork?
+    /// batch93: one-entry memos for two deterministic rebuilds
+    /// that a single session build used to repeat for identical
+    /// inputs (see factoryTrip and makeTimetableSelection).
+    private var memoizedFactoryTrip: RegionalPlayableRoute?
+    private var memoizedFactoryTripKey: String?
+    private var memoizedTimetableSelection: RegionalTimetableSelection?
+    private var memoizedTimetableSelectionKey: String?
     private var appliedTimetableDepartureDelaySeconds = 0
     private var trafficEngine: TrafficSimulationEngine?
-    private var trafficScenario: TrafficScenario?
+    // batch51 (2026-11-14): private(set) so ContentView can hand
+    // THIS assembled scenario (diagram v4 + branch shuttles +
+    // depot movements + the tour meet train) to the scene. Until
+    // batch51 ContentView fed the scene its own bundled
+    // placeholder scenario instead, so every engine actor failed
+    // the scene's plan lookup and no AI train ever rendered.
+    private(set) var trafficScenario: TrafficScenario?
     /// Active passing wait: the player is routed to the siding at
     /// `stationCenterM` (travel frame) until the passer clears.
     private struct PassingWaitState {
@@ -272,6 +345,21 @@ final class SimulatorModel: ObservableObject {
     private var lastProtectionActingSystems = Set<String>()
     private var lastATSSAwaiting = false
     private var lastExceededPattern = false
+    /// batch67: 速度パターン超過の段階動作（警告→確認猶予→制動）。
+    /// 従来は超過した tick に即 B7 が入っていた。猶予秒数は教材ATS
+    /// （EducationalATSConfirmation）の確認期限 5 秒に揃える
+    /// （init で acknowledgementTimeoutSeconds: 5 を渡している
+    /// 本プロジェクト既存の設計値）。
+    private static let atsPatternGraceSeconds: Double = 5
+    private var patternWarningStartTime: Double?
+    private var patternWarningAcknowledged = false
+    private var patternBrakeActive = false
+    private var patternBrakeEmergency = false
+    /// batch67: ATS警報ベルの次回再生時刻（simulationTime）。
+    /// 警報需要が続く間、updateAudio がこの周期でベルを回す。
+    private var atsBellNextRingTime: Double = 0
+    /// batch67: 発車メロディを停車ごとに1回だけ鳴らすための記録。
+    private var departureBellPlayedForCurrentStop = false
     private var playedChopperStartBuzzer = false
     private var stationPatternAlarmStopID: String?
     private var doorWarningStopID: String?
@@ -288,6 +376,20 @@ final class SimulatorModel: ObservableObject {
     private var lastBridgeLandmarkID: String?
     private var audioOnBridge = false
     private var audioOnPoints = false
+    private var audioOnJointedRail = false
+    /// batch78: armed by reset() (a new drive session) and
+    /// consumed by the first live advance() frame, which plays
+    /// the key + reverser cues once. Snapshot restore never
+    /// calls reset(), so it never re-arms; pause/resume cannot
+    /// re-fire because the flag is already consumed.
+    private var sessionStartCuesArmed = false
+    /// batch63: コンプレッサー実録音の簡易トリガー用状態
+    /// （updateCompressorSound 参照）。時刻はすべて simulationTime。
+    private var lastCompressorStartTime: Double = -1_000
+    private var compressorSoundEndsAt: Double = 0
+    private var lastBrakeReleaseOrDoorEventTime: Double = -1_000
+    private var previousAudioDoorsOpen = false
+    private var previousAudioBrakeCommand: Double = 0
     @Published private(set) var protectionNeedsAcknowledgement = false
     private var recorder: DrivingSessionRecorder
     private var latestOperationsSnapshot: SimulatorOperationsSnapshot?
@@ -296,6 +398,14 @@ final class SimulatorModel: ObservableObject {
     private var fixedStepAccumulator = 0.0
     private var arrivalDwellSeconds = 0.0
     private var stopScoringEngine: StopScoring.StopScoringEngine?
+    /// batch60: adjusted origin-platform target from the latest
+    /// stop-scoring preparation; reset() places the train there.
+    private var stopScoringOriginTargetM: Double?
+    /// batch60: the chainage reset() placed the train at for the
+    /// current run (0 when no adjusted origin target exists).
+    /// "Has not departed yet" checks compare against this instead
+    /// of assuming a run always starts at chainage 0.
+    private var originStartPositionM: Double = 0
     private var scoringStationID: String?
     private var pendingScoringDepartureStationID: String?
     private var stopScoringTickSequence = 0
@@ -339,39 +449,94 @@ final class SimulatorModel: ObservableObject {
         let plan = FictionalOperationsPlan.loadBundled()
         let routePackage = try? RailwayRouteData.RoutePackageLoader.loadResource(named: "fictional_70km_network")
         let trip = plan.flatMap { try? RegionalRouteFactory.make(plan: $0, variant: .throughBranch, category: .local, direction: .up) }
-        let loadedRoute = Self.loadRoute()
+        // batch93: loadRoute() decodes the 110 KB legacy mainline
+        // package and validates it, yet every consumer below
+        // takes the trip branch whenever the factory trip exists
+        // — the loaded route only ever feeds the trip == nil
+        // fallback. Build it only on that fallback path.
+        let initialProfile: RailwayRouteProfile
+        let initialIssues: [RouteDataIssue]
+        if let trip {
+            initialProfile = trip.profile
+            initialIssues = trip.profile.validateData()
+        } else {
+            let loadedRoute = Self.loadRoute()
+            initialProfile = loadedRoute.profile
+            initialIssues = loadedRoute.issues
+        }
         train = loadedTrain
         selectedVehicleProfile = profile
         selectedSoundProfile = profile.soundProfile
-        route = trip?.profile ?? loadedRoute.profile
+        route = initialProfile
         routeID = trip?.routeID ?? "fictional-legacy-route"
         regionalPlan = plan
         canonicalRoutePackage = routePackage
         timetableNetwork = try? RegionalTimetableAdapter.loadCanonicalNetwork()
         activeStops = trip?.stops ?? [
-            RegionalRouteStop(stationID: "LEGACY_START", name: loadedRoute.profile.departureStation, positionM: 0, trackID: "main-up"),
-            RegionalRouteStop(stationID: "LEGACY_END", name: loadedRoute.profile.arrivalStation, positionM: loadedRoute.profile.stopMarkerM, trackID: "main-up")
+            RegionalRouteStop(stationID: "LEGACY_START", name: initialProfile.departureStation, positionM: 0, trackID: "main-up"),
+            RegionalRouteStop(stationID: "LEGACY_END", name: initialProfile.arrivalStation, positionM: initialProfile.stopMarkerM, trackID: "main-up")
         ]
         engine = loadedPhysics
-        blockSystem = Self.makeBlocks(route: trip?.profile ?? loadedRoute.profile)
-        scheduleEngine = Self.makeSchedule(route: trip?.profile ?? loadedRoute.profile, train: loadedTrain, blocks: blockSystem)
+        blockSystem = Self.makeBlocks(route: initialProfile)
+        scheduleEngine = Self.makeSchedule(route: initialProfile, train: loadedTrain, blocks: blockSystem)
         trafficScenario = Self.makeTrafficScenario()
-        trafficEngine = trafficScenario.flatMap(Self.makeTrafficEngine(from:))
-        trafficSnapshot = trafficEngine?.snapshot()
+        // batch64: scenario (re)installed — advance the
+        // generation the pose caches key on.
+        TrafficScenarioGeneration.advance()
+        // batch93: the traffic ENGINE (scenario validation over
+        // all 798 trains plus the runtime maps) and its first
+        // snapshot are still built here for demo-drive launches,
+        // which drive the default working without a route
+        // selection. A normal launch discards both at the first
+        // selectRoute → reset() rebuild, and nothing reads
+        // trafficSnapshot before the first advance, so a normal
+        // launch defers the engine to the first traffic advance
+        // (see advanceTrafficAtCurrentTick); reset() keeps
+        // building it eagerly exactly as before. (The argument
+        // is read directly here — self, and with it the
+        // demoDriveEnabled computed property, is not available
+        // until every stored property has a value.)
+        if ProcessInfo.processInfo.arguments.contains("-RMDemoDrive") {
+            trafficEngine = trafficScenario.flatMap(Self.makeTrafficEngine(from:))
+            trafficSnapshot = trafficEngine?.snapshot()
+            // batch101: a demo launch builds the engine eagerly,
+            // so surface a failed build here (the lazy path in
+            // advanceTrafficAtCurrentTick covers normal launches).
+            // Before this, a scenario that failed to load or to
+            // validate left the game with no AI trains and no
+            // message anywhere — the exact silent failure behind
+            // the user's repeated "no oncoming trains" reports.
+            if trafficScenario == nil {
+                storageNotice = "架空交通シナリオを読み込めなかったため、AI列車なしで運転を継続します。"
+            } else if trafficEngine == nil {
+                storageNotice = "架空交通AIを初期化できなかったため、AI列車なしで運転を継続します。"
+            }
+        }
         atsSystem = try? EducationalATSConfirmation(acknowledgementTimeoutSeconds: 5)
-        recorder = DrivingSessionRecorder(metadata: Self.makeSessionMetadata(route: trip?.profile ?? loadedRoute.profile))
+        recorder = DrivingSessionRecorder(metadata: Self.makeSessionMetadata(route: initialProfile))
         trainPhysicsTelemetry = loadedPhysics.telemetry
         stoppingDistanceEstimate = nil
         telemetry = TrainPhysicsProfileAdapter.projectTelemetry(
             loadedPhysics.telemetry,
             engine: loadedPhysics,
-            route: trip?.profile ?? loadedRoute.profile,
+            route: initialProfile,
             stoppingDistance: nil
         )
-        dataValidationIssues = trip?.profile.validateData() ?? loadedRoute.issues
+        dataValidationIssues = initialIssues
+        // batch93: prime the factory-trip memo with the trip
+        // just built, so the rebuildStopScoringSession below
+        // reuses it instead of regenerating the same route.
+        if let trip {
+            memoizedFactoryTrip = trip
+            memoizedFactoryTripKey = Self.factoryTripKey(variant: .throughBranch, category: .local, direction: .up)
+        }
         rebuildProtectionSession()
         rebuildStopScoringSession()
         rebuildDoorProcedureScoringSession()
+        // batch60: init builds the default working directly
+        // (no reset()), so place the train at the origin
+        // platform here too.
+        placeTrainAtOriginTarget()
         incidentMaintenanceEngine = Self.makeIncidentMaintenanceEngine(seed: 0x5241494C)
         refreshOperationsSnapshot()
         rebuildGameplayCoordinators()
@@ -391,6 +556,24 @@ final class SimulatorModel: ObservableObject {
         }
     }
 
+    /// batch78: 運転開始のキー音＋逆転器音（mec keyon /
+    /// reverseron、どちらも同梱済みだが従来は再生箇所が無
+    /// かった）。reset() が新セッションとして武装し、最初の
+    /// ライブフレームで key_on → 約 0.45 秒後に reverser_on
+    /// を 1 回だけ鳴らす。スナップショット復元は reset() を
+    /// 通らないため武装されず、ポーズ再開でも消費済みで鳴ら
+    /// ない。発火は advance のライブ区間（ポーズ中・ロード中
+    /// は advance 自体が進まない）でのみ起きる。
+    private func playSessionStartCuesIfArmed() {
+        guard sessionStartCuesArmed else { return }
+        sessionStartCuesArmed = false
+        _ = audio.playBundledSampleOneShot(named: "key_on")
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            _ = self?.audio.playBundledSampleOneShot(named: "reverser_on")
+        }
+    }
+
     /// Frame time is only an input clock. All simulation systems advance together at 120 Hz.
     func advance(at time: TimeInterval) {
         guard let previous = lastFrameTime else {
@@ -402,6 +585,7 @@ final class SimulatorModel: ObservableObject {
         guard !isPaused, runPhase == .running else { return }
         let realDelta = min(max(time - previous, 0), 2.0)
         guard realDelta > 0 else { return }
+        playSessionStartCuesIfArmed()
         driveDemoIfEnabled()
         fixedStepAccumulator += realDelta
         let fixedStep = TrainPhysics.PhysicsConstants.fixedTimeStepSeconds
@@ -437,9 +621,12 @@ final class SimulatorModel: ObservableObject {
             simulationTick(dt: fixedStep)
         }
         applyPendingDoorCloseIfDue()
+        updateAutomaticDoorCycle()
         refreshPublishedTelemetry()
         if let latestOperationsSnapshot { operationsSnapshot = latestOperationsSnapshot }
-        let waitingForScheduledDeparture = timetableDepartureRemainingSeconds > 0 && engine.positionM <= 0.5
+        // batch65: ダイヤ遅延による初発ホールド（力行0・ブレーキ7
+        // の強制）は完全撤廃済み。ここで操作を差し替えるのは自動
+        // ブレーキ作動時だけ。
         let effectiveControls: TrainControls
         if latestOperationsSnapshot?.automaticBrakeActive == true {
             effectiveControls = TrainControls(
@@ -447,8 +634,6 @@ final class SimulatorModel: ObservableObject {
                 brakeNotch: max(appliedDrivingControls.brakeNotch, 7),
                 emergencyBrake: appliedDrivingControls.emergencyBrake || latestOperationsSnapshot?.atsStatus?.automaticBrakeCommanded == true
             )
-        } else if waitingForScheduledDeparture {
-            effectiveControls = TrainControls(throttleNotch: 0, brakeNotch: 7)
         } else {
             effectiveControls = controls
         }
@@ -519,7 +704,9 @@ final class SimulatorModel: ObservableObject {
            lastATSProtectedBlockID != reading.blockID {
             do {
                 try atsSystem?.trigger(at: simulationTime)
-                audio.playATSAlarm()
+                // batch67: ベルは updateAudio のループが警報需要
+                // （awaiting 状態）の続く間回し続ける。ここでの
+                // ワンショットは廃止（二重発音の防止）。
                 lastATSProtectedBlockID = reading.blockID
             } catch {
                 storageNotice = "教材ATSの状態更新に失敗しました。"
@@ -544,6 +731,15 @@ final class SimulatorModel: ObservableObject {
             signalBlock: signalContext.block,
             brakingMultiplier: maintenanceEffects.brakingMultiplier * activeIncidentEffects.brakingMultiplier
         )
+        // Permitted-speed cap for the HUD limit and the ATS pattern
+        // staging ONLY (see permittedSpeed below): the section
+        // limit scaled by maintenance/incident multipliers, and
+        // any explicit cap. This value must NOT be handed to the
+        // physics engine as a hard cap — doing so (via the old
+        // PhysicsModifiers.speedCapKmh wiring) made the displayed
+        // limit a cruise control: under full notch the train
+        // pinned at exactly the limit and could never overspeed,
+        // so the staged ATS intervention below never engaged.
         let maintenanceSpeedCap = min(
             route.condition(at: engine.positionM).speedLimitKmh * max(maintenanceEffects.maximumSpeedMultiplier * activeIncidentEffects.speedMultiplier, 0),
             maintenanceEffects.speedCapKmh ?? Double.infinity
@@ -551,24 +747,35 @@ final class SimulatorModel: ObservableObject {
         let permittedSpeed = min(basePermittedSpeed, maintenanceSpeedCap)
         let currentSpeedKmh = engine.speedMps * 3.6
         let exceededPattern = currentSpeedKmh > permittedSpeed + 0.25
-        if exceededPattern && !lastExceededPattern {
-            audio.playATSAlarm()
-        }
         lastExceededPattern = exceededPattern
+        // batch67: パターン超過はいきなり制動しない。実車ATSの
+        // 段階動作に合わせ、(1) 警告段階: ベルが鳴り続けるだけ
+        // (2) 運転士が確認したら、なお超過していれば常用制動で
+        // パターン以下まで落とす (3) 確認しないまま猶予（5秒、
+        // 教材ATSの確認期限と同値）を過ぎたら非常制動。速度が
+        // パターン以下に戻れば全段階は解除される。従来の即時
+        // 制動は、制限境界で速度が上下するたび自動ブレーキが
+        // 点滅し、音響スナップショットのノッチ/ブレーキまで
+        // 往復して見えてノッチ音・ブレーキ音が繰り返し鳴る
+        // 原因にもなっていた。
+        updatePatternWarning(exceeded: exceededPattern)
         let atsBrake = atsStatus?.automaticBrakeCommanded == true
-        let automaticBrake = exceededPattern || atsBrake
+        let automaticBrake = patternBrakeActive || atsBrake
         let nextStopPosition = activeStops.indices.contains(nextStopIndex) ? activeStops[nextStopIndex].positionM : route.stopMarkerM
         let stationHold = abs(engine.positionM - nextStopPosition) <= Self.arrivalToleranceM && currentSpeedKmh <= 0.5
-        let waitingForScheduledDeparture = timetableDepartureRemainingSeconds > 0 && engine.positionM <= 0.5
+        // batch65: ダイヤ遅延による初発ホールド（力行0・ブレーキ7
+        // の強制）は完全撤廃済み。発車保留が残るのは駅停車・待避・
+        // 保守/インシデントによる departureHeld の場合だけ。
         let effectiveControls: TrainControls
         if automaticBrake {
             effectiveControls = TrainControls(
                 throttleNotch: 0,
                 brakeNotch: 7,
-                emergencyBrake: atsBrake
+                // batch67: 非常になるのは教材ATSの期限超過か、
+                // パターン警告を未確認のまま猶予を過ぎた場合だけ。
+                // 確認済みのパターン制動は常用（B7）のまま。
+                emergencyBrake: atsBrake || patternBrakeEmergency
             )
-        } else if waitingForScheduledDeparture {
-            effectiveControls = TrainControls(throttleNotch: 0, brakeNotch: 7)
         } else if stationHold || passingWaitHolding || maintenanceEffects.departureHeld || activeIncidentEffects.departureHeld {
             effectiveControls = TrainControls(throttleNotch: 0, brakeNotch: max(1, controls.brakeNotch), emergencyBrake: false)
         } else {
@@ -589,7 +796,12 @@ final class SimulatorModel: ObservableObject {
             modifiers: TrainPhysics.PhysicsModifiers(
                 tractionMultiplier: maintenanceEffects.tractionMultiplier * activeIncidentEffects.tractionMultiplier,
                 brakingMultiplier: maintenanceEffects.brakingMultiplier * activeIncidentEffects.brakingMultiplier,
-                speedCapKmh: maintenanceSpeedCap,
+                // Only the explicit vehicle/game cap (e.g. a
+                // maintenance fault limit) is a physical ceiling.
+                // The section limit and event multipliers live in
+                // permittedSpeed and are enforced by the ATS
+                // pattern staging, never by clamping physics.
+                speedCapKmh: maintenanceEffects.speedCapKmh,
                 adhesionCoefficientOverride: weatherDrivingEffect.adhesionCoefficient,
                 extraResistanceN: weatherDrivingEffect.extraResistanceN
             )
@@ -721,6 +933,20 @@ final class SimulatorModel: ObservableObject {
     }
 
     private func advanceTrafficAtCurrentTick() {
+        // batch93: normal launches no longer build the traffic
+        // engine in init (its first snapshot was always
+        // discarded by the first route selection's reset()).
+        // Build it on the first advance that needs it — the
+        // same engine, from the same cached scenario — so a
+        // model advanced without a prior reset (tests, a
+        // restored session) behaves exactly as before.
+        if trafficEngine == nil, let scenario = trafficScenario {
+            trafficEngine = Self.makeTrafficEngine(from: scenario)
+        }
+        // batch101: if the build just failed (or the scenario
+        // itself never loaded), say so once instead of returning
+        // silently on every tick forever.
+        if trafficEngine == nil { noteTrafficUnavailableIfNeeded() }
         guard var traffic = trafficEngine else { return }
         // The zoo and theme park shuttles run alone by design: the
         // regional traffic scenario has no zoo/park tracks, so
@@ -1159,6 +1385,21 @@ final class SimulatorModel: ObservableObject {
         let offset = engine.positionM - targetStop.positionM
         if offset > Self.overshootToleranceM {
             updateStopScoring(events: events)
+            // batch44 (2026-11-14): in screenshot-tour mode the
+            // train is teleported to scenic positions, not to
+            // stopping-pattern positions. The final main-tour spot
+            // (67,980) sits 22 m PAST the terminal's adjusted stop
+            // target (67,958 — the scoring adapter clamps the
+            // leading-end target into the platform's safe window),
+            // so this branch ended the run (.overshot) the moment
+            // the tour arrived there: simulation time froze,
+            // driveDemoIfEnabled (gated on .running) never ran
+            // again, and spots 32+ never became READY — in the
+            // original launch and in the script's relaunch alike
+            // (demo log: TOUR spot=31 then t= frozen at
+            // phase=overshot). A tour hold must never end the run;
+            // the scoring update above still runs as before.
+            guard !tourEnabled else { return }
             runPhase = .overshot
             finishDoorProcedureScoring()
             finishStopScoring()
@@ -1192,11 +1433,19 @@ final class SimulatorModel: ObservableObject {
                 }
                 if nextStopIndex == activeStops.count - 1 {
                     updateStopScoring(events: events)
-                    runPhase = .arrived
-                    finishDoorProcedureScoring(finalizing: targetStop.stationID)
-                    finishStopScoring()
-                    captureCompletedRun()
-                    persistCurrentSession()
+                    // batch44 (2026-11-14): same guard as the
+                    // overshoot branch above — a tour hold at the
+                    // terminal must not end the run mid-tour (and
+                    // must not put the result sheet up via
+                    // captureCompletedRun while the script is
+                    // still photographing).
+                    if !tourEnabled {
+                        runPhase = .arrived
+                        finishDoorProcedureScoring(finalizing: targetStop.stationID)
+                        finishStopScoring()
+                        captureCompletedRun()
+                        persistCurrentSession()
+                    }
                 } else {
                     pendingConfirmations.append(DriveConfirmation(
                         actionID: "station-arrival-\(targetStop.stationID)",
@@ -1406,6 +1655,7 @@ final class SimulatorModel: ObservableObject {
             curveRadiusMeters: condition.curveRadiusM.map { Float($0) },
             isInTunnel: condition.tunnelResistanceMultiplier > 1.05,
             isOnBridge: audioOnBridge,
+            isOnJointedRail: audioOnJointedRail,
             isOnPoints: audioOnPoints,
             doorsOpen: gameModeDoorState.isOpen,
             weather: audioWeather,
@@ -1413,6 +1663,83 @@ final class SimulatorModel: ObservableObject {
             trainPosition: trainPosition,
             listenerPosition: listenerPosition
         ))
+        updateCompressorSound(speedKmh: speedKmh, brakeCommand: brakeCommand, doorsOpen: gameModeDoorState.isOpen)
+        updateATSBellLoop()
+    }
+
+    /// batch67: ATS警報ベルのループ駆動（毎フレーム呼ばれる）。
+    /// ベル需要 = 教材ATSが確認待ち / 保護セッションのATS-Sが
+    /// 確認待ち / パターン警告が未確認かつ未制動、のいずれか。
+    /// 需要が続く間、ベルの長さの周期で ats_alert を回し続け、
+    /// 確認された瞬間（需要が消えた瞬間）に止まる。実車ATSの
+    /// 「警報ベルは条件が続く間鳴り続け、確認で止まる」挙動。
+    /// 従来は各トリガー点でワンショット1回だけだったため、
+    /// 「ベルが鳴らず勝手に非常ブレーキ」と体感されていた。
+    private func updateATSBellLoop() {
+        let educationalAwaiting = latestOperationsSnapshot?.atsStatus?.state == .awaitingAcknowledgement
+        let patternWarning = patternWarningStartTime != nil && !patternWarningAcknowledged && !patternBrakeActive
+        guard educationalAwaiting || protectionNeedsAcknowledgement || patternWarning else { return }
+        guard simulationTime >= atsBellNextRingTime else { return }
+        let duration = audio.playATSAlarm()
+        atsBellNextRingTime = simulationTime + max(duration, 0.6)
+    }
+
+    /// batch67: 速度パターン超過の段階状態機械（simulationTick
+    /// から毎tick呼ばれる）。警告の開始・確認済み制動・猶予
+    /// 超過の非常制動・パターン復帰での全解除だけを行い、
+    /// ベルの駆動は updateATSBellLoop が担う。
+    private func updatePatternWarning(exceeded: Bool) {
+        if !exceeded {
+            patternWarningStartTime = nil
+            patternWarningAcknowledged = false
+            patternBrakeActive = false
+            patternBrakeEmergency = false
+            return
+        }
+        if patternWarningStartTime == nil {
+            patternWarningStartTime = simulationTime
+            patternWarningAcknowledged = false
+            patternBrakeActive = false
+            patternBrakeEmergency = false
+            return
+        }
+        if patternBrakeActive { return }
+        if patternWarningAcknowledged {
+            // 確認済みでもなお超過していれば常用制動で落とす
+            // （ATS-P の確認後パターン制動に相当）。
+            patternBrakeActive = true
+            patternBrakeEmergency = false
+        } else if let start = patternWarningStartTime,
+                  simulationTime - start >= Self.atsPatternGraceSeconds {
+            patternBrakeActive = true
+            patternBrakeEmergency = true
+        }
+    }
+
+    /// batch63: コンプレッサー実録音の簡易トリガー（MAPPING v1 仕様）。
+    /// 停車中（0.5km/h 未満）で、直近にブレーキ緩解かドア開閉があり、
+    /// 前回再生から25秒以上空いていれば cp_start を鳴らす。発車時
+    /// （ドア閉）に再生中なら cp_end で締める。
+    private func updateCompressorSound(speedKmh: Double, brakeCommand: Double, doorsOpen: Bool) {
+        if previousAudioBrakeCommand > 0.05, brakeCommand <= 0.05 {
+            lastBrakeReleaseOrDoorEventTime = simulationTime
+        }
+        if doorsOpen != previousAudioDoorsOpen {
+            lastBrakeReleaseOrDoorEventTime = simulationTime
+            if !doorsOpen, simulationTime < compressorSoundEndsAt {
+                _ = audio.playBundledSample(named: "cp_end")
+                compressorSoundEndsAt = 0
+            }
+        }
+        previousAudioBrakeCommand = brakeCommand
+        previousAudioDoorsOpen = doorsOpen
+
+        guard speedKmh < 0.5,
+              simulationTime - lastCompressorStartTime >= 25,
+              simulationTime - lastBrakeReleaseOrDoorEventTime <= 20,
+              let duration = audio.playBundledSample(named: "cp_start") else { return }
+        lastCompressorStartTime = simulationTime
+        compressorSoundEndsAt = simulationTime + duration
     }
 
     private func refreshOperationsSnapshot() {
@@ -1448,7 +1775,20 @@ final class SimulatorModel: ObservableObject {
             }
         }
         if let system = try? ThreeAspectBlockSystem(blocks: blocks) { return system }
-        let fallback = try! RailwayBlock(identifier: "fictional-block-fallback", startM: 0, endM: max(route.distanceM, 1), trackID: "T1")
+        // batch101: the fallback used to feed route.distanceM
+        // straight into the try! below. RailwayBlock rejects a
+        // non-finite endM, so a corrupt route whose distanceM is
+        // +inf (or NaN, if max propagated it) turned this recovery
+        // path itself into a crash — the fallback exists precisely
+        // for bad route data. Sanitize the end first: for every
+        // finite distanceM the fallback block is identical to
+        // before, and with the end finite and >= 1 the two try!
+        // constructions satisfy the types' own validation by
+        // construction (non-empty identifiers, endM > startM, and
+        // a single block cannot duplicate an identifier or
+        // overlap itself).
+        let fallbackEndM = route.distanceM.isFinite ? max(route.distanceM, 1) : 1
+        let fallback = try! RailwayBlock(identifier: "fictional-block-fallback", startM: 0, endM: fallbackEndM, trackID: "T1")
         return try! ThreeAspectBlockSystem(blocks: [fallback])
     }
 
@@ -1574,6 +1914,15 @@ final class SimulatorModel: ObservableObject {
             }
         }
         guard let handle = demoLogHandle else { return }
+        // batch58 (diagnosis §2): the scene view appends its
+        // census / diagnostic lines (CENSUS, TRAFFIC_DIAG,
+        // DEPOT_DIAG, DEPOT_BUILD, GLB_*) to this same file
+        // through its own handle, seeking to the end first.
+        // Every write through THIS handle must also seek to the
+        // end first — batch56's per-second writes used the
+        // handle's stale offset and overwrote the view's
+        // appended lines, so no diagnostic ever reached the
+        // pulled log.
         // quality25 READY emission (see tourAwaitingAckIndex): the
         // gate is simulation time at least 4 s past the teleport —
         // the model and the view share the main runloop, so sim
@@ -1588,7 +1937,7 @@ final class SimulatorModel: ObservableObject {
            simulationTime >= tourTeleportSimTime + 4 || wall - tourTeleportWallTime >= 60,
            abs(engine.positionM - tourSpots[tourReadyPendingIndex]) < 5 {
             let line = "READY spot=\(tourReadyPendingIndex) pos=\(Int(engine.positionM))\n"
-            if let data = line.data(using: .utf8) { handle.write(data) }
+            if let data = line.data(using: .utf8) { handle.seekToEndOfFile(); handle.write(data) }
             tourAwaitingAckIndex = tourReadyPendingIndex
             tourReadyWallTime = wall
             tourReadyPendingIndex = -1
@@ -1606,7 +1955,13 @@ final class SimulatorModel: ObservableObject {
                           String(describing: gameModeDoorState), runPhase.rawValue,
                           demoStuckSince, demoCreepUntilM,
                           trainPhysicsTelemetry.brakeCylinderPressureKPa, arrivalDwellSeconds)
-        if let data = line.data(using: .utf8) { handle.write(data) }
+        if let data = line.data(using: .utf8) { handle.seekToEndOfFile(); handle.write(data) }
+        // batch62: 音響テレメトリを同じ1秒周期に相乗りさせる。
+        // 実機で全音声が無音になる問題の切り分け用（エンジンの
+        // 開始失敗・セッション状態・警笛の呼び出し回数）。状態行と
+        // 同じく seekToEndOfFile してから書く（batch58 の教訓）。
+        let audioLine = audio.statusLogLine + "\n"
+        if let audioData = audioLine.data(using: .utf8) { handle.seekToEndOfFile(); handle.write(audioData) }
     }
 
     // quality23: spots sit at curve apexes (exit visible in frame)
@@ -1623,7 +1978,67 @@ final class SimulatorModel: ObservableObject {
     // quality40: station survey — every one of the 32 stations,
     // shot from 20 m before its centre (the user's choice), so the
     // platform faces, canopies and station cores fill the frame.
-    private static let tourSpotsM: [Double] = [5, 1_819, 3_851, 5_980, 8_206, 10_335, 12_367, 14_593, 16_915, 19_141, 21_270, 24_174, 26_303, 28_432, 30_657, 32_883, 35_109, 37_335, 39_561, 41_786, 44_012, 46_238, 48_464, 50_690, 52_915, 55_141, 57_367, 59_980, 61_980, 63_980, 65_980, 67_980, 17_905, 3_545, 12_067]
+    private static let tourSpotsM: [Double] = [5, 1_819, 3_851, 5_980, 8_206, 10_335, 12_367, 14_593, 16_915, 19_141, 21_270, 24_174, 26_303, 28_432, 30_657, 32_883, 35_109, 37_335, 39_561, 41_786, 44_012, 46_238, 48_464, 50_690, 52_915, 55_141, 57_367, 59_980, 61_980, 63_980, 65_980, 67_980, 6_435, 7_910, 12_067, 8_292, 28_518, 44_098, 27_200, 28_432]
+    // 2026-11-14 (batch37): the last three spots are stop-marker
+    // close-ups. Station-approach spots (centre − 20 m) leave the
+    // batch34 diamond markers ~80–100 m away (4–5 px, unverifiable),
+    // so these sit 25 m before the far-end markers at S05 石神池
+    // (centre 8,226; 8-car marker +78 m, 10-car +97.5 m), S14 津田池
+    // (28,452) and S21 勝沼 (44,032): from centre + 53 m both markers
+    // are in frame at 25 m / 44.5 m. S05 and S21 are island stations
+    // (batch36), so these also prove the island-side marker placement.
+    // batch46 (2026-11-14, batch45 photo verdict): at centre + 53 m
+    // the S14 frame was filled by the station wall and the board
+    // stayed unreadable — the camera sat mid-platform, past the
+    // island's near end. The spots move to centre + 66 m: 12 m
+    // before the 8-car board (10.4 m from the forward camera at
+    // the nose), so the 0.55 m board spans ~96 px with its numeral
+    // legible and the 10-car board (+97.5 m) still in frame behind
+    // it. All three stations are islands: the target board stands
+    // on the island at route lateral −2.05, 1.95 m right of the
+    // spread running track the tour train stands on.
+    // 2026-11-13 (Mac photo verdict): the old crossing spots
+    // (17,905 / 3,545) match no crossing the world actually
+    // places (rm-crossings.txt) — 36 photographed a tunnel
+    // interior and 37 an empty curve. The new spots sit 60 m
+    // before real world crossings (6,495 / 7,970).
+    // batch47 (2026-11-14, user: the depot has never been
+    // photographed and no opposing train has ever appeared):
+    // the last two spots close both gaps. Spot 38 (27,470)
+    // frames Touou depot from the main line: the yard tracks
+    // (27,605-27,795) carry the stabled E231 10-car (nose
+    // 27,797, body 27,602-27,797 at lateral 19.5) and 117
+    // 8-car (nose 27,760, body 27,604-27,760 at lateral 24.5)
+    // on the depot side, so from 27,470 both consists lie
+    // 130-330 m ahead at only 4-12 degrees off the view axis,
+    // with the shed and office behind them. Spot 39 (28,432,
+    // the S14 Tsudaike approach, same framing as spot 16)
+    // photographs the tour-only opposing local that
+    // generatedDiagramTrains parks at S14's down platform
+    // for the whole session (see there) — a guaranteed meet
+    // across the island platform, not a timing lottery.
+    // batch51 (2026-11-14, batch47-49 photo verdict): neither
+    // spot proved anything. (a) The meet train existed in the
+    // engine but the scene was fed the bundled placeholder
+    // scenario (see ContentView), so it could never render —
+    // fixed in ContentView/SimulatorModel (private(set)); spot
+    // 39 is unchanged and should now show the 8-car local
+    // standing at S14's down main (lateral +4.0 at the island).
+    // (b) The depot yard did not appear at all from 27,470.
+    // (The 27,640 move this paragraph originally announced
+    // never landed in tourSpotsM, and its yard figures were
+    // stale besides — batch58 diagnosis §3.)
+    // batch58 (2026-11-15, diagnosis §3): spot 38 now sits at
+    // 27,200. The rebuild camera is FOV 66° portrait, a
+    // horizontal half-FOV of only ~16.6°: from 27,470 the shed
+    // centre (27,710 at depth 82.5) bore ~19.0° — outside the
+    // frame no matter what rendered — while the near consists
+    // (depths 19.5-24.5, 270-350 m ahead) bore 4-13° and
+    // WOULD have been in frame, so the missing yard is a
+    // render-loss question, not only a framing one (the yard's
+    // DEPOT_BUILD line now reaches the pulled log — see
+    // buildDepotYard). From 27,200 the shed bears ~9.2°
+    // (~55 px tall, identifiable) and the consists 2-5°.
 
     /// The active tour's spots: the short-line tours launched with
     /// `-RMZooTour` / `-RMParkTour` photograph their own routes
@@ -1636,7 +2051,32 @@ final class SimulatorModel: ObservableObject {
             // paddocks are inside the forward view. CI #412's spots
             // were just past each paddock, so the photographs showed
             // empty fields and no animals.
-            return [80, 505, 935, 1_435, 1_655, 2_430]
+            // batch50 (2026-11-14, penguins still dots in batch46):
+            // the animal panels are side-profile cards, so from
+            // 46-55 m along the track they are seen nearly edge-on
+            // (foreshortened to ~19 px for the penguin group). Each
+            // spot now sits ~13-25 m before its enclosure's near
+            // panel with the panels pulled to just inside the
+            // 7.6 m fence, so the group reads ~40-50 px wide
+            // (penguins 544, lion 967, tiger 1,465, elephant
+            // 1,677 — the elephant was already ~55 px tall, so
+            // its spot moves only to centre it).
+            // batch51 (2026-11-14): the batch47-49 photos settle
+            // that the panels DO render — the elephant panel is
+            // identifiable in 44-zoo-elephant (a ~35 px washed-out
+            // shape at the paddock's far end). The failure is pure
+            // geometry: at the old spots the near panel sat 46-60 m
+            // ahead and only ~11-13 m to the side, so the card was
+            // seen at 74-82 degrees off its normal and foreshortened
+            // to a sliver. batch50 halved the distance; batch51
+            // finishes the job by putting each spot where the near
+            // panel bears ~35 degrees (inside the frame, clear of
+            // the mascon overlay) at ~55 degrees obliquity and
+            // 10.6-12.1 m range: penguins 548 (panel 556.5 at
+            // lateral 8.2, figure ~69 px tall), lion 971 and tiger
+            // 1,471 (panels at centre-9, lateral 9.0, ~66-69 px),
+            // elephant 1,691 (panel 1,701, figure ~166 px).
+            return [80, 548, 971, 1_471, 1_691, 2_430]
         }
         if ProcessInfo.processInfo.arguments.contains("-RMParkTour") {
             // 2026-11-12: the ferris wheel (centre 1,280) is shot
@@ -1738,13 +2178,15 @@ final class SimulatorModel: ObservableObject {
 
     private func logTourLine(_ line: String) {
         guard let handle = demoLogHandle else { return }
-        if let data = line.data(using: .utf8) { handle.write(data) }
+        // batch58: seek first — see logDemoStateIfDue.
+        if let data = line.data(using: .utf8) { handle.seekToEndOfFile(); handle.write(data) }
     }
 
     private func logTourTeleport(to position: Double, spotIndex: Int) {
         guard let handle = demoLogHandle else { return }
         let line = "TOUR spot=\(spotIndex) pos=\(Int(position)) wall=\(Int(Date().timeIntervalSinceReferenceDate))\n"
-        if let data = line.data(using: .utf8) { handle.write(data) }
+        // batch58: seek first — see logDemoStateIfDue.
+        if let data = line.data(using: .utf8) { handle.seekToEndOfFile(); handle.write(data) }
     }
 
     private func teleportForTour(to position: Double) {
@@ -1894,9 +2336,71 @@ final class SimulatorModel: ObservableObject {
         }
     }
 
+    // batch71: handle-cue coalescing (BVE's firing model: a
+    // handle OPERATION is the unit — [Master Controller] fires
+    // once per operation, [Brake] air sounds are BC-pressure
+    // events). The lever reports every detent it crosses during
+    // a drag, so an EB→N sweep used to fire the EB release pair
+    // plus one brake-release sample per detent, and the samples
+    // piled up audibly behind the operation. The setters now only
+    // RECORD the burst: the first change of a burst captures the
+    // pre-gesture controls and schedules one flush 120 ms later;
+    // the flush voices at most one cue per family for the NET
+    // change (EB pair, one brake-air cue at the final notch's
+    // level / the single strongest release, one controller step
+    // for the net throttle move). Physics controls still apply
+    // immediately — only the sound is coalesced.
+    private var handleCueBurstStart: TrainControls?
+    private var handleCueFlushTask: Task<Void, Never>?
+
+    private func noteHandleCueBurst(previousControls: TrainControls) {
+        if handleCueBurstStart == nil { handleCueBurstStart = previousControls }
+        if handleCueFlushTask == nil {
+            handleCueFlushTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                self?.flushHandleCues()
+            }
+        }
+    }
+
+    private func flushHandleCues() {
+        handleCueFlushTask = nil
+        guard let start = handleCueBurstStart else { return }
+        handleCueBurstStart = nil
+        let end = controls
+        if end.emergencyBrake != start.emergencyBrake {
+            if end.emergencyBrake {
+                _ = audio.playBundledSample(named: "eb_on")
+                _ = audio.playBundledSample(named: "eb_apply")
+            } else {
+                _ = audio.playBundledSample(named: "eb_off")
+                _ = audio.playBundledSample(named: "eb_release")
+            }
+        }
+        if end.brakeNotch > start.brakeNotch {
+            let level = min(4, max(1, (end.brakeNotch + 1) / 2))
+            _ = audio.playBrakeAirSample(named: "brake_apply_\(level)")
+        } else if end.brakeNotch < start.brakeNotch {
+            let bigRelease = start.brakeNotch - end.brakeNotch >= 3 || (start.brakeNotch >= 5 && end.brakeNotch == 0)
+            _ = audio.playBrakeAirSample(named: bigRelease ? "brake_release_long" : "brake_release")
+        }
+        // batch78: B7 到達のハンドルクリック（mec B7on →
+        // brake_max_click）。この flush へ来るのは setBrake 等の
+        // 運転士操作バーストだけ（ATS 等の自動制動は setter を
+        // 通らない）なので、B7 未満から B7 へ入ったバーストで
+        // 1 回だけ鳴らせば「突入ごとに 1 回」になる。
+        if end.brakeNotch == 7, start.brakeNotch < 7 {
+            _ = audio.playBundledSampleOneShot(named: "brake_max_click")
+        }
+        if end.throttleNotch != start.throttleNotch {
+            audio.playControllerStep(from: start.throttleNotch, to: end.throttleNotch)
+        }
+    }
+
     func setThrottle(_ notch: Int) {
         guard runPhase == .running else { return }
         let value = min(max(notch, 0), max(train.tractionNotchFractions.count - 1, 0))
+        let previousControls = controls
         controls = TrainControls(
             throttleNotch: value,
             brakeNotch: value > 0 ? 0 : controls.brakeNotch,
@@ -1904,11 +2408,18 @@ final class SimulatorModel: ObservableObject {
             masterReversed: value == 0 && controls.masterReversed
         )
         noteProtectionDriverActivity()
+        // batch67→71: ノッチ操作音はハンドル操作イベント単位
+        // （BVE sound.cfg [Master Controller]）。発火は
+        // flushHandleCues へ集約（batch71 のコメント参照）。
+        if controls != previousControls {
+            noteHandleCueBurst(previousControls: previousControls)
+        }
     }
 
     func setBrake(_ notch: Int) {
         guard runPhase == .running else { return }
         let value = min(max(notch, 0), 7)
+        let previousControls = controls
         controls = TrainControls(
             throttleNotch: value > 0 ? 0 : controls.throttleNotch,
             brakeNotch: value,
@@ -1916,10 +2427,19 @@ final class SimulatorModel: ObservableObject {
             masterReversed: controls.masterReversed && value == 0
         )
         noteProtectionDriverActivity()
+        // batch63→71: ブレーキ空気音（実録・強さ連動）は
+        // flushHandleCues が正味の段数変化に対して1回だけ発火
+        // する（込めは最終段のレベル brake_apply_1..4、緩めは
+        // brake_release／大きく緩める場合は brake_release_long）。
+        // setBrake を通らない遷移（ATS 指令等）は DSP トグル側が担保する。
+        if controls != previousControls {
+            noteHandleCueBurst(previousControls: previousControls)
+        }
     }
 
     func setEmergencyBrake(_ isOn: Bool) {
         guard runPhase == .running else { return }
+        let previousControls = controls
         controls = TrainControls(
             throttleNotch: isOn ? 0 : controls.throttleNotch,
             brakeNotch: controls.brakeNotch,
@@ -1927,6 +2447,12 @@ final class SimulatorModel: ObservableObject {
             masterReversed: controls.masterReversed && !isOn
         )
         noteProtectionDriverActivity()
+        // batch63→71: 非常の操作音＋空気音（実録）も
+        // flushHandleCues へ集約。警報ブザー
+        // （playEmergencyBrakeAlert）は従来どおり合成のまま。
+        if controls != previousControls {
+            noteHandleCueBurst(previousControls: previousControls)
+        }
     }
 
     func setMasterReversed(_ isOn: Bool) {
@@ -1951,7 +2477,7 @@ final class SimulatorModel: ObservableObject {
         timetableDaypart = daypart
         timetableInitialDelayMinutes = min(max(initialDelayMinutes, 0), 30)
         timetableSelection = makeTimetableSelection(originStationID: activeStops.first?.stationID)
-        if simulationTime <= 0.000_1 && engine.positionM <= 0.5 && runPhase == .running {
+        if simulationTime <= 0.000_1 && isAtOriginPosition && runPhase == .running {
             rebuildStopScoringSession()
         } else {
             timetableSettingsPendingRestart = true
@@ -1967,6 +2493,20 @@ final class SimulatorModel: ObservableObject {
             timetableSelectionError = "架空の正本時刻表を読み込めませんでした。"
             return nil
         }
+        // batch93: selectRun is a deterministic function of
+        // (network, category, direction, calendar, daypart,
+        // delay, origin) — the network is fixed once loaded and
+        // DisruptionSimulator carries no randomness — yet every
+        // reset() re-ran its network-wide disruption simulation
+        // for identical inputs (a plain route selection or
+        // restart changes none of them). Reuse the last
+        // selection when every input matches; the success
+        // path's side effects (error cleared) are reproduced.
+        let memoKey = "\(serviceCategory.rawValue)|\(travelDirection.rawValue)|\(timetableCalendar.rawValue)|\(timetableDaypart.rawValue)|\(timetableInitialDelayMinutes)|\(originStationID)"
+        if memoizedTimetableSelectionKey == memoKey, let memoizedTimetableSelection {
+            timetableSelectionError = nil
+            return memoizedTimetableSelection
+        }
         do {
             let selection = try RegionalTimetableAdapter.selectRun(
                 network: network,
@@ -1978,6 +2518,8 @@ final class SimulatorModel: ObservableObject {
                 routeOriginStationID: originStationID
             )
             timetableSelectionError = nil
+            memoizedTimetableSelectionKey = memoKey
+            memoizedTimetableSelection = selection
             return selection
         } catch {
             timetableSelectionError = "架空時刻表を現在の運転条件へ結び付けられませんでした: \(error.localizedDescription)"
@@ -1985,10 +2527,39 @@ final class SimulatorModel: ObservableObject {
         }
     }
 
+    /// batch93: memo key for factoryTrip — the (variant,
+    /// category, direction) triple is the whole input space of
+    /// RegionalRouteFactory.make at its fixed default geometry
+    /// seed, for a given plan.
+    private static func factoryTripKey(variant: RegionalRouteVariant, category: ServiceCategory, direction: RegionalTravelDirection) -> String {
+        "\(variant.rawValue)|\(category.rawValue)|\(direction.rawValue)"
+    }
+
+    /// batch93: RegionalRouteFactory.make is a pure function of
+    /// (plan, variant, category, direction) — same seed, same
+    /// geometry, per the factory's own contract — yet one
+    /// session build used to run it two or three times for
+    /// identical inputs: init and selectRoute make the trip,
+    /// then reset()'s rebuildStopScoringSession makes it again.
+    /// This memo hands back the identical value instead. Only
+    /// regionalPlan-driven session builds use it; the save
+    /// restore path keeps its own direct make, because it
+    /// validates the saved state against a fresh build.
+    private func factoryTrip(plan: FictionalOperationsPlan, variant: RegionalRouteVariant, category: ServiceCategory, direction: RegionalTravelDirection) -> RegionalPlayableRoute? {
+        let key = Self.factoryTripKey(variant: variant, category: category, direction: direction)
+        if memoizedFactoryTripKey == key, let memoizedFactoryTrip {
+            return memoizedFactoryTrip
+        }
+        let trip = try? RegionalRouteFactory.make(plan: plan, variant: variant, category: category, direction: direction)
+        memoizedFactoryTripKey = key
+        memoizedFactoryTrip = trip
+        return trip
+    }
+
     @discardableResult
     func selectRoute(variant: RegionalRouteVariant, category: ServiceCategory, direction: RegionalTravelDirection) -> Bool {
         guard let plan = regionalPlan,
-              let trip = try? RegionalRouteFactory.make(plan: plan, variant: variant, category: category, direction: direction) else {
+              let trip = factoryTrip(plan: plan, variant: variant, category: category, direction: direction) else {
             storageNotice = "選択した架空路線・種別・方向を準備できませんでした。路線データを確認してください。"
             return false
         }
@@ -2002,7 +2573,9 @@ final class SimulatorModel: ObservableObject {
         serviceCategory = category
         travelDirection = direction
         blockSystem = Self.makeBlocks(route: trip.profile)
+        routeApplyProgressHandler?(1, "運行データを準備しています")
         reset()
+        routeApplyProgressHandler?(3, "世界を構築しています")
         return true
     }
 
@@ -2036,6 +2609,7 @@ final class SimulatorModel: ObservableObject {
 
     private func rebuildStopScoringSession() {
         stopScoringEngine = nil
+        stopScoringOriginTargetM = nil
         stopScoringEvaluation = nil
         stopScoringError = nil
         scoringStationID = nil
@@ -2050,12 +2624,7 @@ final class SimulatorModel: ObservableObject {
 
         guard let plan = regionalPlan,
               let routePackage = canonicalRoutePackage,
-              let trip = try? RegionalRouteFactory.make(
-                plan: plan,
-                variant: routeVariant,
-                category: serviceCategory,
-                direction: travelDirection
-              ) else {
+              let trip = factoryTrip(plan: plan, variant: routeVariant, category: serviceCategory, direction: travelDirection) else {
             stopScoringError = "架空の正本路線・ホームデータを読み込めず、駅別停車スコアを準備できません。"
             return
         }
@@ -2079,6 +2648,7 @@ final class SimulatorModel: ObservableObject {
             )
             activeStops = prepared.activeStops
             stopScoringEngine = prepared.engine
+            stopScoringOriginTargetM = prepared.originTargetM
             stopScoringEvaluation = prepared.engine.evaluation()
         } catch {
             stopScoringError = "架空の駅別停車スコアを準備できませんでした: \(String(describing: error))"
@@ -2096,27 +2666,74 @@ final class SimulatorModel: ObservableObject {
 
     /// Recorded door sound bundled for the selected control family.
     /// The resistance family shares the chopper recordings (project
-    /// decision, 2026-11-07); VVVF families use the 223-series
-    /// recordings. Nil means no recording is bundled for that family.
-    private func bundledDoorSampleName(open: Bool) -> String? {
+    /// decision, 2026-11-07); VVVF families use the E231-series
+    /// recordings (batch63). Nil means no recording is bundled for
+    /// that family.
+    private func bundledDoorSampleName(open: Bool, side: GameModeDoorState) -> String? {
         switch selectedVehicleProfile.soundProfile {
         case .fieldChopperDC, .rheostaticDC:
             if open { return "door_open_chopper" }
             return "door_close_chopper"
         case .vvvfGTO, .vvvfIGBT, .vvvfIGBTVariableCarrier, .vvvfSiC:
-            if open { return "door_open_vvvf" }
-            return "door_close_vvvf"
+            // batch79: E231 のドア音は Primrose 更新車（Sound_R）
+            // セットへ移行し、開扉側で _L / _R を選ぶ。側が
+            // 特定できない場合は無印（中央ミックス）を使う。
+            // open1 / close1 は予備テイクとして同梱のみ（BVE
+            // 本体でも未参照のため、トリガーには載せない）。
+            switch (open, side) {
+            case (true, .openRight): return "door_open_prim_r_r"
+            case (true, .openLeft): return "door_open_prim_r_l"
+            case (true, _): return "door_open_prim_r"
+            case (false, .openRight): return "door_close_prim_r_r"
+            case (false, .openLeft): return "door_close_prim_r_l"
+            case (false, _): return "door_close_prim_r"
+            }
+        }
+    }
+
+    /// batch79: Primrose セットが欠けた場合のフォールバック先
+    /// （従来の LEYokohama kozu セット）。VVVF 系以外は nil。
+    private func doorFallbackSampleName(open: Bool) -> String? {
+        switch selectedVehicleProfile.soundProfile {
+        case .fieldChopperDC, .rheostaticDC:
+            return nil
+        case .vvvfGTO, .vvvfIGBT, .vvvfIGBTVariableCarrier, .vvvfSiC:
+            if open { return "door_open_e231" }
+            return "door_close_e231"
         }
     }
 
     /// Plays the recorded door sound for the selected vehicle when one
     /// is bundled, falling back to the synthesized door cue.
-    private func playDoorSound(open: Bool) {
-        if let name = bundledDoorSampleName(open: open),
-           audio.playBundledSample(named: name) != nil {
+    /// batch67: フォールバック判定は「実際に鳴ったか」。従来は
+    /// playBundledSample の duration 返却（無音でも返る）を発音
+    /// 成功とみなしていたため、ドア閉音が無音のまま合成にも
+    /// 落ちず消えていた。
+    /// batch79: 開扉側（GameModeDoorState）を音選択まで通す。
+    /// 閉扉時は「開いていた側」を呼び出し側が渡す。Primrose が
+    /// 鳴らなかった場合のみ kozu セットへ、それも駄目なら合成へ。
+    private func playDoorSound(open: Bool, side: GameModeDoorState = .unknown) {
+        if let name = bundledDoorSampleName(open: open, side: side),
+           audio.playBundledSampleOneShot(named: name) {
+            return
+        }
+        if let fallback = doorFallbackSampleName(open: open),
+           audio.playBundledSampleOneShot(named: fallback) {
             return
         }
         audio.playDoor(open: open)
+    }
+
+    /// batch67: 発車メロディ（発車ベル）。停車中の駅でドアが
+    /// 閉まった瞬間に、その駅キーで1回だけ鳴らす。従来は
+    /// DepartureMelodyCatalog が設定シートのテストボタンにしか
+    /// 繋がっておらず、発車シーケンスでは一度も鳴らなかった。
+    private func playDepartureBellIfAtStation() {
+        guard !departureBellPlayedForCurrentStop else { return }
+        guard engine.speedMps * 3.6 < 0.5 else { return }
+        guard let stop = activeStops.first(where: { abs($0.positionM - engine.positionM) <= Self.arrivalToleranceM }) else { return }
+        departureBellPlayedForCurrentStop = true
+        audio.playDepartureChime(stationID: stop.stationID)
     }
 
     /// Applies a door closure that was held back until the recorded door
@@ -2125,11 +2742,56 @@ final class SimulatorModel: ObservableObject {
         guard let pending = pendingDoorClose, simulationTime >= pending.applyAt else { return }
         pendingDoorClose = nil
         let wasOpen = gameModeDoorState.isOpen
+        // batch79: 閉扉音の左右選択用に、開いていた側を上書き
+        // 前に控える。
+        let closingSide = gameModeDoorState
         gameModeDoorState = pending.state
         if wasOpen {
-            audio.playDoor(open: false)
+            // batch67: 従来は合成 playDoor 直呼びで実録の閉扉音を
+            // 経由しなかった。playDoorSound に統一する。
+            playDoorSound(open: false, side: closingSide)
+            playDepartureBellIfAtStation()
         }
         gameModeHostNotice = "架空ゲームのドア状態を「\(pending.state.rawValue)」に更新しました。物理モデルのドアではありません。"
+    }
+
+    // batch71: automatic door cycle for NORMAL driving. Door
+    // open/close used to be driven only by the fictional
+    // game-mode session's host effects (and by the demo script),
+    // so on a plain route-selection drive — no game-mode sheet
+    // opened — the doors never moved at all: no door sounds, no
+    // departure bell, at any station, which the user reported on
+    // device. The cycle below reuses the same host-effect path
+    // (recorded door sounds + departure bell on close) whenever
+    // no game-mode session is in charge: open on arrival at a
+    // scheduled stop (the origin included, for boarding), close
+    // after a 12 s dwell or as soon as the train moves off,
+    // whichever comes first. The game-mode host notice is
+    // cleared after each automatic operation — these are the
+    // train's real doors now, not a game overlay state.
+    private var autoDoorServedStationID: String?
+    private var autoDoorCloseAt: Double?
+
+    private func updateAutomaticDoorCycle() {
+        guard !demoDriveEnabled, gameModeSession == nil else { return }
+        guard runPhase == .running || runPhase == .arrived else { return }
+        let speedKmh = engine.speedMps * 3.6
+        if gameModeDoorState.isOpen {
+            let dwellElapsed = autoDoorCloseAt.map { simulationTime >= $0 } ?? false
+            if dwellElapsed || speedKmh > 0.5 {
+                autoDoorCloseAt = nil
+                handleGameModeHostEffects([.setGameDoorState(.closed)])
+                gameModeHostNotice = nil
+            }
+            return
+        }
+        guard speedKmh <= 0.5,
+              let stop = activeStops.first(where: { abs($0.positionM - engine.positionM) <= Self.arrivalToleranceM }),
+              stop.stationID != autoDoorServedStationID else { return }
+        autoDoorServedStationID = stop.stationID
+        autoDoorCloseAt = simulationTime + 12
+        handleGameModeHostEffects([.setGameDoorState(travelDirection == .up ? .openRight : .openLeft)])
+        gameModeHostNotice = nil
     }
 
     func handleGameModeHostEffects(_ effects: [GameModeHostEffect]) {
@@ -2137,12 +2799,16 @@ final class SimulatorModel: ObservableObject {
             switch effect {
             case .setGameDoorState(let state):
                 let wasOpen = gameModeDoorState.isOpen
+                // batch79: 閉扉音の左右選択用に、開いていた側を
+                // 状態の上書き前に控える。
+                let closingSide = gameModeDoorState
                 if state.isOpen {
                     // Opening cancels any chime-timed closure in progress.
                     pendingDoorClose = nil
                     gameModeDoorState = state
                     if !wasOpen {
-                        playDoorSound(open: true)
+                        departureBellPlayedForCurrentStop = false
+                        playDoorSound(open: true, side: state)
                     }
                     gameModeHostNotice = "架空ゲームのドア状態を「\(state.rawValue)」に更新しました。物理モデルのドアではありません。"
                 } else if wasOpen, pendingDoorClose == nil,
@@ -2156,7 +2822,8 @@ final class SimulatorModel: ObservableObject {
                 } else if pendingDoorClose == nil {
                     gameModeDoorState = state
                     if wasOpen {
-                        playDoorSound(open: false)
+                        playDoorSound(open: false, side: closingSide)
+                        playDepartureBellIfAtStation()
                     }
                     gameModeHostNotice = "架空ゲームのドア状態を「\(state.rawValue)」に更新しました。物理モデルのドアではありません。"
                 }
@@ -2279,57 +2946,31 @@ final class SimulatorModel: ObservableObject {
     /// Applies fictional ATS-S / ATS-P / ATS-Ps / ATC / EB brake flags to the controls
     /// that the fixed physics tick will consume. ATO traction and deadman release are not driven.
     private func protectionAdjustedControls(_ driver: TrainControls) -> TrainControls {
-        guard var session = protectionSession else {
-            appliedDrivingControls = driver
-            return driver
-        }
-        protectionTick &+= 1
-        let speedKmh = max(0, engine.speedMps * 3.6)
-        let input = FictionalLiveProtectionSession.Input(
-            fixedTick: protectionTick,
-            timeSeconds: max(simulationTime, 0),
-            frontPositionM: min(max(engine.positionM, 0), session.routeLengthM),
-            speedKmh: speedKmh,
-            trainLengthM: max(1, train.estimatedTrainLengthM),
-            acknowledgeATSS: protectionAcknowledge,
-            driverActivityPulse: protectionActivityPulse,
-            resetAfterStop: protectionReset,
-            driver: FictionalDriverControls(
-                throttleNotch: driver.throttleNotch,
-                brakeNotch: driver.brakeNotch,
-                emergencyBrake: driver.emergencyBrake
-            )
-        )
-        protectionAcknowledge = false
-        protectionActivityPulse = false
-        protectionReset = false
-        do {
-            let outcome = try session.step(input)
-            protectionSession = session
-            let previousActing = lastProtectionActingSystems
-            protectionActingSystems = outcome.command.actingSystems
-            cueProtectionSounds(previous: previousActing, outcome: outcome)
-            protectionNeedsAcknowledgement = outcome.states.contains {
-                $0.trainID == FictionalLiveProtectionSession.playerTrainID
-                    && $0.system == ProtectionSystemKind.atsS.rawValue
-                    && $0.stateDescription.contains("awaiting")
-            }
-            let applied = TrainControls(
-                throttleNotch: outcome.command.throttleNotch,
-                brakeNotch: outcome.command.brakeNotch,
-                emergencyBrake: outcome.command.emergencyBrake
-            )
-            appliedDrivingControls = applied
-            return applied
-        } catch {
-            protectionSession = session
-            protectionActingSystems = []
-            lastProtectionActingSystems = []
-            lastATSSAwaiting = false
-            protectionNeedsAcknowledgement = false
-            appliedDrivingControls = driver
-            return driver
-        }
+        // batch71 (user directive, 2026-11-15): the fictional
+        // PLACEHOLDER protection session (ProtectionSystems) is
+        // DISCONNECTED from the player train. Its supervision
+        // devices — the 12 s driver-inactivity EB latch above
+        // all — emergency-braked the train in normal play (about
+        // 12 s after the last handle operation, roughly 25 km/h
+        // into a terminal departure, and likewise on the theme
+        // park line), and its status surfaced in the driving UI
+        // as the red 「架空保安 eb が制動 (PLACEHOLDER)」 warning.
+        // The session is therefore never stepped here: the
+        // driver's controls pass through unchanged, no acting
+        // systems are ever reported (so the warning text and the
+        // cab's fictional-system indicators stay dark, the
+        // snapshot's automaticBrakeActive reflects only the real
+        // systems, and the demo log's prot= field reads "-"), and
+        // the ATS bell demand comes only from the educational ATS
+        // and the safety-pattern warning. The ProtectionSystems
+        // package itself is untouched (its tests keep passing);
+        // the disconnect is at this app-side connection point
+        // only. The real supervision — the block-signal safety
+        // pattern and the educational ATS — is unaffected.
+        if !protectionActingSystems.isEmpty { protectionActingSystems = [] }
+        if protectionNeedsAcknowledgement { protectionNeedsAcknowledgement = false }
+        appliedDrivingControls = driver
+        return driver
     }
 
     private func cueProtectionSounds(previous: Set<String>, outcome: FictionalProtectionTickOutcome) {
@@ -2340,9 +2981,9 @@ final class SimulatorModel: ObservableObject {
                 && $0.system == ProtectionSystemKind.atsS.rawValue
                 && $0.stateDescription.contains("awaiting")
         }
-        if awaiting && !lastATSSAwaiting {
-            audio.playATSAlarm()
-        }
+        // batch67: ATS-S 確認待ちのベルは updateATSBellLoop が
+        // protectionNeedsAcknowledgement を見て回し続けるため、
+        // ここでの立ち上がりワンショットは廃止（二重発音防止）。
         lastATSSAwaiting = awaiting
         let emergencyIDs: Set<String> = ["atsS", "eb", "deadman"]
         if !appeared.intersection(emergencyIDs).isEmpty && outcome.command.emergencyBrake {
@@ -2401,10 +3042,69 @@ final class SimulatorModel: ObservableObject {
             direction: travelDirection == .up ? .up : .down
         )
         audioOnPoints = impacts.insideTurnout
-        for impact in impacts.impacts {
-            let kind: RailwayAudioEventKind = impact.kind == .pointClatter ? .pointClatter : .railJoint
-            audio.playTrackImpact(kind, intensity: impact.intensity)
+        // batch78: 走行ベッドの区間判定（Run3 / Run6 切替用）。
+        // トラッカーと同じ locate を先頭位置で評価し、
+        // FictionalTrackImpactSchedule の継目判定をそのまま使う
+        // （audioOnBridge / audioOnPoints と同じ「wayside で
+        // 計算して snapshot へ渡す」パターン）。
+        if let located = FictionalTrackImpactSchedule.locate(
+            path: trackImpactPath,
+            direction: travelDirection == .up ? .up : .down,
+            routePositionM: position
+        ) {
+            audioOnJointedRail = FictionalTrackImpactSchedule.isJointedRail(line: located.line, chainageM: located.chainageM)
         }
+        for impact in impacts.impacts {
+            if impact.kind == .pointClatter {
+                audio.playTrackImpact(.pointClatter, intensity: impact.intensity)
+            } else {
+                // batch79: 継目音は代表イベントのみ発火する。
+                // トラッカーは台車ごとに発火するため、全台車分を
+                // 鳴らすと継目間隔と無関係な約0.40秒周期の多重
+                // 発音になる（ハーネス測定で確認した合成
+                // チャタリングと同じ構造）。Primrose [Joint]
+                // の録音は列車1本分の通過が入った長さなので、
+                // 先頭台車の通過で1回だけ鳴らすのが実物側の
+                // 意味論に合う。
+                // batch97: 低速域（RailwayAudioEngine
+                // .lowSpeedJointClackMaxKmh 未満）だけは代表方式を
+                // やめ、全台車イベントを転送する。この速度域では
+                // エンジン側が p1 の代わりに台車1台分の打音
+                // （joint_clack）を鳴らすため、台車ごとの発火が
+                // 実物のカデンス（台車間隔 5.6 m / 13.9 m の
+                // 距離真値）になる。分岐器スパン内の継目は全速度で
+                // 従来どおり代表イベントのみ — p45 は分岐器通過
+                // そのものの録音で多重打撃が物理的に正しく、
+                // 台車ごとのカデンスは span 進入時の pointClatter
+                // が別途担っている。
+                let insideTurnout = isInsideTurnout(impact)
+                if impact.bogieIndex != 0 {
+                    if insideTurnout { continue }
+                    if engine.speedMps * 3.6 >= RailwayAudioEngine.lowSpeedJointClackMaxKmh { continue }
+                }
+                audio.playTrackImpact(
+                    .railJoint,
+                    intensity: impact.intensity,
+                    insideTurnout: insideTurnout
+                )
+            }
+        }
+    }
+
+    /// batch79: 継目インパクトを打った台車が分岐器スパン内に
+    /// いるか（Primrose [Joint] の p45 バリアント選択用）。
+    /// トラッカー自身の locate / turnouts と同じ判定を、その
+    /// 台車の位置で再評価する。
+    private func isInsideTurnout(_ impact: FictionalTrackImpact) -> Bool {
+        let offsets = FictionalTrackImpactSchedule.bogieOffsets(carCount: selectedVehicleProfile.carCount)
+        guard offsets.indices.contains(impact.bogieIndex) else { return false }
+        let bogieRoute = impact.routePositionM - offsets[impact.bogieIndex]
+        guard let located = FictionalTrackImpactSchedule.locate(
+            path: trackImpactPath,
+            direction: travelDirection == .up ? .up : .down,
+            routePositionM: bogieRoute
+        ) else { return false }
+        return !FictionalTrackImpactSchedule.turnouts(containing: located.line, chainageM: located.chainageM).isEmpty
     }
 
     private var trackImpactPath: FictionalPlayablePath {
@@ -2430,6 +3130,7 @@ final class SimulatorModel: ObservableObject {
         lastBridgeLandmarkID = nil
         audioOnBridge = false
         audioOnPoints = false
+        audioOnJointedRail = false
     }
 
     private func protectionBrakeReason(educationalATS: Bool, exceededPattern: Bool) -> String? {
@@ -2447,8 +3148,20 @@ final class SimulatorModel: ObservableObject {
         noteProtectionDriverActivity()
         protectionAcknowledge = true
         if engine.speedMps * 3.6 <= 0.1 { protectionReset = true }
-        guard var system = atsSystem else { return protectionAcknowledge }
+        // batch67: パターン警告への確認も同じボタンで受ける。
+        // 確認した瞬間にベル需要が消え（updateATSBellLoop）、
+        // なお超過していれば次の tick から常用制動段階へ移る。
+        var patternAccepted = false
+        if patternWarningStartTime != nil, !patternWarningAcknowledged {
+            patternWarningAcknowledged = true
+            patternAccepted = true
+        }
+        guard var system = atsSystem else {
+            if patternAccepted { audio.playATSConfirmation() }
+            return patternAccepted || protectionAcknowledge
+        }
         let accepted = (try? system.acknowledge(at: simulationTime)) ?? false
+        if patternAccepted, !accepted { audio.playATSConfirmation() }
         if accepted {
             atsSystem = system
             pendingConfirmations.append(DriveConfirmation(actionID: "ats_ack", label: "架空教材ATS確認", wasPerformed: true))
@@ -2469,7 +3182,7 @@ final class SimulatorModel: ObservableObject {
                 operationsSnapshot = updated
             }
         }
-        return accepted
+        return accepted || patternAccepted
     }
 
     func playHorn(long: Bool = false) {
@@ -3324,7 +4037,12 @@ final class SimulatorModel: ObservableObject {
         engine = candidateEngine
         blockSystem = candidateBlocks
         scheduleEngine = candidateSchedule
-        trafficScenario = trafficScenario ?? Self.makeTrafficScenario()
+        if trafficScenario == nil {
+            trafficScenario = Self.makeTrafficScenario()
+            // batch64: scenario installed by the restore —
+            // advance the generation the pose caches key on.
+            TrafficScenarioGeneration.advance()
+        }
         trafficEngine = candidateTraffic
         atsSystem = candidateATS
         rebuildProtectionSession()
@@ -3415,6 +4133,29 @@ final class SimulatorModel: ObservableObject {
         }
     }
 
+    /// batch60: true while the train is still standing where
+    /// reset() placed it at the run origin. Replaces the old
+    /// `positionM <= 0.5` checks, which assumed every run starts
+    /// with the consist front on the origin station centre.
+    private var isAtOriginPosition: Bool {
+        engine.positionM <= originStartPositionM + 0.5
+    }
+
+    /// batch60: place the train stopped at the origin platform.
+    /// The scoring preparation computed the same platform-centred
+    /// target for the origin that every later stop uses; without
+    /// this the consist front sat on the station centre
+    /// (chainage 0) and the train started mid-platform with its
+    /// rear off the platform end. Called from reset() and from
+    /// init (which builds the default working without reset()).
+    private func placeTrainAtOriginTarget() {
+        originStartPositionM = 0
+        if let originTarget = stopScoringOriginTargetM, originTarget > 0 {
+            engine.placeAt(positionM: originTarget)
+            originStartPositionM = originTarget
+        }
+    }
+
     func reset() {
         if !recorder.samples.isEmpty { persistCurrentSession() }
         engine.reset()
@@ -3427,6 +4168,8 @@ final class SimulatorModel: ObservableObject {
         gameModeSession = nil
         gameModeHostNotice = nil
         gameModeDoorState = .closed
+        autoDoorServedStationID = nil
+        autoDoorCloseAt = nil
         crewWorkflow = CrewWorkflow()
         incidentMaintenanceEngine = Self.makeIncidentMaintenanceEngine(seed: 0x5241494C)
         incidentTickResult = nil
@@ -3436,6 +4179,9 @@ final class SimulatorModel: ObservableObject {
         audioEventScheduler.reset(to: 0)
         audioEventSequence = 0
         clearAudioCueEdges()
+        // batch78: 新しい運転セッションの開始として、キー音＋
+        // 逆転器音を最初のライブフレームで鳴らすよう武装する。
+        sessionStartCuesArmed = true
         automaticAnnouncedStopIDs.removeAll(keepingCapacity: true)
         gameModeCurrentStationID = nil
         pendingGameModeStationEvent = nil
@@ -3452,13 +4198,26 @@ final class SimulatorModel: ObservableObject {
         storageNotice = nil
         rebuildStopScoringSession()
         rebuildDoorProcedureScoringSession()
+        // batch60: start stopped AT the origin platform (see
+        // placeTrainAtOriginTarget). placeAt re-resets the
+        // physics state, so this runs before the schedule /
+        // traffic / telemetry rebuilds below. The screenshot
+        // tour teleports explicitly per spot, so it is unaffected.
+        placeTrainAtOriginTarget()
         recorder = DrivingSessionRecorder(metadata: Self.makeSessionMetadata(route: route))
         atsSystem = try? EducationalATSConfirmation(acknowledgementTimeoutSeconds: 5)
         rebuildProtectionSession()
         scheduleEngine = Self.makeSchedule(route: route, train: train, blocks: blockSystem)
         trafficScenario = Self.makeTrafficScenario()
+        // batch64: scenario (re)installed — advance the
+        // generation the pose caches key on.
+        TrafficScenarioGeneration.advance()
         trafficEngine = trafficScenario.flatMap(Self.makeTrafficEngine(from:))
         trafficSnapshot = trafficEngine?.snapshot()
+        // batch101: reset() cleared storageNotice above, so a
+        // traffic build failure is re-surfaced for the new
+        // session instead of leaving it silently train-less.
+        noteTrafficUnavailableIfNeeded()
         refreshPublishedTelemetry()
         lastFrameTime = nil
         refreshOperationsSnapshot()
@@ -3516,7 +4275,33 @@ final class SimulatorModel: ObservableObject {
         return LoadedRailwayRoute(profile: fallback, blockSystem: makeBlocks(route: fallback), issues: [warning] + fallback.validateData())
     }
 
+    /// batch66: the assembled scenario is a pure function of
+    /// the bundled resources and the (process-constant) launch
+    /// arguments — it takes no inputs, and a full read of the
+    /// generation path (loadBundledRegionalNetwork,
+    /// FictionalOperationsPlan.loadBundled,
+    /// generatedDiagramTrains) shows no randomness, no clock
+    /// and no UUID use; the only environment read is
+    /// ProcessInfo's argument list (the -RMTour meet train),
+    /// which cannot change during a process. reset() used to
+    /// regenerate all 798 diagram trains on every route
+    /// selection for an identical result, so the value is now
+    /// built once per process and reused. TrafficScenario is a
+    /// struct, every caller receives the value (copy-on-write),
+    /// nothing mutates a scenario in place, and the per-reset
+    /// engine rebuild / validation still run as before. A nil
+    /// result is not cached (assigning nil leaves the cache
+    /// empty), so a transient load failure still retries.
+    private static var cachedTrafficScenario: TrafficScenario?
+
     private static func makeTrafficScenario() -> TrafficScenario? {
+        if let cachedTrafficScenario { return cachedTrafficScenario }
+        let scenario = buildTrafficScenario()
+        cachedTrafficScenario = scenario
+        return scenario
+    }
+
+    private static func buildTrafficScenario() -> TrafficScenario? {
         guard let source = try? TrafficScenarioLibrary.loadBundledRegionalNetwork() else { return nil }
         // Game clock zero represents the fictional service-day first departure (05:30).
         // All subsystems then share the same relative seconds and fixed-tick count.
@@ -3657,6 +4442,12 @@ final class SimulatorModel: ObservableObject {
         let chiharaChainage = mainlineChainage["S12"] ?? 24_194
 
         var trains: [AITrainPlan] = []
+        // batch90: the local service's generated top speed and
+        // ascending stop chainages, captured for the
+        // session-start seed trains appended after the branch
+        // shuttles (see the batch90 block below).
+        var localSeedMaximumSpeedMps: Double?
+        var localSeedStopsAscending: [Double] = []
         for service in plan.services {
             guard let serviceType = TrainServiceType(rawValue: service.category.rawValue) else { continue }
             let ascendingStops = service.stopStationIDs
@@ -3703,6 +4494,10 @@ final class SimulatorModel: ObservableObject {
                 let movingSeconds = max(600.0, durationSeconds - totalDwell - Double(stops.count) * 25.0 - 30.0)
                 let cruise = mainlineLength / movingSeconds
                 let maximumSpeed = min(speedCap, cruise * 1.3)
+                if service.category == .local, localSeedMaximumSpeedMps == nil {
+                    localSeedMaximumSpeedMps = maximumSpeed
+                    localSeedStopsAscending = ascendingStops
+                }
                 guard let firstMinute = FictionalOperationsPlan.minutesSinceMidnight(pattern.firstDeparture),
                       let lastMinute = FictionalOperationsPlan.minutesSinceMidnight(pattern.lastDeparture),
                       pattern.intervalMinutes > 0 else { continue }
@@ -3799,11 +4594,240 @@ final class SimulatorModel: ObservableObject {
             }
         }
 
+        // batch90 (2026-11-16, user on IPA #10: "no oncoming
+        // trains at all"): batch87 proved the cause is the
+        // session clock, not rendering — the game clock starts
+        // at the 05:30 service-day zero, every diagram pattern's
+        // first departure is 06:00 from a terminus, and the
+        // engine keeps trains .scheduled (unposed, unrendered)
+        // until departure, so the first 30 minutes of every
+        // session contain no AI trains at all and the first
+        // possible meet is ~45 minutes in. Moving the session
+        // start to 09:00 was rejected on the impact sweep:
+        // shifting the zero alone still starts every train at a
+        // terminus (pre-09:00 departures clamp to t=0 there, so
+        // the first meet stays ~30 minutes away), while a true
+        // 09:00 state needs a 12,600 s pre-roll of the traffic
+        // engine — 1.5M ticks at the shared 120 Hz step —
+        // inside reset(), which would also expire the batch47
+        // tour-meet dwell below and break the t≈0 anchors
+        // (timetable-settings gate, chopper start buzzer).
+        // Instead, seed a small set of locals that are already
+        // en route at t=0: the batch47 tour-meet mechanism
+        // generalized to gameplay. Every seed is an ordinary
+        // diagram local — the local service's own stops, dwells
+        // (30 s, 45 s at Chihara), 8-car length, acceleration
+        // and generated top speed — that simply starts mid-run
+        // and completes a normal trip, so the seeds only bridge
+        // the dead first half hour before the real 06:00
+        // diagram flow has crossed the line. Tour sessions are
+        // excluded so the photo tour keeps today's behaviour.
+        let seedTourArguments = ProcessInfo.processInfo.arguments
+        if !seedTourArguments.contains("-RMTour"),
+           !seedTourArguments.contains("-RMZooTour"),
+           !seedTourArguments.contains("-RMParkTour"),
+           let seedMaximumSpeed = localSeedMaximumSpeedMps {
+            func seedStops(between lower: Double, and upper: Double, descending: Bool) -> [TrafficTrainStop] {
+                var chainages = localSeedStopsAscending.filter { $0 > lower && $0 < upper }
+                if descending { chainages.reverse() }
+                return chainages.map { chainage in
+                    let dwell: Double
+                    if abs(chainage - chiharaChainage) < 0.5 {
+                        dwell = 45
+                    } else {
+                        dwell = 30
+                    }
+                    return TrafficTrainStop(positionM: chainage, dwellSeconds: dwell)
+                }
+            }
+            func seedTrain(id: String, trackID: String, start: Double, destination: Double, stops: [TrafficTrainStop], duration: Double?) -> AITrainPlan {
+                AITrainPlan(
+                    id: id,
+                    trackID: trackID,
+                    departureTimeSeconds: 0,
+                    startPositionM: start,
+                    destinationPositionM: destination,
+                    maximumSpeedMps: seedMaximumSpeed,
+                    accelerationMps2: 0.70,
+                    brakingDecelerationMps2: 0.80,
+                    lengthM: 8 * 19.5,
+                    stops: stops,
+                    serviceType: .local,
+                    servicePeriod: .morningRush,
+                    operationKind: .passengerService,
+                    scheduledTripDurationSeconds: duration
+                )
+            }
+            // Opposing locals already inside the first 10 km of
+            // each terminus, so a departing player meets traffic
+            // within the first minutes in either direction.
+            // Their remaining runs are under 20 km, so the
+            // scenario validator does not require a trip
+            // duration; without the schedule cap their pace is
+            // set by the same stop-to-stop braking curves a
+            // diagram local obeys.
+            trains.append(seedTrain(
+                id: "seed-main-down-09000", trackID: "main-down",
+                start: 9_000, destination: 0,
+                stops: seedStops(between: 0, and: 9_000, descending: true),
+                duration: nil
+            ))
+            trains.append(seedTrain(
+                id: "seed-main-up-51000", trackID: "main-up",
+                start: 51_000, destination: mainlineLength,
+                stops: seedStops(between: 51_000, and: mainlineLength, descending: false),
+                duration: nil
+            ))
+            // Mid-line locals, so the middle of the line is
+            // alive from the first minute too (remaining runs
+            // again just under the 20 km duration threshold).
+            trains.append(seedTrain(
+                id: "seed-main-down-19500", trackID: "main-down",
+                start: 19_500, destination: 0,
+                stops: seedStops(between: 0, and: 19_500, descending: true),
+                duration: nil
+            ))
+            trains.append(seedTrain(
+                id: "seed-main-up-40500", trackID: "main-up",
+                start: 40_500, destination: mainlineLength,
+                stops: seedStops(between: 40_500, and: mainlineLength, descending: false),
+                duration: nil
+            ))
+            // Same-direction locals ahead of each terminus on
+            // near-full-length runs. These carry an explicit
+            // 3,600 s duration (the validator's minimum for a
+            // 20 km+ passenger run), whose schedule cap holds
+            // them at roughly the pace a diagram local runs
+            // over the same ground.
+            trains.append(seedTrain(
+                id: "seed-main-up-12000", trackID: "main-up",
+                start: 12_000, destination: mainlineLength,
+                stops: seedStops(between: 12_000, and: mainlineLength, descending: false),
+                duration: 3_600
+            ))
+            trains.append(seedTrain(
+                id: "seed-main-down-48000", trackID: "main-down",
+                start: 48_000, destination: 0,
+                stops: seedStops(between: 0, and: 48_000, descending: true),
+                duration: 3_600
+            ))
+            // Branch shuttles already mid-run, mirroring the
+            // generated shuttles' own parameters, so a branch
+            // session also starts with a shuttle on its way.
+            trains.append(AITrainPlan(
+                id: "seed-branch-up-03000",
+                trackID: "branch-up",
+                departureTimeSeconds: 0,
+                startPositionM: 3_000,
+                destinationPositionM: branchLength,
+                maximumSpeedMps: 13.9,
+                accelerationMps2: 0.70,
+                brakingDecelerationMps2: 0.80,
+                lengthM: 8 * 19.5,
+                stops: branchChainages.filter { $0 > 3_000 }.map { TrafficTrainStop(positionM: $0, dwellSeconds: 30) },
+                serviceType: .local,
+                servicePeriod: .morningRush,
+                operationKind: .passengerService,
+                scheduledTripDurationSeconds: nil
+            ))
+            trains.append(AITrainPlan(
+                id: "seed-branch-down-05000",
+                trackID: "branch-down",
+                departureTimeSeconds: 0,
+                startPositionM: 5_000,
+                destinationPositionM: 0,
+                maximumSpeedMps: 13.9,
+                accelerationMps2: 0.70,
+                brakingDecelerationMps2: 0.80,
+                lengthM: 8 * 19.5,
+                stops: branchChainages.filter { $0 < 5_000 }.reversed().map { TrafficTrainStop(positionM: $0, dwellSeconds: 30) },
+                serviceType: .local,
+                servicePeriod: .morningRush,
+                operationKind: .passengerService,
+                scheduledTripDurationSeconds: nil
+            ))
+        }
+
+        // batch47 (2026-11-14, user: why has no photograph ever
+        // shown an opposing train?): the diagram itself explains
+        // it — the session clock starts at the 05:30 service-day
+        // zero and every pattern's first departure is 06:00 from
+        // a terminus, so for the tour's first half hour the
+        // opposing track is empty by construction, and after
+        // that a 30 s dwell or a fast pass never lines up with a
+        // held teleport spot. The cab session's meet hunt was a
+        // lottery against those facts. In mainline TOUR sessions
+        // only (-RMTour; never in gameplay, where this train
+        // does not exist), add one up local that starts the day
+        // already standing at S14 Tsudaike (28,452, a passing
+        // station) on the opposing track main-down. Its first
+        // stop is 1 m ahead of its start (the scenario validator
+        // requires strictly increasing stop progress) with a
+        // 7,200 s dwell, so the engine creeps 1 m, parks at the
+        // down platform from the first seconds of the session
+        // and stays there until long after any tour ends. The
+        // final tour spot (28,432, the S14 approach) therefore
+        // frames a guaranteed opposing train across the island
+        // platform — a structural guarantee from the engine's
+        // dwell semantics, not a timing coincidence. The plan
+        // remains a valid up local throughout (remaining stops
+        // below, 30 s dwells, 45 s at Chihara, the standard
+        // 9,000 s local duration the validator requires for a
+        // 20 km+ passenger run); no real session reaches its
+        // departure.
+        let tourArguments = ProcessInfo.processInfo.arguments
+        if tourArguments.contains("-RMTour"),
+           !tourArguments.contains("-RMZooTour"),
+           !tourArguments.contains("-RMParkTour") {
+            let meetStationM = mainlineChainage["S14"] ?? 28_452
+            var meetStops = [TrafficTrainStop(positionM: meetStationM - 1, dwellSeconds: 7_200)]
+            for chainage in mainlineChainage.values.sorted(by: >) where chainage > 0 && chainage < meetStationM - 1.5 {
+                let dwell = abs(chainage - chiharaChainage) < 0.5 ? 45.0 : 30.0
+                meetStops.append(TrafficTrainStop(positionM: chainage, dwellSeconds: dwell))
+            }
+            trains.append(AITrainPlan(
+                id: "tour-meet-local-up-tsudaike",
+                trackID: "main-down",
+                departureTimeSeconds: 0,
+                startPositionM: meetStationM,
+                destinationPositionM: 0,
+                maximumSpeedMps: 27.8,
+                accelerationMps2: 0.70,
+                brakingDecelerationMps2: 0.80,
+                lengthM: 8 * 19.5,
+                stops: meetStops,
+                serviceType: .local,
+                servicePeriod: .morningRush,
+                operationKind: .passengerService,
+                scheduledTripDurationSeconds: 9_000
+            ))
+        }
+
         trains.append(contentsOf: depotTrains)
         return trains
     }
 
     private static func makeTrafficEngine(from scenario: TrafficScenario) -> TrafficSimulationEngine? {
         try? TrafficSimulationEngine(scenario: scenario)
+    }
+
+    /// batch101: makeTrafficEngine swallows the engine's
+    /// validation error (try?), and buildTrafficScenario returns
+    /// nil when the bundled regional network fails to load. Both
+    /// used to be completely silent: the session simply had no AI
+    /// trains, indistinguishable from the batch51/87 "no
+    /// oncoming trains" defects the user reported. Surface the
+    /// state through the existing notice channel. Only fills an
+    /// empty notice, so a more specific message already on screen
+    /// is never overwritten; reset() clears the notice before its
+    /// rebuild, so a persistent failure is reported once per
+    /// session rather than never.
+    private func noteTrafficUnavailableIfNeeded() {
+        guard trafficEngine == nil, storageNotice == nil else { return }
+        if trafficScenario == nil {
+            storageNotice = "架空交通シナリオを読み込めなかったため、AI列車なしで運転を継続します。"
+        } else {
+            storageNotice = "架空交通AIを初期化できなかったため、AI列車なしで運転を継続します。"
+        }
     }
 }

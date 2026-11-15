@@ -209,7 +209,15 @@ enum RailwayRoutePackageLoader {
                 curveDirection: curve.map { $0.curveDirection == "RIGHT" ? 1 : -1 },
                 cantMm: curve?.cantMm,
                 speedLimitKmh: speed.limitKmh,
-                tunnelResistanceMultiplier: 1
+                // batch98: the fallback profile carries the
+                // canonical tunnels too (TunnelSpans.swift), so
+                // a fallback run agrees with the generated route
+                // on where the tunnels are. `midpoint` here is an
+                // absolute mainline chainage — validate() has
+                // already pinned this document to the fictional
+                // mainline starting at chainage 0.
+                tunnelResistanceMultiplier: TunnelSpans.contains(mainlineChainage: midpoint)
+                    ? TunnelSpans.resistanceMultiplier : 1
             ))
         }
 
