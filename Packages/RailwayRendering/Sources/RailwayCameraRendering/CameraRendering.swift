@@ -147,16 +147,46 @@ public final class CameraController {
     private static func preset(for mode: CameraViewMode) -> CameraPose {
         switch mode {
         case .cab:
-            // The eye sits ~2.45 m behind the train's front face, at the
-            // driver seat (seat cushion top is 1.55 m above rail; a seated
-            // driver's eyes are ~0.77 m above the cushion). Pose y is
-            // height above rail, matching the cab geometry: dashboard top
-            // ~1.86 m, console/instruments ~1.92-2.17 m, windscreen
-            // 2.62-3.34 m. The previous y of 1.55 put the eye at cushion
-            // height, staring into the dashboard and the front bulkhead.
-            // The E231 cab seats the driver left of centre, so the eye
-            // shifts to x -0.35 (user decision 2026-11-08).
-            return CameraPose(position: RenderVector3(x: -0.35, y: 2.32, z: -2.45), target: RenderVector3(x: -0.35, y: 2.30, z: 60), fieldOfViewDegrees: 66)
+            // The eye sits at the driver seat, 1.95 m behind the
+            // train's front face: the seat cushion is at car-local
+            // z -7.45 (train-relative -2.30) with its back at -7.70,
+            // the desk at -8.42 and the rear bulkhead at -7.42
+            // (train-relative -2.33). The previous z of -2.45 put
+            // the eye 0.12 m BEHIND that solid 2.30 x 2.60 m
+            // bulkhead, staring at its blank back face — that is
+            // why 20/21-cab photographed pure black (Mac 2026-11-13).
+            // Pose y is height above rail. The eye is raised
+            // 2.32 -> 2.50 so the sight line to the track clears
+            // the binnacle top (2.34): at 2.32 the level gaze hit
+            // the panel and only sky showed through the band above
+            // it. The E231 cab seats the driver left of centre, so
+            // the eye shifts to x -0.35 (user decision 2026-11-08).
+            // batch15 (2026-11-13 diagnosis): at z -1.95 the eye
+            // (car-local -7.80) sat 0.015 m behind the driver
+            // seat's headrest (local z -7.785..-7.655) — one
+            // rounding error from inside the headrest box. At
+            // -1.80 (local -7.95) the eye is 0.165 m in front of
+            // the headrest and 0.50 m in front of the bulkhead.
+            // batch46 (2026-11-14, user: 「全然視野が広くない。
+            // もっと運転台もっと小さくして」): the outside view
+            // filled only ~41% of the frame's centre column.
+            // The batch45 projection model shows why widening
+            // the FOV cannot fix that: the windshield is a
+            // fixed physical aperture 1.75 m ahead of the eye,
+            // so a wider FOV shrinks the window's share of the
+            // frame (FOV 100 scores 0.33-0.42, worse than the
+            // 0.41 at 66). The share grows by enlarging the
+            // aperture — the glass band now reaches down to
+            // y 2.05 (see the vehicle glazing/body builders) —
+            // and by a slightly NARROWER FOV that magnifies
+            // the window against the desk: at FOV 61 with the
+            // eye 0.02 m lower, the model gives glass band
+            // 0.44 -> 0.61 of the centre column, visible
+            // outside 0.41 -> 0.55, the header band 0.18 ->
+            // 0.14, and the gauge tops still peeking at the
+            // frame's bottom edge (fy 0.92). Horizontal FOV
+            // stays ~93 degrees in the landscape frame.
+            return CameraPose(position: RenderVector3(x: -0.35, y: 2.48, z: -1.80), target: RenderVector3(x: -0.35, y: 2.28, z: 60), fieldOfViewDegrees: 61)
         case .forward:
             // Scenery-only front view (user decision 2026-11-08: the cab
             // interior is no longer shown). The eye floats just ahead of
