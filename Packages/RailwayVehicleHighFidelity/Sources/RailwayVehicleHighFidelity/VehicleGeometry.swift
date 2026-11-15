@@ -102,9 +102,6 @@ private enum SharedPrimitiveMeshes {
 
     static func cylinder(radius: Float, length: Float) -> MeshResource {
         getOrCreate(Key(shape: 1, a: radius.bitPattern, b: length.bitPattern, c: 0)) {
-            if #available(iOS 18.0, *) {
-                return .generateCylinder(height: length, radius: radius)
-            }
             return FallbackCylinderMesh.make(height: length, radius: radius)
         }
     }

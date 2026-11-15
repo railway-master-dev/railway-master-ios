@@ -89,7 +89,7 @@ public final class VehicleCabControlRig {
         if range.rotates {
             entity.orientation = simd_quatf(angle: travel, axis: SIMD3<Float>(0, 0, 1))
         } else {
-            entity.position.y = entity.components[VehicleControlHomeComponent.self]?.homeY ?? entity.position.y
+            entity.position.y = (entity.components[VehicleControlHomeComponent.self] as? VehicleControlHomeComponent)?.homeY ?? entity.position.y
             entity.position.y -= travel * 0.018
         }
         return value
