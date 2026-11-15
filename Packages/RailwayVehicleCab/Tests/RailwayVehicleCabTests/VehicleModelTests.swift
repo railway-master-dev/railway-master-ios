@@ -37,6 +37,6 @@ final class VehicleModelTests: XCTestCase {
     func testControlNodeHasComponent() {
         let model = RailwayVehicleModelBuilder.build()
         let handle = try! XCTUnwrap(model.cabControls.nodes[.brakeLever])
-        XCTAssertEqual(handle.components[VehicleCabControlComponent.self]?.kind, .brakeLever)
+        XCTAssertEqual((handle.components[VehicleCabControlComponent.self] as? VehicleCabControlComponent)?.kind, .brakeLever)
     }
 }
