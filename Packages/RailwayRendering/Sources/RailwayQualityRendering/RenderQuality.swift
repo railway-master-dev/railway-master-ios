@@ -92,7 +92,7 @@ public enum RenderQualityResolver {
             return RenderQualitySettings(
                 visibleDistanceMeters: 2_000,
                 foliageInstanceLimit: 6_000,
-                sceneryInstanceLimit: 3_000,
+                sceneryInstanceLimit: 4_200,
                 shadowScale: 1.0,
                 shadowLightCount: 4,
                 volumetricFogEnabled: true,
@@ -102,7 +102,7 @@ public enum RenderQualityResolver {
             return RenderQualitySettings(
                 visibleDistanceMeters: 1_700,
                 foliageInstanceLimit: 4_500,
-                sceneryInstanceLimit: 2_400,
+                sceneryInstanceLimit: 3_400,
                 shadowScale: 0.8,
                 shadowLightCount: 3,
                 volumetricFogEnabled: true,
@@ -112,7 +112,7 @@ public enum RenderQualityResolver {
             return RenderQualitySettings(
                 visibleDistanceMeters: 1_400,
                 foliageInstanceLimit: 2_800,
-                sceneryInstanceLimit: 1_600,
+                sceneryInstanceLimit: 2_400,
                 shadowScale: 0.6,
                 shadowLightCount: 2,
                 volumetricFogEnabled: true,
@@ -122,7 +122,7 @@ public enum RenderQualityResolver {
             return RenderQualitySettings(
                 visibleDistanceMeters: 1_100,
                 foliageInstanceLimit: 1_400,
-                sceneryInstanceLimit: 900,
+                sceneryInstanceLimit: 1_300,
                 shadowScale: 0.4,
                 shadowLightCount: 1,
                 volumetricFogEnabled: false,
