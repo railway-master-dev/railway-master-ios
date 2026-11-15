@@ -317,19 +317,27 @@ public struct GameModeSession: Sendable {
     }
 
     private static func blockingReason(for mode: GameModeID, scenario: GameModeScenario, snapshot: GameModeSimulationSnapshot) -> GameModeBlockingReason? {
+        // The first stop in travel order is the run origin. Its
+        // plan position is the origin stop target — where the
+        // consist front stands at the start — which is generally
+        // not ~0, so "non-origin" is a list-position property,
+        // never a position threshold. (Position-threshold checks
+        // silently changed meaning when stop plans moved from
+        // station positions to front stop targets.)
+        let nonOriginStops = scenario.stops.dropFirst()
         switch mode {
         case .driver:
             if scenario.driverDutyStepIDs.isEmpty { return .missingDriverChecklist }
-            return scenario.stops.contains(where: { $0.positionM > 0.1 }) ? nil : .missingStops
+            return nonOriginStops.isEmpty ? .missingStops : nil
         case .timetable, .fullLine:
-            if mode == .fullLine && snapshot.positionM > 0.1 { return .mustStartAtRouteOrigin }
-            return scenario.stops.contains(where: { $0.positionM > 0.1 }) ? nil : .missingStops
+            if mode == .fullLine && snapshot.positionM > (scenario.stops.first?.positionM ?? 0) + 0.1 { return .mustStartAtRouteOrigin }
+            return nonOriginStops.isEmpty ? .missingStops : nil
         case .conductor:
             if snapshot.doors == .unknown { return .unknownInitialDoorState }
-            if scenario.stops.contains(where: { $0.positionM > 0.1 && $0.stationNameAnnouncementID == nil }) {
+            if nonOriginStops.contains(where: { $0.stationNameAnnouncementID == nil }) {
                 return .missingStationAnnouncements
             }
-            return scenario.stops.contains(where: { $0.positionM > 0.1 }) ? nil : .missingStops
+            return nonOriginStops.isEmpty ? .missingStops : nil
         case .training:
             return scenario.trainingSteps.isEmpty ? .missingTrainingSteps : nil
         case .tourism:
@@ -343,8 +351,28 @@ public struct GameModeSession: Sendable {
         }
     }
 
+    /// Every stop after the origin (the first stop in travel
+    /// order) is a required stop. The origin's plan position is
+    /// its stop target, not ~0, so this must key off list
+    /// position, not a position threshold.
     private var requiredStopIDs: [String] {
-        scenario.stops.filter { $0.positionM > 0.1 }.map(\.id)
+        scenario.stops.dropFirst().map(\.id)
+    }
+
+    /// batch71: the position the service actually ends at — the
+    /// final required stop's position. Stop targets no longer sit
+    /// on the route end (the front now stops at least 5 m short
+    /// of the platform end at the terminal), so finish() gates on
+    /// the final stop instead of routeLengthM. The overrun
+    /// fail-safes in the update paths keep using routeLengthM:
+    /// reaching the physical end of the line without having
+    /// visited the stops is still an incomplete route.
+    private var serviceEndPositionM: Double {
+        guard let lastID = requiredStopIDs.last,
+              let stop = scenario.stops.first(where: { $0.id == lastID }) else {
+            return scenario.routeLengthM
+        }
+        return stop.positionM
     }
 
     private var requiredLandmarkCount: Int {
@@ -393,8 +421,7 @@ public struct GameModeSession: Sendable {
         guard case .timetable(var state) = progress else { return }
         state.routeProgressM = max(state.routeProgressM, snapshot.positionM)
         if let stationID = snapshot.atStationID,
-           let stop = scenario.stops.first(where: { $0.id == stationID }),
-           stop.positionM > 0.1 {
+           let stop = scenario.stops.dropFirst().first(where: { $0.id == stationID }) {
             if snapshot.stationEvent == .arrival && !state.observedStopIDs.contains(stationID) {
                 let expectedIndex = state.observedStopIDs.count
                 if expectedIndex < requiredStopIDs.count && requiredStopIDs[expectedIndex] == stationID {
@@ -847,7 +874,7 @@ public struct GameModeSession: Sendable {
                   state.completedDutyStepIDs.count == scenario.driverDutyStepIDs.count,
                   state.departureConfirmed,
                   state.visitedStopIDs.count == requiredStopIDs.count,
-                  lastSnapshot.positionM >= scenario.routeLengthM - 0.1,
+                  lastSnapshot.positionM >= serviceEndPositionM - 0.1,
                   lastSnapshot.speedMps <= 0.1 else {
                 if case .driver(let state) = progress, !state.departureConfirmed { fail(.departureNotConfirmed) }
                 else if case .driver(let state) = progress, state.completedDutyStepIDs.count != scenario.driverDutyStepIDs.count { fail(.driverChecklistIncomplete) }
@@ -857,7 +884,7 @@ public struct GameModeSession: Sendable {
             succeed()
         case .timetable:
             guard case .timetable(let state) = progress else { return }
-            guard lastSnapshot.positionM >= scenario.routeLengthM - 0.1 else {
+            guard lastSnapshot.positionM >= serviceEndPositionM - 0.1 else {
                 fail(.routeIncomplete)
                 return
             }
@@ -902,7 +929,7 @@ public struct GameModeSession: Sendable {
         case .fullLine:
             guard case .fullLine(let state) = progress,
                   state.visitedStopIDs.count == requiredStopIDs.count,
-                  lastSnapshot.positionM >= scenario.routeLengthM - 0.1,
+                  lastSnapshot.positionM >= serviceEndPositionM - 0.1,
                   lastSnapshot.speedMps <= 0.1 else {
                 fail(.routeIncomplete)
                 return
