@@ -185,6 +185,31 @@ def paint_timber(img: Image.Image, rng: np.random.Generator, base) -> None:
         wrapped(lambda cx, cy, tone=tone: d.ellipse([cx - 2.5, cy - 2.5, cx + 2.5, cy + 2.5], fill=tone), x, y)
 
 
+def paint_crossing_stripe(img: Image.Image, rng: np.random.Generator, base) -> None:
+    """Diagonal hazard bands for crossing rods and warning-pole bases:
+    45-degree yellow/black stripes (period 128px, so the tile holds
+    four full bands), with grime and paint chips so the paint reads
+    as weathered metalwork, not a printed pattern. The band phase is
+    a function of x + y with a period dividing SIZE, so it tiles."""
+    arr = np.asarray(img).astype(np.float32)
+    yy, xx = np.mgrid[0:SIZE, 0:SIZE]
+    black = ((xx + yy) % 128) >= 64
+    grime = noise(777, rolls=4)
+    black_rgb = np.array([30.0, 30.0, 32.0], dtype=np.float32)
+    for channel in range(3):
+        arr[:, :, channel] = np.where(black, black_rgb[channel] + (grime - 0.5) * 22, arr[:, :, channel])
+    out = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), mode="RGB")
+    d = ImageDraw.Draw(out)
+    for _ in range(700):  # speckle and paint chips on both colours
+        x, y = float(rng.uniform(0, SIZE)), float(rng.uniform(0, SIZE))
+        if (x + y) % 128 >= 64:
+            tone = shade(base, float(rng.uniform(0.75, 1.05)))
+        else:
+            tone = (22, 22, 24)
+        wrapped(lambda cx, cy, tone=tone: d.point((cx, cy), fill=tone), x, y)
+    img.paste(out)
+
+
 PAINTERS = {
     "scenery_ballast": paint_ballast,
     "scenery_concrete": paint_concrete,
@@ -195,6 +220,7 @@ PAINTERS = {
     "scenery_brick_cool": _paint_brick,
     "scenery_steel": paint_steel,
     "scenery_timber": paint_timber,
+    "scenery_crossing_stripe": paint_crossing_stripe,
 }
 
 
@@ -216,6 +242,7 @@ def main() -> None:
     save("scenery_brick_cool", (132, 142, 146), 77, 30)
     save("scenery_steel", (92, 98, 102), 88, 24)
     save("scenery_timber", (112, 78, 48), 99, 32)
+    save("scenery_crossing_stripe", (238, 183, 24), 111, 30)
     print(f"wrote {len(list(OUT.glob('scenery_*.png')))} textures ({SIZE}x{SIZE}) to {OUT}")
 
 

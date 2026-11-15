@@ -3,6 +3,12 @@
 # Usage: bash Scripts/ci_run.sh [static|build|packages|screenshots]
 set -u
 mode="${1:-}"
+# 2026-11-13: the borrowed Mac is Intel (x86_64); GitHub runners are
+# Apple Silicon (arm64). ci_run.sh used to hardcode ARCHS=arm64, which
+# builds a test bundle the Intel simulator cannot run (rc=70, "does not
+# support any of ...'s architectures: x86_64"). Detect the host arch so
+# the same script works on both.
+HOST_ARCH="$(uname -m)"
 
 pick_simulator() {
   python3 - << 'PY'
@@ -55,17 +61,21 @@ case "$mode" in
       -scheme RailwayMasterPhase1 \
       -configuration Debug \
       -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
-      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ENABLE_TESTABILITY=YES \
+      CODE_SIGNING_ALLOWED=NO ARCHS="$HOST_ARCH" ENABLE_TESTABILITY=YES \
       | tee build.log
     build_status=$?
     if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
+    # 2026-11-13: test-without-building refuses an existing
+    # -resultBundlePath (00:55 chain: rc=64, tests never ran).
+    # The watcher's manual test rerun left one behind, so clear it.
+    rm -rf TestResults.xcresult
     xcodebuild test-without-building \
       -project RailwayMasterPhase1.xcodeproj \
       -scheme RailwayMasterPhase1 \
       -configuration Debug \
       -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
       -resultBundlePath TestResults.xcresult \
-      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ENABLE_TESTABILITY=YES \
+      CODE_SIGNING_ALLOWED=NO ARCHS="$HOST_ARCH" ENABLE_TESTABILITY=YES \
       | tee test.log
     test_status=$?
     # Extract per-test failure details (assertion messages) as plain text.
@@ -124,7 +134,7 @@ PYEOF
       -configuration Debug \
       -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
       -derivedDataPath build/DerivedData \
-      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 \
+      CODE_SIGNING_ALLOWED=NO ARCHS="$HOST_ARCH" \
       | tee screenshots-build.log
     build_status=$?
     if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
@@ -151,6 +161,17 @@ PYEOF
     # at 2,100 s, cab check starts only before 2,100 s. Note
     # JOB_START is set after this script's own build phase
     # (~15 min of the job), which the margins absorb.
+    # batch44 (2026-11-14): the short-tour gates above starved
+    # the zoo/park tours two chains in a row — a degraded main
+    # tour (frozen app, recovery cycles) burned past 1,800 s
+    # and both short tours were SKIPPED while the cab check
+    # and the (then 540 s) audio wait still ran. The short
+    # tours now run UNCONDITIONALLY immediately after the main
+    # tour, before the cab check and the audio step, under
+    # their own 900 s deadline (SHORT_TOUR_DEADLINE, set where
+    # they are invoked below); the cab check keeps its own
+    # 2,100 s gate and skips itself if the short tours ran
+    # long, as designed.
     JOB_START=$SECONDS
     xcrun simctl boot "$SIMULATOR_UDID" || true
     xcrun simctl bootstatus "$SIMULATOR_UDID" -b
@@ -167,6 +188,65 @@ PYEOF
       rm -f "$APP_DATA/Documents"/tour-ack-*.txt 2>/dev/null || true
       rm -f "$APP_DATA/Documents/demo-drive-log.txt" 2>/dev/null || true
     fi
+    # 2026-11-13 (Mac photo verdict): the title screen (batch12/13)
+    # was never photographed — the demo launch below bypasses it
+    # (-RMDemoDrive) and the launch video came back a stale
+    # home-screen file from an earlier chain. Launch once WITHOUT
+    # demo args and photograph the rotating title photos first,
+    # then terminate and continue with the demo tour. This block
+    # runs before capture_still/shot_with_timeout are defined, so
+    # it uses a small local screenshot helper with the same
+    # 45 s timeout discipline.
+    title_shot() {
+      local NAME="$1"
+      # 2026-11-13 (Mac photo verdict): the first title shots were
+      # pure black (20 KB PNGs) — the app takes well over 10 s
+      # after process start to first render on this Mac, and a
+      # one-shot screenshot in that window captures a black
+      # screen. Retry until the frame is non-black: a black frame
+      # is ~20 KB, a real title photo is several hundred KB.
+      # A failed capture leaves an honest gap, never a black file.
+      local ATTEMPT=0
+      while [ "$ATTEMPT" -lt 10 ]; do
+        ATTEMPT=$((ATTEMPT + 1))
+        rm -f "screenshots/$NAME.tmp.png"
+        xcrun simctl io "$SIMULATOR_UDID" screenshot "screenshots/$NAME.tmp.png" 2>/dev/null &
+        local PID=$!
+        local T0=$SECONDS
+        while kill -0 "$PID" 2>/dev/null; do
+          if [ $((SECONDS - T0)) -ge 45 ]; then kill -9 "$PID" 2>/dev/null || true; break; fi
+          sleep 2
+        done
+        wait "$PID" 2>/dev/null || true
+        local SZ=0
+        if [ -s "screenshots/$NAME.tmp.png" ]; then SZ=$(stat -f %z "screenshots/$NAME.tmp.png" 2>/dev/null || echo 0); fi
+        if [ "$SZ" -gt 100000 ]; then
+          mv "screenshots/$NAME.tmp.png" "screenshots/$NAME.png"
+          echo "title shot $NAME ok (attempt $ATTEMPT, ${SZ}B)"
+          rm -f "screenshots/$NAME.tmp.png"
+          return 0
+        fi
+        echo "title shot $NAME attempt $ATTEMPT black/empty (${SZ}B), retrying"
+        sleep 10
+      done
+      rm -f "screenshots/$NAME.tmp.png"
+      echo "title shot $NAME FAILED (no non-black frame — honest gap, not a stale file)"
+    }
+    xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+    TITLE_WAIT=0
+    while [ "$TITLE_WAIT" -lt 120 ]; do
+      if xcrun simctl spawn "$SIMULATOR_UDID" launchctl list 2>/dev/null | grep -qi 'railwaymaster'; then break; fi
+      sleep 5; TITLE_WAIT=$((TITLE_WAIT + 5))
+    done
+    # 2026-11-13: first render takes well over 10 s on this Mac,
+    # so give the title screen 20 s before the first attempt
+    # (title_shot retries anyway until the frame is non-black).
+    sleep 20
+    title_shot 01-title
+    sleep 8
+    title_shot 02-title
+    xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+    sleep 3
     # -RMDemoDrive -RMTour: the app teleports the standing train to a
     # new scenic chainage every ~35 s of wall time (first at ~25 s),
     # so one launch photographs sixteen different places along the
@@ -251,9 +331,73 @@ do {
     exit(1)
 }
 SWIFT_EOF
+    # batch41 (2026-11-14): duration probe for the %-offset mode
+    # below. Prints the clip length in seconds (AVFoundation via
+    # a tiny script; no ffmpeg dependency on the Mac).
+    cat > screenshots/mov_duration.swift << 'SWIFT_EOF'
+import AVFoundation
+import Foundation
+
+let args = CommandLine.arguments
+guard args.count >= 2 else { exit(2) }
+let asset = AVURLAsset(url: URL(fileURLWithPath: args[1]))
+let seconds = CMTimeGetSeconds(asset.duration)
+if seconds.isFinite && seconds > 0 {
+    print(seconds)
+} else {
+    exit(1)
+}
+SWIFT_EOF
     extract_frame() {
       local MOV="$1"; local PNG="$2"; local SEC="$3"
       rm -f "$PNG"
+      # batch41: SEC may be "%NN" — a percentage of the clip's
+      # own length. capture_still records ~8 s clips, but under
+      # runner load the finalized .mov stretches well past that,
+      # and a fixed late offset (the old 5 s) can land after the
+      # scene has already changed: the tour teleporting on, or —
+      # this morning — the demo drive's results sheet, whose
+      # frame 20-cab-running then kept. The middle of the clip
+      # is the frame most certain to show the intended held
+      # scene. Percentage mode resolves the offset from the
+      # measured duration (ffprobe if present, else the
+      # AVFoundation probe above) and tries the timed extractors
+      # before the qlmanage first-frame fallback, which cannot
+      # honour an offset at all.
+      local PCT=""
+      case "$SEC" in
+        \%*) PCT="${SEC#\%}" ;;
+      esac
+      if [ -n "$PCT" ]; then
+        local DUR=""
+        if command -v ffprobe >/dev/null 2>&1; then
+          DUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$MOV" 2>/dev/null || true)"
+        fi
+        if [ -z "$DUR" ] && [ -f screenshots/mov_duration.swift ]; then
+          DUR="$(xcrun swift screenshots/mov_duration.swift "$MOV" 2>/dev/null || true)"
+        fi
+        if [ -n "$DUR" ]; then
+          SEC="$(awk -v d="$DUR" -v p="$PCT" 'BEGIN{ if (d > 0) printf "%.2f", d * p / 100 }')"
+        fi
+        case "$SEC" in
+          %*|"0.00"|"") SEC=4 ;;
+        esac
+        if command -v ffmpeg >/dev/null 2>&1; then
+          ffmpeg -y -v error -ss "$SEC" -i "$MOV" -frames:v 1 "$PNG" 2>/dev/null || true
+        fi
+        if [ ! -s "$PNG" ] && [ -f screenshots/extract_frame.swift ]; then
+          xcrun swift screenshots/extract_frame.swift "$MOV" "$PNG" "$SEC" 2>/dev/null || true
+        fi
+        if [ ! -s "$PNG" ]; then
+          local QD="$(mktemp -d)"
+          qlmanage -t -s 1600 -o "$QD" "$MOV" >/dev/null 2>&1 || true
+          local QF="$(ls "$QD"/*.png 2>/dev/null | head -n 1)"
+          if [ -n "$QF" ]; then cp "$QF" "$PNG" 2>/dev/null || true; fi
+          rm -rf "$QD"
+        fi
+        [ -s "$PNG" ]
+        return
+      fi
       if command -v ffmpeg >/dev/null 2>&1; then
         ffmpeg -y -v error -ss "$SEC" -i "$MOV" -frames:v 1 "$PNG" 2>/dev/null || true
       fi
@@ -269,6 +413,12 @@ SWIFT_EOF
       fi
       [ -s "$PNG" ]
     }
+    # 2026-11-13: remove any stale launch video first — the
+    # 00:55 Mac chain's 01/02/03 were extracted from a 00:17 file
+    # left by the failed 00:07 chain (home screen throughout),
+    # because recordVideo never overwrote it. A failed recording
+    # now leaves an honest gap instead of a stale home screen.
+    rm -f screenshots/launch-video.mov
     xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 screenshots/launch-video.mov &
     VIDEO_PID=$!
     sleep 4
@@ -278,6 +428,9 @@ SWIFT_EOF
     wait "$VIDEO_PID" 2>/dev/null || true
     # batch8: the launch stills are frames of the launch video
     # (at ~4 s, ~12 s and ~24 s), not separate screenshot calls.
+    # 2026-11-13: if the video is missing (recording failed),
+    # extract_frame leaves no file — an honest gap, never a stale
+    # frame from an earlier chain (see the rm -f above).
     extract_frame screenshots/launch-video.mov screenshots/01-launch.png 4 || true
     extract_frame screenshots/launch-video.mov screenshots/02-main.png 12 || true
     extract_frame screenshots/launch-video.mov screenshots/03-settled.png 24 || true
@@ -336,11 +489,23 @@ SWIFT_EOF
     # each shot 20 m before the station centre (S01 Kaibukuro at
     # 5 m — the line starts there). Mainline centres 0-60,000 m,
     # then the branch in through-frame chainages 62,000-68,000 m.
+    # batch41 (2026-11-14): tourSpotsM gained three stop-marker
+    # close-ups at its tail in batch37 (8,279 Ishigamiike /
+    # 28,505 Tsudaike / 44,085 Katsunuma) but this fixed name
+    # list was never extended, so the tour ended at
+    # 38-akimizu-fan and the close-ups were silently never
+    # photographed. The 39-marker* names below restore the
+    # 1:1 correspondence with tourSpotsM (38 names total).
+    # batch47 (2026-11-14): tourSpotsM gained two more tail
+    # spots — 27,470 (the Touou depot's stabled consists) and
+    # 28,432 (the guaranteed opposing-train meet at S14) — and
+    # 50-depot-stabled / 51-meet-loop below extend the list to
+    # 40 names, keeping the 1:1 correspondence.
     TOUR_LOG=""
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log.txt" ]; then
       TOUR_LOG="$APP_DATA/Documents/demo-drive-log.txt"
     fi
-    TOUR_SHOTS="04-st01-kaibukuro 05-st02-asanuma 06-st03-oginuma 07-st04-ohara 08-st05-ishigamiike 09-st06-hibarigaoka 10-st07-akimizu 11-st08-wakakusadai 12-st09-higashimurakawa 13-st10-nishitachikawa 14-st11-hihara 15-st12-tououchihara 16-st13-makufu 17-st14-tsudaike 18-st15-mikkaido 19-st16-misagi 20-st17-touousahara 21-st18-shigeno 22-st19-kazusaninomiya 23-st20-togane 24-st21-katsunuma 25-st22-kisaragawa 26-st23-namihana 27-st24-ohno 28-st25-mihama 29-st26-tatekawa 30-st27-chikura 31-st28-kamogawa 32-st29-kuruno 33-st30-ohbitsu 34-st31-hirayama 35-st32-kazusaryuzan 36-crossing-17965 37-crossing-3605 38-akimizu-fan"
+    TOUR_SHOTS="04-st01-kaibukuro 05-st02-asanuma 06-st03-oginuma 07-st04-ohara 08-st05-ishigamiike 09-st06-hibarigaoka 10-st07-akimizu 11-st08-wakakusadai 12-st09-higashimurakawa 13-st10-nishitachikawa 14-st11-hihara 15-st12-tououchihara 16-st13-makufu 17-st14-tsudaike 18-st15-mikkaido 19-st16-misagi 20-st17-touousahara 21-st18-shigeno 22-st19-kazusaninomiya 23-st20-togane 24-st21-katsunuma 25-st22-kisaragawa 26-st23-namihana 27-st24-ohno 28-st25-mihama 29-st26-tatekawa 30-st27-chikura 31-st28-kamogawa 32-st29-kuruno 33-st30-ohbitsu 34-st31-hirayama 35-st32-kazusaryuzan 36-crossing-6495 37-crossing-7970 38-akimizu-fan 39-marker1-ishigamiike 39-marker2-tsudaike 39-marker3-katsunuma 50-depot-stabled 51-meet-loop"
     TOUR_START=$SECONDS
     TOUR_INDEX=0
     # batch7: count of app-relaunch recoveries used so far in
@@ -369,10 +534,35 @@ SWIFT_EOF
       kill -INT "$RPID" 2>/dev/null || true
       wait "$RPID" 2>/dev/null || true
       if [ -s "screenshots/$NAME.mov" ]; then
-        if extract_frame "screenshots/$NAME.mov" "screenshots/$NAME.png" 5; then
+        # batch41: take the clip's middle frame (50%), not a
+        # fixed 5 s — see the %-offset mode in extract_frame.
+        if extract_frame "screenshots/$NAME.mov" "screenshots/$NAME.png" "%50"; then
           TOUR_SIZE=$(stat -f %z "screenshots/$NAME.png" 2>/dev/null || echo 0)
-          rm -f "screenshots/$NAME.mov"
-          echo "tour-progress: capture $NAME via video ok size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+          if [ "$TOUR_SIZE" -ge 30000 ]; then
+            rm -f "screenshots/$NAME.mov"
+            echo "tour-progress: capture $NAME via video ok size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+            return 0
+          fi
+          # batch15 (2026-11-13 diagnosis): a pure-black frame
+          # extracts "successfully" too — the loop-2 cab shots
+          # were byte-identical 20,976 B black PNGs that this
+          # function happily reported as ok. A real frame of
+          # this scene is >100 KB; anything under 30 KB is
+          # treated as a black/blank capture and falls back to
+          # a still screenshot, keeping the video frame only
+          # if the screenshot also fails.
+          echo "tour-progress: capture $NAME video frame tiny/black size=${TOUR_SIZE}B, trying screenshot" >> screenshots/tour-progress.txt
+          mv "screenshots/$NAME.png" "screenshots/$NAME-video.png"
+          shot_with_timeout "$NAME" 45
+          if [ "$SHOT_OK" -eq 1 ]; then
+            TOUR_SIZE=$(stat -f %z "screenshots/$NAME.png" 2>/dev/null || echo 0)
+            rm -f "screenshots/$NAME.mov" "screenshots/$NAME-video.png"
+            echo "tour-progress: capture $NAME via screenshot after black video frame size=${TOUR_SIZE}B" >> screenshots/tour-progress.txt
+            return 0
+          fi
+          mv "screenshots/$NAME-video.png" "screenshots/$NAME.png"
+          TOUR_SIZE=$(stat -f %z "screenshots/$NAME.png" 2>/dev/null || echo 0)
+          echo "tour-progress: capture $NAME kept tiny video frame size=${TOUR_SIZE}B (screenshot failed too)" >> screenshots/tour-progress.txt
           return 0
         fi
         echo "tour-progress: capture $NAME video kept, frame extraction failed" >> screenshots/tour-progress.txt
@@ -539,11 +729,15 @@ SWIFT_EOF
       local IDX=0
       for SHOT in $SHOTS; do
         # batch9: hard deadline inside the short tour — stop
-        # starting new spots once the script is 2,100 s in, so
-        # this function returns in time for the job's upload
-        # step (see the JOB_START note).
-        if [ $((SECONDS - JOB_START)) -ge 2100 ]; then
-          echo "tour-progress: short $EXTRA_ARG aborted at spot $IDX (job budget)" >> screenshots/tour-progress.txt
+        # starting new spots once the tour's own budget is
+        # spent, so this function returns in time for the
+        # stages after it. batch44: the deadline is now
+        # SHORT_TOUR_DEADLINE (set just before the zoo tour is
+        # invoked below) instead of a JOB_START-relative gate
+        # the main tour could starve — see the batch44 note at
+        # the zoo/park invocation.
+        if [ "$SECONDS" -ge "$SHORT_TOUR_DEADLINE" ]; then
+          echo "tour-progress: short $EXTRA_ARG aborted at spot $IDX (short-tour budget)" >> screenshots/tour-progress.txt
           break
         fi
         # 2026-11-12: same rule as the main tour — no READY, no
@@ -578,20 +772,24 @@ SWIFT_EOF
       xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
       sleep 3
     }
-    # batch7: each short tour starts only while the job still
-    # has budget (elapsed < 1,800 s, batch9); a skipped tour is logged
-    # instead of being cut off by the 60-minute job cap.
+    # batch44 (2026-11-14): the short tours run here — directly
+    # after the main tour and BEFORE the cab check and the audio
+    # step — and they run unconditionally, no longer gated on
+    # the JOB_START clock. The batch7/batch9 gate (start only
+    # before 1,800 s) skipped BOTH tours two chains in a row
+    # whenever the main tour degraded: its failure modes (READY
+    # waits, relaunch recoveries) legitimately consume the
+    # 1,500 s tour cap, by which time the 1,800 s gate had
+    # already closed, while later stages (cab, audio) still
+    # ran. The pair now shares its own 900 s deadline from the
+    # moment this block starts (observed healthy cost is
+    # ~35 s per spot, 10 spots plus two launches ≈ 400 s), so
+    # the zoo and park photographs exist even if everything
+    # after this block fails or is skipped.
     if [ -n "$APP_DATA" ]; then
-      if [ $((SECONDS - JOB_START)) -lt 1800 ]; then
-        run_short_tour -RMZooTour 40-zoo-approach 41-zoo-penguins 42-zoo-lion 43-zoo-tiger 44-zoo-elephant 45-zoo-terminal
-      else
-        echo "tour-progress: zoo short tour SKIPPED (job budget)" >> screenshots/tour-progress.txt
-      fi
-      if [ $((SECONDS - JOB_START)) -lt 1800 ]; then
-        run_short_tour -RMParkTour 46-park-entrance 47-park-grounds 48-park-wheel 49-park-terminal
-      else
-        echo "tour-progress: park short tour SKIPPED (job budget)" >> screenshots/tour-progress.txt
-      fi
+      SHORT_TOUR_DEADLINE=$((SECONDS + 900))
+      run_short_tour -RMZooTour 40-zoo-approach 41-zoo-penguins 42-zoo-lion 43-zoo-tiger 44-zoo-elephant 45-zoo-terminal
+      run_short_tour -RMParkTour 46-park-entrance 47-park-grounds 48-park-wheel 49-park-terminal
     fi
     # Cab check: relaunch in the cab view and let the demo drive the
     # showcase section (origin to Matsubaracho, 1,856 m) so the
@@ -609,7 +807,222 @@ SWIFT_EOF
     # logged, instead of being cut off by the 60-minute cap.
     if [ $((SECONDS - JOB_START)) -lt 2100 ]; then
     sleep 3
+    # batch32 (2026-11-14): keeper-still wrapper for the cab
+    # check. The wave-2 cab stills (20/21/22) and meet-1..3 all
+    # came back byte-identical black (20,624 B) while meet-6 —
+    # the same capture_still minutes later — rendered the cab
+    # fine: the app shows a black screen until its first real
+    # render, which on this loaded simulator can take many
+    # minutes after launch, and every fixed wait expired inside
+    # that black window. capture_still accepts a black frame
+    # whenever the screenshot fallback returns any non-empty
+    # file, so re-check the final PNG here: a real frame of
+    # this scene is >100 KB; anything under 30 KB is a black
+    # capture — wait and shoot again.
+    # batch38 (2026-11-14): the size test was not enough — the
+    # next failure mode was a pale blue-grey VOID frame (the
+    # app past its black window but not yet rendering the
+    # world) weighing 407-717 KB, which sailed through both
+    # the >100 KB probe and the >=30 KB keeper test; 21-cab-
+    # station and 22-home even came back byte-identical. The
+    # keeper test is now CONTENT, calibrated on those very
+    # frames: downscale with sips, parse the BMP in python3
+    # (stdlib only), and sample the centre crop (the 3D view,
+    # clear of the HUD panels). VOID frames measured
+    # distinct<=54 quantized colours and adjdiff<=0.67; real
+    # frames (meet-6, the station and zoo tours) measured
+    # distinct>=711 and adjdiff>=6.04. PASS needs
+    # distinct>=200 AND adjdiff>=2.5, an order-of-magnitude
+    # margin both ways. A frame byte-identical to the
+    # previous cab still is rejected too (frozen screen).
+    # Every rejection logs CAB_CAPTURE_SUSPECT to stdout and
+    # tour-progress.txt; if all tries fail, the last frame
+    # stays on disk but is flagged, never silently "ok".
+    CAB_LAST_STILL_MD5=""
+    cab_png_verdict() {
+      local FILE="$1"
+      local BMP="/tmp/cabcheck-$$.bmp"
+      rm -f "$BMP"
+      if ! sips -s format bmp -z 656 301 "$FILE" --out "$BMP" >/dev/null 2>&1; then
+        echo "SUSPECT(sips-failed)"
+        return 0
+      fi
+      local OUT=""
+      python3 - "$BMP" > "/tmp/cabcheck-$$.txt" <<'PYEOF' || true
+import struct, sys
+
+# batch41 (2026-11-14): the batch38 parser assumed the one BMP
+# variant the local stub produced (40-byte header, BI_RGB) and
+# rejected every frame of the first real chain run with
+# "unsupported BMP": the borrowed Mac's sips writes a different
+# variant. This parser is header-driven instead — data offset
+# (@10), header size (@14), signed width/height (@18/@22),
+# planes (@26), bpp (@28) and compression (@30) all come from
+# the file itself; 24/32bpp, BI_RGB (0) and BI_BITFIELDS (3),
+# bottom-up and top-down (negative height) are all accepted.
+# Anything else raises with the header values it actually read
+# in the message, so the next failure is diagnosable from the
+# verdict string alone.
+def read_bmp(path):
+    with open(path, "rb") as fh:
+        data = fh.read()
+    if len(data) < 54 or data[:2] != b"BM":
+        raise ValueError("not a BMP (len=%d)" % len(data))
+    data_off = struct.unpack_from("<I", data, 10)[0]
+    header_size = struct.unpack_from("<I", data, 14)[0]
+    if header_size < 40:
+        raise ValueError(
+            "unsupported BMP headerSize=%d len=%d" % (header_size, len(data)))
+    width, height = struct.unpack_from("<ii", data, 18)
+    planes, bpp = struct.unpack_from("<HH", data, 26)
+    compression = struct.unpack_from("<I", data, 30)[0]
+    if (planes != 1 or bpp not in (24, 32) or compression not in (0, 3)
+            or width <= 0 or height == 0):
+        raise ValueError(
+            "unsupported BMP headerSize=%d bpp=%d compression=%d "
+            "width=%d height=%d planes=%d dataOff=%d"
+            % (header_size, bpp, compression, width, height, planes, data_off))
+    # Channel masks: BI_BITFIELDS stores them right after the
+    # 40-byte info header (also where the V4/V5 headers keep
+    # them); BI_RGB uses the standard BGR(A) byte order. Either
+    # way a pixel is read as one little-endian integer and the
+    # masks pick the channels out of it.
+    rmask, gmask, bmask = 0xFF << 16, 0xFF << 8, 0xFF
+    if compression == 3 and len(data) >= 66:
+        rmask, gmask, bmask = struct.unpack_from("<III", data, 54)
+        if rmask == 0 or gmask == 0 or bmask == 0:
+            rmask, gmask, bmask = 0xFF << 16, 0xFF << 8, 0xFF
+    def channel(value, mask):
+        if mask == 0:
+            return 0
+        shift = (mask & -mask).bit_length() - 1
+        raw = (value & mask) >> shift
+        top = mask >> shift
+        return (raw * 255) // top if top else 0
+    if data_off == 0 or data_off >= len(data):
+        data_off = 14 + header_size + (12 if compression == 3 and header_size == 40 else 0)
+    top_down = height < 0
+    height = abs(height)
+    stride = ((bpp * width + 31) // 32) * 4
+    pxb = bpp // 8
+    rows = []
+    for y in range(height):
+        src_y = y if top_down else (height - 1 - y)
+        base = data_off + src_y * stride
+        row = []
+        for x in range(width):
+            off = base + x * pxb
+            value = int.from_bytes(data[off:off + pxb], "little")
+            row.append((channel(value, rmask), channel(value, gmask),
+                        channel(value, bmask)))
+        rows.append(row)
+    return width, height, rows
+
+try:
+    w, h, rows = read_bmp(sys.argv[1])
+    x0, x1 = int(w * 0.30), int(w * 0.92)
+    y0, y1 = int(h * 0.25), int(h * 0.62)
+    colours = set()
+    diff_sum = 0
+    diff_n = 0
+    for y in range(y0, y1):
+        row = rows[y]
+        prev = None
+        for x in range(x0, x1):
+            r, g, b = row[x]
+            colours.add((r >> 3, g >> 3, b >> 3))
+            if prev is not None:
+                diff_sum += abs(r - prev[0]) + abs(g - prev[1]) + abs(b - prev[2])
+                diff_n += 3
+            prev = (r, g, b)
+    distinct = len(colours)
+    adjdiff = diff_sum / max(diff_n, 1)
+    if distinct >= 200 and adjdiff >= 2.5:
+        print("PASS")
+    else:
+        print("SUSPECT distinct=%d adjdiff=%.2f" % (distinct, adjdiff))
+except Exception as exc:
+    print("SUSPECT(python: %s)" % exc)
+PYEOF
+      OUT=$(cat "/tmp/cabcheck-$$.txt" 2>/dev/null || echo "")
+      rm -f "$BMP" "/tmp/cabcheck-$$.txt"
+      if [ -z "$OUT" ]; then OUT="SUSPECT(no-output)"; fi
+      echo "$OUT"
+    }
+    # batch41 (2026-11-14): retry budget trimmed 5 tries x 20 s
+    # -> 3 tries x 10 s. This morning every verdict came back
+    # "unsupported BMP" (a parser bug, not bad frames), so all
+    # the cab stills burned their full 5 tries and the cab
+    # phase ate the job budget — the zoo/park short tours were
+    # SKIPPED. Worst case per still is now ~3 x (8 s recording
+    # + extraction + verdict + 10 s) instead of ~5 x (...+20 s);
+    # with the parser fixed, a genuinely rendered frame passes
+    # on the first try, and a still that fails 3 content checks
+    # is a scene problem, not a capture-timing one.
+    capture_cab_still() {
+      local NAME="$1"; local TRIES="${2:-3}"; local TRY=0
+      while [ "$TRY" -lt "$TRIES" ]; do
+        TRY=$((TRY + 1))
+        capture_still "$NAME"
+        local F="screenshots/$NAME.png"
+        local SZ=0
+        if [ -s "$F" ]; then SZ=$(stat -f %z "$F" 2>/dev/null || echo 0); fi
+        if [ "$SZ" -lt 30000 ]; then
+          echo "tour-progress: cab still $NAME black try=$TRY size=${SZ}B, waiting and retrying" >> screenshots/tour-progress.txt
+          sleep 10
+          continue
+        fi
+        local MD5=""
+        MD5=$(md5 -q "$F" 2>/dev/null || echo "")
+        if [ -n "$MD5" ] && [ "$MD5" = "$CAB_LAST_STILL_MD5" ]; then
+          echo "CAB_CAPTURE_SUSPECT $NAME try=$TRY reason=identical-to-previous-still"
+          echo "tour-progress: CAB_CAPTURE_SUSPECT $NAME try=$TRY reason=identical-to-previous-still" >> screenshots/tour-progress.txt
+          sleep 10
+          continue
+        fi
+        local VERDICT=""
+        VERDICT=$(cab_png_verdict "$F")
+        if [ "$VERDICT" != "PASS" ]; then
+          echo "CAB_CAPTURE_SUSPECT $NAME try=$TRY reason=content verdict=$VERDICT size=${SZ}B"
+          echo "tour-progress: CAB_CAPTURE_SUSPECT $NAME try=$TRY reason=content verdict=$VERDICT size=${SZ}B" >> screenshots/tour-progress.txt
+          sleep 10
+          continue
+        fi
+        CAB_LAST_STILL_MD5="$MD5"
+        echo "tour-progress: cab still $NAME ok try=$TRY size=${SZ}B" >> screenshots/tour-progress.txt
+        return 0
+      done
+      echo "CAB_CAPTURE_SUSPECT $NAME gave up after $TRIES tries; last frame kept on disk, NOT verified"
+      echo "tour-progress: CAB_CAPTURE_SUSPECT $NAME gave up after $TRIES tries; last frame kept, NOT verified" >> screenshots/tour-progress.txt
+      return 1
+    }
     xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMCabView
+    # batch32: probe with cheap screenshots until the app
+    # actually renders a non-black frame (cap 600 s) before
+    # trusting the drive log or taking keeper stills.
+    CAB_PHASE_START=$SECONDS
+    RENDER_OK=0
+    while [ $((SECONDS - CAB_PHASE_START)) -lt 600 ]; do
+      shot_with_timeout cab-probe 45
+      if [ "$SHOT_OK" -eq 1 ]; then
+        PROBE_SIZE=$(stat -f %z screenshots/cab-probe.png 2>/dev/null || echo 0)
+        # batch38: size alone passed the 407-717 KB void frames;
+        # the probe now also needs the content verdict (see
+        # cab_png_verdict above).
+        if [ "$PROBE_SIZE" -ge 30000 ]; then
+          PROBE_VERDICT=$(cab_png_verdict screenshots/cab-probe.png)
+          if [ "$PROBE_VERDICT" = "PASS" ]; then RENDER_OK=1; break; fi
+          echo "tour-progress: cab probe content $PROBE_VERDICT size=${PROBE_SIZE}B" >> screenshots/tour-progress.txt
+        fi
+      fi
+      sleep 15
+    done
+    rm -f screenshots/cab-probe.png
+    echo "tour-progress: cab render probe ok=$RENDER_OK after $((SECONDS - CAB_PHASE_START))s" >> screenshots/tour-progress.txt
+    if [ "$RENDER_OK" -eq 0 ]; then
+      echo "CAB_CAPTURE_SUSPECT probe: no content-verified frame within 600 s"
+      echo "tour-progress: CAB_CAPTURE_SUSPECT probe never verified within 600 s" >> screenshots/tour-progress.txt
+    fi
     CAB_LOG=""
     if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/demo-drive-log-cab.txt" ]; then
       CAB_LOG="$APP_DATA/Documents/demo-drive-log-cab.txt"
@@ -640,7 +1053,7 @@ SWIFT_EOF
     if [ "$CAB_MOVING" -eq 0 ]; then
       echo "Cab drive did not start moving (pos > 30) within 240 s; shooting the running shot anyway."
     fi
-    capture_still 20-cab-running
+    capture_cab_still 20-cab-running
     CAB_WAITED=0
     CAB_ARRIVED=0
     while [ "$CAB_WAITED" -lt 300 ]; do
@@ -656,7 +1069,28 @@ SWIFT_EOF
       echo "Cab drive did not reach Matsubaracho (pos >= 1850) within 300 s; shooting anyway."
     fi
     sleep 5
-    capture_still 21-cab-station
+    capture_cab_still 21-cab-station
+    # 2026-11-13: 22-home used to be captured AFTER the terminate
+    # below, so it only ever showed the iOS home screen. Capture
+    # it while the app is still running (cab view at the station,
+    # end of the drive).
+    capture_cab_still 22-home
+    # batch19: meet hunt. 798 diagram trains are the product's
+    # headline, yet no tour photo has ever caught an opposing
+    # train: the tour teleports and holds still, and the two cab
+    # stills are single 8 s windows. The demo drive keeps running
+    # past Matsubaracho, so spend up to ~2.5 more minutes taking
+    # a still every ~20 s; an opposing pass is visible through
+    # the windshield for several seconds, and six windows give
+    # it a fair chance to land in one. Guarded by the job budget
+    # like the rest of the cab check.
+    MEET_N=0
+    while [ "$MEET_N" -lt 6 ] && [ $((SECONDS - JOB_START)) -lt 2550 ]; do
+      MEET_N=$((MEET_N + 1))
+      capture_cab_still "23-meet-$MEET_N" 2 || true
+      sleep 8
+    done
+    echo "tour-progress: meet hunt took $MEET_N stills" >> screenshots/tour-progress.txt
     xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
     else
       echo "tour-progress: cab check SKIPPED (job budget)" >> screenshots/tour-progress.txt
@@ -676,12 +1110,85 @@ SWIFT_EOF
       cp "$APP_DATA/Documents/rm-crossings.txt" screenshots/ || true
     fi
     sleep 3
-    capture_still 22-home
+    # 2026-11-13: 22-home is now captured before the cab terminate
+    # above (see there); nothing to shoot after the app is gone.
     # quality26: capture the device log once more at the very
     # end. The device-log.txt capture near the top only covers
     # the first minutes of the run; in CI #238 everything
     # interesting happened half an hour later and was gone.
     xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 10m --predicate 'process == "RailwayMasterPhase1"' 2>/dev/null | tail -c 150000 > screenshots/device-log-final.txt || true
+    # batch33 (2026-11-14): drive-audio capture, at the user's
+    # request (音も確認したい). Everything above ran with
+    # RM_DISABLE_AUDIO=1 (the CoreAudio safeguard), so this is a
+    # separate, final launch with the audio engine enabled. With
+    # RM_RECORD_AUDIO=1 the app taps its own main mixer and writes
+    # Documents/rm_drive_audio.caf, auto-stopping after 400 s and
+    # dropping an rm_drive_audio.done marker; the demo drive covers
+    # departure chime -> acceleration -> cruise -> braking ->
+    # arrival -> door chime. TTS station announcements bypass the
+    # app mixer and are NOT in the recording. Every step is
+    # best-effort so a failure here can never fail the photo run.
+    echo "tour-progress: audio capture starting" >> screenshots/tour-progress.txt
+    export SIMCTL_CHILD_RM_DISABLE_AUDIO=0
+    export SIMCTL_CHILD_RM_RECORD_AUDIO=1
+    xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+    sleep 2
+    APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
+    if [ -n "$APP_DATA" ]; then
+      rm -f "$APP_DATA/Documents/rm_drive_audio.caf" "$APP_DATA/Documents/rm_drive_audio.done" "$APP_DATA/Documents/rm_drive_audio_status.txt" 2>/dev/null || true
+    fi
+    xcrun simctl launch "$SIMULATOR_UDID" "$BUNDLE_ID" -RMDemoDrive -RMCabView || true
+    # batch44 (2026-11-14): the wait is capped at 120 s, not
+    # 540 s. In the batch40+41 chain the recorder's status file
+    # stopped at "recorder created" — the audio engine hung in
+    # init around engine.prepare() (the known simulator
+    # CoreAudio deadlock documented in RailwayAudioEngine.swift)
+    # before the tap was ever attempted, and the remaining
+    # ~9 minutes of waiting could not change that. 120 s is
+    # ample for the engine to come up and the tap to install
+    # when it is going to; a recording already in progress
+    # still leaves a .caf the fallback below salvages after
+    # the terminate.
+    AUDIO_WAIT_START=$SECONDS
+    while [ $((SECONDS - AUDIO_WAIT_START)) -lt 120 ]; do
+      if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/rm_drive_audio.done" ]; then break; fi
+      sleep 15
+    done
+    xcrun simctl terminate "$SIMULATOR_UDID" "$BUNDLE_ID" 2>/dev/null || true
+    sleep 2
+    # batch41: the recorder now narrates every step into
+    # Documents/rm_drive_audio_status.txt (created / format /
+    # file creation error / first buffer / stop bytes). Pick it
+    # up unconditionally so a failed capture explains itself in
+    # the artifact instead of just "no recording file".
+    if [ -n "$APP_DATA" ] && [ -f "$APP_DATA/Documents/rm_drive_audio_status.txt" ]; then
+      cp "$APP_DATA/Documents/rm_drive_audio_status.txt" screenshots/rm-drive-audio-status.txt || true
+    fi
+    if [ -n "$APP_DATA" ] && [ -s "$APP_DATA/Documents/rm_drive_audio.caf" ]; then
+      rm -f screenshots/rm-drive-audio.m4a
+      if afconvert -f m4af -d aac@48000 -b 128000 "$APP_DATA/Documents/rm_drive_audio.caf" screenshots/rm-drive-audio.m4a 2>/dev/null; then
+        echo "tour-progress: audio capture ok (m4a)" >> screenshots/tour-progress.txt
+      else
+        cp "$APP_DATA/Documents/rm_drive_audio.caf" screenshots/rm-drive-audio.caf || true
+        echo "tour-progress: audio capture ok (caf fallback)" >> screenshots/tour-progress.txt
+      fi
+    elif [ -f screenshots/rm-drive-audio-status.txt ] \
+        && grep -q "recorder created" screenshots/rm-drive-audio-status.txt \
+        && ! grep -q "tap start attempt" screenshots/rm-drive-audio-status.txt \
+        && ! grep -q "tap installed" screenshots/rm-drive-audio-status.txt; then
+      # batch44: the recorder was created but its tap was never
+      # even attempted — the engine hung during init (around
+      # engine.prepare()) before start(on:) could run. Name it
+      # in the progress log instead of a bare "no recording
+      # file", so the failure is diagnosable from tour-progress
+      # alone (the full status file is collected above either
+      # way).
+      echo "tour-progress: audio capture FAILED (audio engine init hang (known simulator CoreAudio deadlock) - recorder created but tap never attempted; see rm-drive-audio-status.txt)" >> screenshots/tour-progress.txt
+    else
+      echo "tour-progress: audio capture FAILED (no recording file)" >> screenshots/tour-progress.txt
+    fi
+    export SIMCTL_CHILD_RM_DISABLE_AUDIO=1
+    export SIMCTL_CHILD_RM_RECORD_AUDIO=0
     ls -la screenshots/
     ;;
   packages)
@@ -702,7 +1209,7 @@ SWIFT_EOF
         (cd "$dir" && xcodebuild test \
           -scheme "$name" \
           -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
-          CODE_SIGNING_ALLOWED=NO ARCHS=arm64) 2>&1 | tee "package-test-$name.log"
+          CODE_SIGNING_ALLOWED=NO ARCHS="$HOST_ARCH") 2>&1 | tee "package-test-$name.log"
         status=${PIPESTATUS[0]}
         # A few packages declare a test target but their autogenerated scheme
         # is still not configured for the test action; fall back to a build
@@ -712,7 +1219,7 @@ SWIFT_EOF
           (cd "$dir" && xcodebuild build \
             -scheme "$name" \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
-            CODE_SIGNING_ALLOWED=NO ARCHS=arm64) 2>&1 | tee -a "package-test-$name.log"
+            CODE_SIGNING_ALLOWED=NO ARCHS="$HOST_ARCH") 2>&1 | tee -a "package-test-$name.log"
           status=${PIPESTATUS[0]}
         fi
       else
@@ -720,7 +1227,7 @@ SWIFT_EOF
         (cd "$dir" && xcodebuild build \
           -scheme "$name" \
           -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
-          CODE_SIGNING_ALLOWED=NO ARCHS=arm64) 2>&1 | tee "package-test-$name.log"
+          CODE_SIGNING_ALLOWED=NO ARCHS="$HOST_ARCH") 2>&1 | tee "package-test-$name.log"
         status=${PIPESTATUS[0]}
       fi
       echo "::endgroup::"
@@ -742,18 +1249,24 @@ SWIFT_EOF
     xcodebuild -resolvePackageDependencies \
       -project RailwayMasterPhase1.xcodeproj \
       -scheme RailwayMasterPhase1
+    # Device IPA is always arm64 (iPhones are arm64); HOST_ARCH is the
+    # *simulator* arch and must NOT be used here — on the Intel Mac it
+    # would build an x86_64 device binary no iPhone can run.
+    # Release, not Debug: the Debug build's synchronous launch-time world
+    # build exceeded the 20 s scene-create watchdog on a real iPhone
+    # (0x8BADF00D kill, 2026-11-15). Do not switch this back to Debug.
     set -o pipefail
     xcodebuild build \
       -project RailwayMasterPhase1.xcodeproj \
       -scheme RailwayMasterPhase1 \
-      -configuration Debug \
+      -configuration Release \
       -destination 'generic/platform=iOS' \
       -derivedDataPath build/DerivedDataIPA \
-      CODE_SIGNING_ALLOWED=NO ARCHS=arm64 \
+      CODE_SIGNING_ALLOWED=NO ARCHS="arm64" \
       | tee ipa-build.log
     build_status=$?
     if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
-    APP_PATH="$(find build/DerivedDataIPA/Build/Products/Debug-iphoneos -maxdepth 1 -name '*.app' | head -n 1)"
+    APP_PATH="$(find build/DerivedDataIPA/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)"
     if [ -z "$APP_PATH" ]; then echo "Built .app not found" >&2; exit 1; fi
     echo "Built app: $APP_PATH"
     rm -rf Payload RailwayMaster.ipa

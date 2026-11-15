@@ -485,10 +485,24 @@ require("import ProtectionSystems" in protection_host_source and "makeProtection
         "The separate fictional ProtectionSystems demo is not connected to the regional audit adapter")
 
 # Count XCTest methods without executing them; Xcode is required to run the tests.
+# 57 = the 48 suite tests + AudioHarnessTests' single opt-in method
+# (skipped unless RM_AUDIO_HARNESS=1; see AUDIO_HARNESS_RUNBOOK.md)
+# + batch81's 3 ATS-intervention regression tests in
+# GameSystemsIntegrationTests (educational ATS deadline / acknowledge
+# staging + the host-level pattern-overspeed intervention drive)
+# + batch90's seed-train test in GameSystemsIntegrationTests
+# (session-start opposing traffic in the first 10 km)
+# + batch98's tunnel-span pinning test in RegionalIntegrationTests
+# (generated profiles must carry exactly the canonical TunnelSpans
+# tunnels, grid-quantized, in every variant and direction)
+# + batch103's 3 depot game-mode tests in
+# GameSystemsIntegrationTests (single co-located yard target,
+# scored-run modes blocked on the depot variant, passenger
+# terminal clause vs depot exception).
 test_files = list((ROOT / "RailwayMasterPhase1Tests").glob("*.swift"))
 test_source = "\n".join(path.read_text(encoding="utf-8") for path in test_files)
 test_count = len(re.findall(r"\bfunc\s+test[A-Za-z0-9_]*\s*\(", test_source))
-require(test_count == 48, f"Expected 48 XCTest methods, found {test_count}")
+require(test_count == 57, f"Expected 57 XCTest methods, found {test_count}")
 
 scheme = ROOT / "RailwayMasterPhase1.xcodeproj" / "xcshareddata" / "xcschemes" / "RailwayMasterPhase1.xcscheme"
 ET.parse(scheme)

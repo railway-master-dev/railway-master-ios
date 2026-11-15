@@ -206,17 +206,25 @@ def main() -> None:
     # and to eighteen with quality24 (chain-link fence alpha cutout),
     # and to twenty-three with quality33 (derived facade variants:
     # glass x2, office x2, apartment x1, for less repetition), and
-    # to twenty-four with quality37 (photographic sky dome).
+    # to twenty-four with quality37 (photographic sky dome),
+    # and to one hundred and ten with batch34 (diamond stop
+    # markers: scenery_sign_stopdiamond_8/10), and to one
+    # hundred and twelve with batch47 (zoo photo panels:
+    # scenery_zoo_tiger / scenery_zoo_penguin), and to one
+    # hundred and sixteen with batch58 (sign_noentry / bamboo /
+    # sand / beach_tarp for the batch57 object types), and to
+    # one hundred and seventeen with batch88 (crossing hazard
+    # stripes: scenery_crossing_stripe).
     # (IHDR width/height are big-endian uint32 at bytes 16..24).
     texture_root = ROOT / "Packages/RailwaySceneFidelity/Sources/RailwaySceneFidelity/Resources"
     textures = sorted(texture_root.glob("scenery_*.png"))
-    require(len(textures) == 108, f"expected 108 scenery textures, found {len(textures)}")
+    require(len(textures) == 117, f"expected 117 scenery textures, found {len(textures)}")
     for texture in textures:
         header = texture.read_bytes()[:24]
         require(header[:8] == b"\x89PNG\r\n\x1a\n", f"not a PNG: {texture.name}")
         width, height = struct.unpack(">II", header[16:24])
         require((width, height) == (512, 512), f"scenery texture is {width}x{height}, expected 512x512: {texture.name}")
-    print("PASS: 24 scenery textures are 512x512 PNGs")
+    print("PASS: 117 scenery textures are 512x512 PNGs")
 
     # (b) Enhancement meshes must exist in all six enhance-target GLBs.
     station_prefixes = ("bench_", "platform_sign_", "canopy_fixture_", "vending_", "bin_", "white_line_", "end_fence_")
