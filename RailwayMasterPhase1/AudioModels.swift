@@ -40,6 +40,7 @@ public struct RailwaySimulationSnapshot: Codable, Sendable {
     public var curveRadiusMeters: Float?
     public var isInTunnel: Bool
     public var isOnBridge: Bool
+    public var isOnJointedRail: Bool
     public var isOnPoints: Bool
     public var doorsOpen: Bool
     public var weather: RailwayWeather
@@ -61,6 +62,7 @@ public struct RailwaySimulationSnapshot: Codable, Sendable {
         curveRadiusMeters: Float? = nil,
         isInTunnel: Bool = false,
         isOnBridge: Bool = false,
+        isOnJointedRail: Bool = false,
         isOnPoints: Bool = false,
         doorsOpen: Bool = false,
         weather: RailwayWeather = .clear,
@@ -81,6 +83,7 @@ public struct RailwaySimulationSnapshot: Codable, Sendable {
         self.curveRadiusMeters = curveRadiusMeters
         self.isInTunnel = isInTunnel
         self.isOnBridge = isOnBridge
+        self.isOnJointedRail = isOnJointedRail
         self.isOnPoints = isOnPoints
         self.doorsOpen = doorsOpen
         self.weather = weather

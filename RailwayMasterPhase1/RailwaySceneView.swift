@@ -9,6 +9,69 @@ import UIKit
 import simd
 import TrafficSimulation
 
+/// batch66: progress feed for the loading screen shown while
+/// the deferred world build runs. The scene world (the only
+/// writer) reports from the main actor; ContentView observes.
+/// The integer percent is monotonic across a build — report()
+/// clamps every update to at least the highest value reported
+/// so far and to at most 99 — and only finish() lands it on
+/// exactly 100, so the bar never runs backwards and never
+/// claims completion before organizeWorldChunks has run.
+/// @Published assignments are guarded so observers are only
+/// notified when a value actually changes (the percent in
+/// particular: it is republished only when the integer moves).
+final class LoadingProgress: ObservableObject {
+    @Published private(set) var percent: Int = 0
+    @Published private(set) var statusText: String = ""
+    @Published private(set) var isLoading: Bool = false
+    /// Highest percent reported for the current build; the
+    /// monotonicity anchor for report().
+    private var reportedPercent = 0
+
+    func begin(status: String) {
+        // batch71: begin() while a load is already in progress
+        // continues that load (status update only). The route
+        // selection handler now begins the load BEFORE the scene
+        // rebuild begins it again, and the bar must not fall back
+        // to 0 between the two calls.
+        if isLoading {
+            setStatus(status)
+            return
+        }
+        reportedPercent = 0
+        setStatus(status)
+        setPercent(0)
+        isLoading = true
+    }
+
+    /// rawPercent is the caller's measurement (the census
+    /// placement counter against the variant's estimated
+    /// total); floorPercent credits a completed build phase.
+    /// The published value is max(previous, raw, floor),
+    /// capped at 99 until finish().
+    func report(rawPercent: Int, floor floorPercent: Int, status: String) {
+        setStatus(status)
+        let candidate = max(max(rawPercent, floorPercent), reportedPercent)
+        reportedPercent = min(candidate, 99)
+        setPercent(reportedPercent)
+    }
+
+    func finish() {
+        reportedPercent = 100
+        setPercent(100)
+        if isLoading { isLoading = false }
+    }
+
+    private func setPercent(_ value: Int) {
+        let clamped = min(100, max(0, value))
+        if clamped != percent { percent = clamped }
+    }
+
+    private func setStatus(_ value: String) {
+        if value != statusText { statusText = value }
+    }
+}
+
 /// Procedural game scene with fictional data; it is not a photoreal or real-railway simulation.
 struct RealityTrackView: View {
     let route: RailwayRouteProfile
@@ -36,6 +99,9 @@ struct RealityTrackView: View {
     let distanceToNextStopM: Double
     var signalPositionM: Double? = nil
     var signalAspect: ThreeAspectSignal? = nil
+    /// batch66: the scene world reports its deferred-build
+    /// progress here for ContentView's loading screen.
+    let loadingProgress: LoadingProgress
 
     var body: some View {
         ZStack {
@@ -68,7 +134,8 @@ struct RealityTrackView: View {
                 serviceCategory: serviceCategory,
                 stationModelPlacements: stationModelPlacements,
                 signalPositionM: signalPositionM,
-                signalAspect: signalAspect
+                signalAspect: signalAspect,
+                loadingProgress: loadingProgress
             )
                 .accessibilityHidden(true)
             let visibilityLoss = max(0, 1 - environmentSelection.environment.visibilityM / 20_000)
@@ -134,10 +201,12 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
     let stationModelPlacements: [RailwayGeneratedStationPlacement]
     var signalPositionM: Double? = nil
     var signalAspect: ThreeAspectSignal? = nil
+    let loadingProgress: LoadingProgress
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> ARView {
+        context.coordinator.scene.loadingProgress = loadingProgress
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
         // The renderer clears with environment.background, not with the
         // UIView's backgroundColor: setting only the latter left the
@@ -173,6 +242,7 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ view: ARView, context: Context) {
+        context.coordinator.scene.loadingProgress = loadingProgress
         if context.coordinator.lastSkySelection != environmentSelection {
             let skyColor = RailwaySkyPalette.color(for: environmentSelection)
             view.backgroundColor = skyColor
@@ -314,14 +384,185 @@ private enum FallbackCylinderMesh {
         // The descriptor is built entirely from the values above, so generation cannot fail.
         return try! MeshResource.generate(from: [descriptor])
     }
+
+    /// Open-ended tube (batch76): the side wall of `make` with
+    /// no end caps, for the signal lamp hoods — a capped
+    /// cylinder would blind the lens it shades. Same placement
+    /// convention (height along Y, centred on the origin);
+    /// pair it with a faceCulling = .none material so the
+    /// inside of the far wall renders.
+    static func makeOpenTube(height: Float, radius: Float, radialSegments: Int = 20) -> MeshResource {
+        let halfHeight = height / 2
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var indices: [UInt32] = []
+        for step in 0...radialSegments {
+            let theta = Float(step) / Float(radialSegments) * 2 * .pi
+            let direction = SIMD3<Float>(cos(theta), 0, sin(theta))
+            positions.append(SIMD3<Float>(direction.x * radius, -halfHeight, direction.z * radius))
+            normals.append(direction)
+            positions.append(SIMD3<Float>(direction.x * radius, halfHeight, direction.z * radius))
+            normals.append(direction)
+        }
+        for step in 0..<radialSegments {
+            let bottom0 = UInt32(step * 2)
+            let top0 = bottom0 + 1
+            let bottom1 = bottom0 + 2
+            let top1 = bottom0 + 3
+            indices.append(contentsOf: [bottom0, top0, bottom1, top0, top1, bottom1])
+        }
+        var descriptor = MeshDescriptor(name: "fallback-open-tube")
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.primitives = .triangles(indices)
+        return try! MeshResource.generate(from: [descriptor])
+    }
+
+    /// Half tube (batch86): the top half of `makeOpenTube`'s
+    /// wall (theta 0...pi), for the signal lamp visors — a real
+    /// visor shades the lens from above and stays open below,
+    /// where the full tube batch76 fitted reads as a tunnel.
+    /// Same placement convention (height along Y, centred on
+    /// the origin); under the signal hood tilt (rotation about
+    /// X by -pi/2, which maps local +Z to +Y) the theta 0...pi
+    /// half lands on top. Pair with a faceCulling = .none
+    /// material so the underside renders.
+    static func makeHalfTube(height: Float, radius: Float, radialSegments: Int = 20) -> MeshResource {
+        let halfHeight = height / 2
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var indices: [UInt32] = []
+        for step in 0...radialSegments {
+            let theta = Float(step) / Float(radialSegments) * .pi
+            let direction = SIMD3<Float>(cos(theta), 0, sin(theta))
+            positions.append(SIMD3<Float>(direction.x * radius, -halfHeight, direction.z * radius))
+            normals.append(direction)
+            positions.append(SIMD3<Float>(direction.x * radius, halfHeight, direction.z * radius))
+            normals.append(direction)
+        }
+        for step in 0..<radialSegments {
+            let bottom0 = UInt32(step * 2)
+            let top0 = bottom0 + 1
+            let bottom1 = bottom0 + 2
+            let top1 = bottom0 + 3
+            indices.append(contentsOf: [bottom0, top0, bottom1, top0, top1, bottom1])
+        }
+        var descriptor = MeshDescriptor(name: "fallback-half-tube")
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.primitives = .triangles(indices)
+        return try! MeshResource.generate(from: [descriptor])
+    }
+}
+
+/// Unit gable-roof prism built with a MeshDescriptor (batch10):
+/// x is the lateral axis (-0.5...0.5, ridge running along z),
+/// y is the rise (0...1), z is the along-track axis. One shared
+/// mesh, scaled per house, so the silhouette variety costs no
+/// extra geometry. UVs are planar per face because the roof
+/// materials are textured.
+private enum FallbackGableRoofMesh {
+    static let shared: MeshResource = make()
+
+    private static func make() -> MeshResource {
+        let slope = Float(0.4472136) // 1 / sqrt(5): unit-prism slope normals
+        let left = SIMD3<Float>(-slope * 2, slope, 0)
+        let right = SIMD3<Float>(slope * 2, slope, 0)
+        let back = SIMD3<Float>(0, 0, -1)
+        let front = SIMD3<Float>(0, 0, 1)
+        // 14 vertices: left slope quad, right slope quad, two
+        // gable triangles; windings verified against the normals.
+        let positions: [SIMD3<Float>] = [
+            SIMD3<Float>(-0.5, 0, -0.5), SIMD3<Float>(0, 1, 0.5), SIMD3<Float>(0, 1, -0.5), SIMD3<Float>(-0.5, 0, 0.5),
+            SIMD3<Float>(0.5, 0, -0.5), SIMD3<Float>(0, 1, -0.5), SIMD3<Float>(0, 1, 0.5), SIMD3<Float>(0.5, 0, 0.5),
+            SIMD3<Float>(-0.5, 0, -0.5), SIMD3<Float>(0, 1, -0.5), SIMD3<Float>(0.5, 0, -0.5),
+            SIMD3<Float>(-0.5, 0, 0.5), SIMD3<Float>(0.5, 0, 0.5), SIMD3<Float>(0, 1, 0.5),
+        ]
+        let normals: [SIMD3<Float>] = [
+            left, left, left, left,
+            right, right, right, right,
+            back, back, back,
+            front, front, front,
+        ]
+        let uvs: [SIMD2<Float>] = [
+            SIMD2<Float>(0, 0), SIMD2<Float>(1, 1), SIMD2<Float>(0, 1), SIMD2<Float>(1, 0),
+            SIMD2<Float>(0, 0), SIMD2<Float>(0, 1), SIMD2<Float>(1, 1), SIMD2<Float>(1, 0),
+            SIMD2<Float>(0, 0), SIMD2<Float>(0.5, 1), SIMD2<Float>(1, 0),
+            SIMD2<Float>(0, 0), SIMD2<Float>(1, 0), SIMD2<Float>(0.5, 1),
+        ]
+        let indices: [UInt32] = [
+            0, 1, 2, 0, 3, 1,
+            4, 5, 6, 4, 6, 7,
+            8, 9, 10,
+            11, 12, 13,
+        ]
+        var descriptor = MeshDescriptor(name: "fallback-gable-roof")
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+        descriptor.primitives = .triangles(indices)
+        // The descriptor is built entirely from the values above, so generation cannot fail.
+        return try! MeshResource.generate(from: [descriptor])
+    }
+}
+
+/// batch56 fix round 1: the per-segment scenery census sinks live
+/// in this plain (non-actor) type, not on RailwaySceneWorld.
+/// The sinks must be recordable from nonisolated contexts —
+/// MeshBatchBuilder.addBoxAxes/addPrism call the recorder for
+/// every batched box — and RailwaySceneWorld is @MainActor, so a
+/// static method there is MainActor-isolated and the compiler
+/// rejects those calls (batch56 chain, rc=65). The world build
+/// runs single-threaded on the main actor, so plain static
+/// storage needs no synchronization here.
+enum CensusSink {
+    static var positions: [SIMD3<Float>] = []
+    static var chainages: [Double] = []
+    /// batch58: placements that carry a photo texture, with
+    /// the texture's name — computeCensusLines turns these
+    /// into the per-segment DISTINCT texture counts
+    /// (`CENSUS tex seg=… distinct=N`). Recorded through the
+    /// same hooked channels as positions (MeshBatchBuilder
+    /// build, addBox, addTree) by callers that pass a
+    /// censusTexture name; flat-colour placements never land
+    /// here, which is exactly the gap this count exposes.
+    static var texturedPositions: [(position: SIMD3<Float>, texture: String)] = []
+    static var active = false
+    static func recordPosition(_ position: SIMD3<Float>) {
+        guard active else { return }
+        positions.append(position)
+    }
+    static func recordChainage(_ chainageM: Double) {
+        guard active else { return }
+        chainages.append(chainageM)
+    }
+    static func recordTexturedPosition(_ position: SIMD3<Float>, texture: String) {
+        guard active else { return }
+        texturedPositions.append((position, texture))
+    }
 }
 
 @MainActor
 private final class RailwaySceneWorld: RenderingStateApplying {
     private var stationModelPlacements: [RailwayGeneratedStationPlacement] = []
+    /// batch42: platform spans [start, end] of the island
+    /// stations whose running tracks spread apart (see
+    /// islandTrackSpread). Recomputed on every rebuild.
+    private var islandSpreadZones: [(start: Double, end: Double)] = []
+    /// batch46: per-station passing-loop target lateral (route-
+    /// centre frame), keyed by station centre chainage. Island
+    /// stations with a loop get 11.54 m so the loop platform
+    /// between the spread main line and the loop keeps its
+    /// 4.5 m width; every other fan station keeps the standard
+    /// 9.64 m (absent from the map). Recomputed with the spread
+    /// zones on every rebuild.
+    private var loopTargetLaterals: [Double: Float] = [:]
     private var importedStationEntity: Entity?
     private var importedStationKey: String?
     private var generatedStaticAssetRoots: [Entity] = []
+    /// batch52: the depot yard's dedicated root (see
+    /// buildDepotYard's render-loss note).
+    private var depotYardRoot: Entity?
 
     private struct SurfaceMaterialTarget {
         let entity: ModelEntity
@@ -338,6 +579,176 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var skyDome: ModelEntity?
     private lazy var renderingCoordinator = RailwayRenderingCoordinator(applier: self)
     private var didBuild = false
+    /// batch66: progress sink for the loading screen, wired
+    /// by the representable before prepare(). Optional so the
+    /// world stays usable without a UI observer (tests, tour
+    /// tooling); every report goes through reportBuildProgress
+    /// or LoadingProgress.report and is a no-op when nil.
+    var loadingProgress: LoadingProgress?
+    /// batch66: the variant of the build currently in flight,
+    /// remembered from rebuild() so reportBuildProgress can
+    /// pick the placement-total estimate for the raw percent.
+    private var buildRouteVariant: RegionalRouteVariant = .throughBranch
+    /// batch75: the rest of the build context rebuild()
+    /// remembers, so the route-less helpers (clearance
+    /// predicates, fan specs, the generated station model) can
+    /// resolve canonical station anchors through
+    /// canonicalPlatformBounds in the same frame the route
+    /// builders use. Set beside the stationModelPlacements
+    /// assignment in rebuild().
+    private var buildTravelDirection: RegionalTravelDirection = .up
+    private var buildRouteLengthM: Double = 0
+    /// batch59: the heavy half of rebuild() runs as deferred
+    /// steps after the first frame has been presented (see
+    /// scheduleDeferredBuild). buildInProgress gates update()
+    /// until the steps land.
+    private var buildInProgress = false
+    private var buildTask: Task<Void, Never>?
+    private var buildGeneration = 0
+    private var pendingBuild: PendingBuild?
+    /// batch60: distance chunking for real-device frame rate.
+    /// After the deferred build lands, the world's static
+    /// children are re-parented under grid-cell anchors and
+    /// only the cells near the camera stay enabled (see
+    /// organizeWorldChunks / updateChunkVisibility). Moving
+    /// roots (player consist, traffic actors, the fidelity
+    /// region) are excluded and stay direct children of world.
+    private var chunkAnchors: [Entity] = []
+    private var chunkBounds: [(center: SIMD3<Float>, radius: Float)] = []
+    private var chunkSweepPosition: SIMD3<Float>?
+    /// batch62: parallel to chunkAnchors — whether the anchor
+    /// is currently parented to `world`. Far anchors are
+    /// detached outright (removeFromParent) instead of merely
+    /// disabled, so the renderer never even walks their
+    /// subtrees; see updateChunkVisibility for the hysteresis
+    /// band between the attach and detach radii.
+    private var chunkAttached: [Bool] = []
+    /// batch85: anchor indices whose attach a sweep found
+    /// due but deferred under the per-sweep attach budget
+    /// (see updateChunkVisibility). Sweeps rebuild this list
+    /// wholesale from their own full scan, and the per-frame
+    /// drain attaches the remainder nearest-first, so the
+    /// list only ever holds indices a sweep has just vouched
+    /// for. Cleared wherever chunkAttached is cleared (world
+    /// reset and organizeWorldChunks), because the indices
+    /// address the discarded world's anchor arrays.
+    private var pendingChunkAttaches: [Int] = []
+    /// batch80: parallel to chunkAnchors — each anchor's
+    /// union bounds in centre/extents form. chunkBounds
+    /// stores only the derived (center, radius) pair, which
+    /// cannot be re-unioned when the deferred organize pass
+    /// adds a child to an existing anchor, so the extents
+    /// form is kept alongside and chunkBounds is re-derived
+    /// from it on every change.
+    private var chunkUnionBounds: [(center: SIMD3<Float>, extents: SIMD3<Float>)] = []
+    /// batch80: grid-cell key -> index into chunkAnchors /
+    /// chunkBounds / chunkAttached / chunkUnionBounds, shared
+    /// by the load-time organize and the deferred pass (which
+    /// creates anchors for cells the near pass never saw).
+    /// Keys pack the two cell coordinates into one Int64
+    /// (see chunkCellKey).
+    private var chunkAnchorIndexByKey: [Int64: Int] = []
+    /// batch80: one world child held back by
+    /// organizeWorldChunks because its own origin sits
+    /// beyond the near-organize radius. It stays a direct
+    /// child of `world` but disabled until the deferred pass
+    /// organizes it, so it cannot render before its chunk
+    /// exists; organizing restores the recorded enabled
+    /// state as the child is re-parented under its anchor.
+    private struct DeferredChunkChild {
+        let entity: Entity
+        let wasEnabled: Bool
+        /// Distance of the child's own origin from the route
+        /// start at classification time. The deferred pass
+        /// works outward in this order so the organized
+        /// frontier stays ahead of the train.
+        let distanceFromStart: Float
+    }
+    /// batch80: deferred organize work, drained by
+    /// runDeferredOrganize in distance order. `child` items
+    /// still need re-parenting (and a merge of their leaves);
+    /// `anchorMerge` items are anchors the load-time pass
+    /// already re-parented (a far cell reached through an
+    /// origin-near child) whose static-leaf merge was
+    /// deferred because the anchor sits beyond the
+    /// load-merge boundary.
+    private enum DeferredOrganizeWork {
+        case child(DeferredChunkChild)
+        case anchorMerge(anchorIndex: Int, distanceFromStart: Float)
+        var distanceFromStart: Float {
+            switch self {
+            case .child(let item):
+                return item.distanceFromStart
+            case .anchorMerge(_, let distance):
+                return distance
+            }
+        }
+    }
+    private var deferredOrganizeQueue: [DeferredOrganizeWork] = []
+    private var deferredOrganizeTask: Task<Void, Never>?
+    /// batch80: running counter for merged-entity names,
+    /// shared by the load-time and deferred merge passes.
+    private var chunkMergedNameCounter = 0
+    /// batch80: cumulative merge outcome of the deferred
+    /// pass, totalled on the CHUNK_MERGE_DEFERRED log line
+    /// when the queue drains.
+    private var deferredMergeLeaves = 0
+    private var deferredMergeEntities = 0
+    /// batch61: outcome of the static-leaf merge that runs at
+    /// the end of organizeWorldChunks (see
+    /// mergeStaticLeavesUnderChunkAnchors). Kept on the world
+    /// so the merge's effect stays verifiable from code: leaf
+    /// ModelEntity counts before/after, how many leaves the
+    /// merge consumed and how many merged entities it created,
+    /// and a post-merge estimate of how many ModelEntities the
+    /// 850 m visibility radius keeps live around the route
+    /// start.
+    private struct ChunkMergeStats {
+        var leafModelEntitiesBefore = 0
+        var leafModelEntitiesAfter = 0
+        var mergedLeafCount = 0
+        var mergedEntityCount = 0
+        var estimatedEntitiesWithinVisibleRadius = 0
+        /// batch64: per-reason merge rejection tallies (see
+        /// ChunkMergeRejectionStats), recorded so the
+        /// CHUNK_MERGE log line shows WHY leaves stayed
+        /// unmerged instead of only that none merged.
+        var rejectionScopeName = 0
+        var rejectionMaterial = 0
+        var rejectionMeshShape = 0
+        var rejectionBucketTooSmall = 0
+        var rejectionIdentity = 0
+        var rejectionOther = 0
+    }
+
+    /// batch64: merge rejection tallies by reason, filled in
+    /// by the candidate validation and the bucketing pass and
+    /// surfaced on the CHUNK_MERGE telemetry line.
+    private struct ChunkMergeRejectionStats {
+        /// The leaf's own name carries a state-driven fragment
+        /// (signal / gate / board / lamp / light / door /
+        /// person / people / sign / precipitation).
+        var scopeName = 0
+        /// Not exactly one eligible material (PhysicallyBased
+        /// / Simple / Unlit), or several materials.
+        var materialMismatch = 0
+        /// Mesh structure the bake cannot reproduce:
+        /// instancing, multiple models/parts, missing or
+        /// mismatched buffers, tangents consumed by a normal
+        /// map, or a mirrored / degenerate transform.
+        var meshShape = 0
+        /// Valid candidates that ended up alone in their
+        /// material bucket (nothing to merge with).
+        var bucketTooSmall = 0
+        /// The leaf is, or sits under, an entity an updater
+        /// holds a direct reference to (signal lamps, surface
+        /// material targets, person rigs, GLB roots, ...).
+        var identityProtected = 0
+        /// Anything else (non-leaf, disabled, no model).
+        var other = 0
+    }
+
+    private var chunkMergeStats = ChunkMergeStats()
     private var routeSignature = ""
     private var samples: [RouteSample] = []
     /// Ground level under the track, per sample (see
@@ -348,9 +759,182 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// -level scenery stands on this; track furniture stays on
     /// `elevationM`.
     private var viaductGround: [Float] = []
+    /// batch100: tunnel spans in the direction-independent
+    /// chainage frame `chainageFromCenter` reports, derived at
+    /// rebuild time from the built profile's own tunnel sections
+    /// via `TunnelSpans.builtSpans(in:)` — the same sections
+    /// `buildTunnels` shells and the crossing guard trusts, so
+    /// `isTunnelChainage` can never drift from the built world
+    /// again. (It previously read a hardcoded table carrying a
+    /// phantom 24,000–25,846 m "tunnel" through 東央千原
+    /// (S12), ends 50–100 m off both real shells, and no branch
+    /// case.) Each span is widened by
+    /// `tunnelPortalClearanceM` at both ends.
+    private var tunnelChainageSpans: [(startM: Double, endM: Double)] = []
+    /// Portal clearance (m) widening each built tunnel span in
+    /// `tunnelChainageSpans`: buildTunnels' portal frames stand
+    /// at the shell ends and their vegetated hill mounds reach
+    /// ±8.5 m along the track beyond them (side mounds span
+    /// lateral 6–21 m), so lineside scenery keeps this much
+    /// clear of a mouth and the viaduct ground stays at track
+    /// level under the portal hills. (The crossing guard's
+    /// 50 m is a deck-safety margin — a different concern.)
+    private static let tunnelPortalClearanceM = 15.0
+    /// batch104: geographic chainage where the middle coastal
+    /// window opens. That window is the tunnel-exit reveal — the
+    /// train bursts out of tunnel 2 straight into the sea view —
+    /// so its start is the BUILT exit of that tunnel, derived in
+    /// `computeTunnelChainageSpans` from the same
+    /// `TunnelSpans.builtSpans(in:)` spans as
+    /// `tunnelChainageSpans`. (Before batch104, `isCoastal` and
+    /// the wind-board table hardcoded the DESIGN exit 43,600;
+    /// the built shell ends at 43,500, so the sea arrived
+    /// 100 m late.) The 43,600 default is the pre-batch104
+    /// behaviour, kept only for routes whose profiles carry no
+    /// tunnel exiting into the window — `isCoastal` is
+    /// mainline-gated, so the default is never observed there.
+    private var coastalTunnelExitM = 43_600.0
     private var trafficSceneRoute: SceneChainageRoute?
     private var trafficActorAdapter = RailwayTrafficActorRealityKitAdapter()
     private var previousTrafficSnapshot: TrafficSnapshot?
+    /// batch62: per-scenario lookup tables for
+    /// updateTrafficActors. These used to be rebuilt from the
+    /// scenario on EVERY frame — seven dictionaries over ~800
+    /// train plans plus the road/platform/trip tables — for
+    /// data that only changes when the scenario does.
+    /// batch64: the cache used to validate itself with a full
+    /// `Equatable` comparison against the stored scenario —
+    /// a deep ~800-plan comparison on every frame, which the
+    /// batch64 measurements put at the top of the frame cost.
+    /// It now validates against the scenario's identity
+    /// fields, its table counts, and the scenario generation
+    /// (`TrafficScenarioGeneration`), which advances wherever
+    /// a scenario is installed (engine creation and the
+    /// model's assignment points), so a content change still
+    /// rebuilds the tables while the per-frame check is O(1).
+    private struct TrafficScenarioLookup {
+        let scenarioID: String
+        let routeID: String
+        let routeLengthM: Double
+        let generation: UInt64
+        let trainCount: Int
+        let trackCount: Int
+        let roadCount: Int
+        let roadVehicleCount: Int
+        let platformCount: Int
+        let passengerTripCount: Int
+        let routePathCount: Int
+        let trainsByID: [String: AITrainPlan]
+        let tracksByID: [String: TrafficTrackDefinition]
+        let roadsByID: [String: ParallelRoadDefinition]
+        let roadPlansByID: [String: RoadVehiclePlan]
+        let platformsByID: [String: TrafficPlatformDefinition]
+        let tripsByID: [String: PlatformPassengerTrip]
+        let supportedRoutePathIDs: Set<String>
+
+        init(scenario: TrafficScenario) {
+            scenarioID = scenario.scenarioID
+            routeID = scenario.routeID
+            routeLengthM = scenario.routeLengthM
+            generation = TrafficScenarioGeneration.current
+            trainCount = scenario.trains.count
+            trackCount = scenario.tracks.count
+            roadCount = scenario.roads.count
+            roadVehicleCount = scenario.roadVehicles.count
+            platformCount = scenario.platforms.count
+            passengerTripCount = scenario.passengerTrips.count
+            routePathCount = scenario.routePaths.count
+            trainsByID = Dictionary(scenario.trains.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            tracksByID = Dictionary(scenario.tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            roadsByID = Dictionary(scenario.roads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            roadPlansByID = Dictionary(scenario.roadVehicles.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            platformsByID = Dictionary(scenario.platforms.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            tripsByID = Dictionary(scenario.passengerTrips.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            supportedRoutePathIDs = Set(scenario.routePaths.map(\.id))
+        }
+
+        func matches(_ scenario: TrafficScenario) -> Bool {
+            scenarioID == scenario.scenarioID
+                && routeID == scenario.routeID
+                && routeLengthM == scenario.routeLengthM
+                && generation == TrafficScenarioGeneration.current
+                && trainCount == scenario.trains.count
+                && trackCount == scenario.tracks.count
+                && roadCount == scenario.roads.count
+                && roadVehicleCount == scenario.roadVehicles.count
+                && platformCount == scenario.platforms.count
+                && passengerTripCount == scenario.passengerTrips.count
+                && routePathCount == scenario.routePaths.count
+        }
+    }
+
+    private var trafficScenarioLookup: TrafficScenarioLookup?
+
+    private func trafficLookup(for scenario: TrafficScenario) -> TrafficScenarioLookup {
+        if let cached = trafficScenarioLookup, cached.matches(scenario) {
+            return cached
+        }
+        let built = TrafficScenarioLookup(scenario: scenario)
+        trafficScenarioLookup = built
+        return built
+    }
+
+    /// batch62: frame-cost accounting for the pulled demo
+    /// log. update() and updateTrafficActors accumulate their
+    /// wall-clock cost in memory; once per 5 s window a single
+    /// PERF_WINDOW line is queued for flushPulledLogIfNeeded
+    /// (see pendingPerfLogLines), so the accounting itself
+    /// never touches the disk per frame.
+    private var perfWindowStartUptime: Double?
+    private var perfFrameCount = 0
+    private var perfUpdateTotalMs = 0.0
+    private var perfUpdateMaxMs = 0.0
+    private var perfTrafficTotalMs = 0.0
+    private var perfTrafficMaxMs = 0.0
+    private var pendingPerfLogLines: [String] = []
+
+    private func recordTrafficPerf(milliseconds: Double) {
+        perfTrafficTotalMs += milliseconds
+        perfTrafficMaxMs = max(perfTrafficMaxMs, milliseconds)
+    }
+
+    private func recordFramePerf(milliseconds: Double) {
+        let now = ProcessInfo.processInfo.systemUptime
+        if perfWindowStartUptime == nil { perfWindowStartUptime = now }
+        perfFrameCount += 1
+        perfUpdateTotalMs += milliseconds
+        perfUpdateMaxMs = max(perfUpdateMaxMs, milliseconds)
+        guard let windowStart = perfWindowStartUptime, now - windowStart >= 5 else { return }
+        let frames = max(perfFrameCount, 1)
+        pendingPerfLogLines.append(String(format: "PERF_WINDOW frames=%d updateAvgMs=%.2f updateMaxMs=%.2f trafficAvgMs=%.2f trafficMaxMs=%.2f pendingAttach=%d",
+                                          perfFrameCount,
+                                          perfUpdateTotalMs / Double(frames), perfUpdateMaxMs,
+                                          perfTrafficTotalMs / Double(frames), perfTrafficMaxMs,
+                                          pendingChunkAttaches.count))
+        perfWindowStartUptime = now
+        perfFrameCount = 0
+        perfUpdateTotalMs = 0
+        perfUpdateMaxMs = 0
+        perfTrafficTotalMs = 0
+        perfTrafficMaxMs = 0
+    }
+    /// batch56: per-segment scenery census (the user's request
+    /// for real per-segment object counts) plus the one-chain
+    /// placement diagnostics of diagnosis §1.5/§2.5. Builders
+    /// record placements into CensusSink (file scope, above)
+    /// while its `active` flag is set (the rebuild window
+    /// below); `computeCensusLines()` turns them into CENSUS
+    /// lines at the end of a full-network rebuild, and
+    /// `flushPulledLogIfNeeded()` appends queued lines to the
+    /// demo-drive log the CI pulls — Swift `print` never reaches
+    /// the pulled logs, so anything a chain must prove
+    /// numerically rides this channel.
+    private var censusBuildEnabled = false
+    private var queuedLogLines: [String] = []
+    private var queuedLogFlushed = false
+    private var trafficDiagText: String?
+    private var trafficDiagFlushed = false
+
     private var roadCarEntities: [String: Entity] = [:]
     private var platformPeople: [String: Entity] = [:]
     private var aiTrainEntities: [String: Entity] = [:]
@@ -412,14 +996,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.40, green: 0.46, blue: 0.50, alpha: 1), metallic: 0.12, roughness: 0.71, textureName: "scenery_steel")
     ]
     private let buildingMaterials = [
+        // batch20 (2026-11-13): this pool was five plain-brick
+        // entries out of seven, so every box drawn from it —
+        // station-front blocks, back-row houses, plain suburb
+        // blocks — read as a tall windowless brick wall (Mac
+        // loop-2 photos at Kisaragawa / Katsunuma). Windowed
+        // facades now lead the pool; one brick and one concrete
+        // stay for variety, at one-in-seven frequency each.
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade", normalName: "normal_apartment_facade"),
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.92, textureName: "scenery_apartment_facade_2", normalName: "normal_apartment_facade"),
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.89, textureName: "scenery_brick_warm"),
-        RailwaySceneWorld.texturedPBR(.white, roughness: 0.86, textureName: "scenery_brick_cool"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.88, green: 0.82, blue: 0.76, alpha: 1), roughness: 0.91, textureName: "scenery_brick_warm"),
         RailwaySceneWorld.texturedPBR(UIColor(red: 0.95, green: 0.90, blue: 0.82, alpha: 1), roughness: 0.88, textureName: "scenery_concrete"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 0.95, blue: 1.0, alpha: 1), metallic: 0.06, roughness: 0.7, textureName: "scenery_brick_cool"),
-        // quality32: two more tones so neighbouring houses differ.
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.82, green: 0.78, blue: 0.72, alpha: 1), roughness: 0.9, textureName: "scenery_brick_warm"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.84, green: 0.86, blue: 0.88, alpha: 1), roughness: 0.88, textureName: "scenery_concrete")
+        RailwaySceneWorld.texturedPBR(.white, roughness: 0.9, textureName: "scenery_danchi_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.82, green: 0.78, blue: 0.72, alpha: 1), roughness: 0.92, textureName: "scenery_apartment_facade_3", normalName: "normal_apartment_facade"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.94, green: 0.90, blue: 0.84, alpha: 1), roughness: 0.9, textureName: "scenery_house_facade")
     ]
     private let officeMaterials = [
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.62, textureName: "scenery_office_facade", normalName: "normal_office_facade"),
@@ -458,10 +1048,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.95, textureName: "scenery_apartment_facade_grimed", normalName: "normal_apartment_facade"),
         RailwaySceneWorld.texturedPBR(.white, roughness: 0.95, textureName: "scenery_danchi_facade_grimed")
     ]
+    // batch28 (2026-11-13): the three tints were all pale and
+    // nearly identical, so every tree read the same light
+    // CG green. Now a deep green, two mid greens and one
+    // warm autumn-leaning tint (1 in 4) share the texture.
     private let foliageMaterials = [
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.75, green: 0.90, blue: 0.75, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.90, green: 1.0, blue: 0.85, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
-        RailwaySceneWorld.texturedPBR(UIColor(red: 0.80, green: 0.95, blue: 0.88, alpha: 1), roughness: 0.98, textureName: "scenery_foliage")
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.50, green: 0.66, blue: 0.46, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.72, green: 0.88, blue: 0.66, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.62, green: 0.80, blue: 0.58, alpha: 1), roughness: 0.98, textureName: "scenery_foliage"),
+        RailwaySceneWorld.texturedPBR(UIColor(red: 0.92, green: 0.84, blue: 0.52, alpha: 1), roughness: 0.98, textureName: "scenery_foliage")
     ]
     /// Full-facade photo texture for suburban houses (windows and door are
     /// painted in, so those houses skip the separate window/door boxes).
@@ -522,52 +1117,111 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// Signal lamp materials: unlit, so a lit lamp reads at full
     /// brightness in daylight while a dark lens stays near-black.
     private let signalDarkLampMaterial = UnlitMaterial(color: UIColor(red: 0.07, green: 0.07, blue: 0.08, alpha: 1))
+    /// batch76: unlit lenses keep a hint of their lamp colour,
+    /// per position (top to bottom: yellow, red, yellow,
+    /// green), so all four aspects read as separate glass even
+    /// with every lamp dark — the shared near-black above made
+    /// the unlit head melt into its housing. Used by
+    /// placeSignal for the fresh lamps and by applyAspect for
+    /// the off state; the aspect-to-lamp wiring is unchanged.
+    /// batch86: the tints are a step brighter again and each
+    /// lens now seats in a galvanized bezel ring (below), so
+    /// the dark glass holds its circle against the housing at
+    /// distance instead of relying on tint alone.
+    private let signalDarkLampMaterials: [UnlitMaterial] = [
+        UnlitMaterial(color: UIColor(red: 0.20, green: 0.16, blue: 0.03, alpha: 1)),
+        UnlitMaterial(color: UIColor(red: 0.22, green: 0.04, blue: 0.04, alpha: 1)),
+        UnlitMaterial(color: UIColor(red: 0.20, green: 0.16, blue: 0.03, alpha: 1)),
+        UnlitMaterial(color: UIColor(red: 0.03, green: 0.20, blue: 0.10, alpha: 1))
+    ]
+    /// batch76: one shared open-tube mesh for every signal
+    /// lamp hood (phi 210 mm x 260 mm long), built once.
+    /// batch86: superseded by the half-tube visor below (kept
+    /// only as the record of the batch76 shape).
+    private let signalHoodMesh = FallbackCylinderMesh.makeOpenTube(height: 0.26, radius: 0.105)
+    /// batch86: the lamp-assembly meshes, built once and
+    /// shared by every signal (placeSignal and the terminal
+    /// fixed heads): a half-tube visor (phi 216 mm, projecting
+    /// 160 mm from the face — about one lens diameter), a
+    /// bezel ring the lens seats in (phi 200 mm, 55 mm deep),
+    /// and the glow disc that sits just behind the lens front
+    /// (phi 176 mm) so a lit lamp shows a halo ring around the
+    /// lens inside its bezel.
+    private let signalVisorMesh = FallbackCylinderMesh.makeHalfTube(height: 0.16, radius: 0.108)
+    private let signalBezelMesh = FallbackCylinderMesh.makeOpenTube(height: 0.055, radius: 0.10)
+    private let signalGlowMesh = FallbackCylinderMesh.make(height: 0.004, radius: 0.088)
+    /// batch86: bezel rings are galvanized metal a step
+    /// lighter than the housing, so every lamp — lit or dark —
+    /// keeps a bright rim circle against the dark face at
+    /// 100+ m, which is what makes an unlit head read as four
+    /// lamps instead of a black board.
+    private let signalBezelMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.34, green: 0.36, blue: 0.37, alpha: 1), metallic: 0.65, roughness: 0.42)
+    /// batch86: visor material — the visor mesh carries no
+    /// UVs, so it takes a plain dark painted-metal PBR (small
+    /// part, like the glass and rails); double-sided so the
+    /// underside of the half tube renders.
+    private var signalVisorMaterial: PhysicallyBasedMaterial {
+        var material = RailwaySceneWorld.pbr(UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1), metallic: 0.35, roughness: 0.55)
+        material.faceCulling = .none
+        return material
+    }
+    /// batch86: glow-disc materials per lamp position (dimmer
+    /// than the lit lens materials, so the disc reads as spill
+    /// around the lens, not as a second lamp). The disc is a
+    /// child of its lamp entity and applyAspect enables it
+    /// exactly when the lamp is lit.
+    private let signalGlowLampMaterials: [UnlitMaterial] = [
+        UnlitMaterial(color: UIColor(red: 0.42, green: 0.32, blue: 0.04, alpha: 1)),
+        UnlitMaterial(color: UIColor(red: 0.42, green: 0.05, blue: 0.04, alpha: 1)),
+        UnlitMaterial(color: UIColor(red: 0.42, green: 0.32, blue: 0.04, alpha: 1)),
+        UnlitMaterial(color: UIColor(red: 0.06, green: 0.40, blue: 0.15, alpha: 1))
+    ]
     private let signalRedMaterial = UnlitMaterial(color: UIColor(red: 1.0, green: 0.12, blue: 0.08, alpha: 1))
     private let signalYellowMaterial = UnlitMaterial(color: UIColor(red: 1.0, green: 0.75, blue: 0.10, alpha: 1))
     private let signalGreenMaterial = UnlitMaterial(color: UIColor(red: 0.15, green: 0.95, blue: 0.35, alpha: 1))
+    /// batch88: crossing lamp assemblies reuse the batch86
+    /// bezel / visor treatment at crossing size (phi 200 mm
+    /// lenses): a galvanized bezel ring the lens seats in and
+    /// a half-tube visor above it, shared by every warning
+    /// unit. The lenses themselves use signalRedMaterial —
+    /// the crossing lamps burn steadily, as they always have
+    /// in this scene (no flasher updater exists).
+    private let crossingBezelMesh = FallbackCylinderMesh.makeOpenTube(height: 0.07, radius: 0.125)
+    private let crossingVisorMesh = FallbackCylinderMesh.makeHalfTube(height: 0.20, radius: 0.13)
+    /// batch88: hazard-stripe material for the barrier rods
+    /// and the warning-pole base collars — the diagonal
+    /// yellow / black bands are a bundled texture
+    /// (scenery_crossing_stripe, drawn by
+    /// Scripts/build_original_scenery_textures.py) loaded
+    /// through SceneTextureProvider, per the project rule,
+    /// instead of the old flat yellow paint with dark boxes
+    /// laid over it.
+    private let crossingStripeMaterial = RailwaySceneWorld.texturedPBR(.white, roughness: 0.55, textureName: "scenery_crossing_stripe")
+    /// batch88: barrier-machine cabinets are light-grey
+    /// weathered steel (scenery_steel through the provider),
+    /// not the flat yellow the old builder painted them.
+    private let crossingCabinetMaterial = RailwaySceneWorld.texturedPBR(UIColor(red: 0.80, green: 0.81, blue: 0.81, alpha: 1), metallic: 0.30, roughness: 0.5, textureName: "scenery_steel")
+    /// batch88: near-black for the deck underlay and the
+    /// flangeway slots the panels sit in (the shadow gaps
+    /// beside each rail), speaker grilles and barrier
+    /// counterweights.
+    private let crossingBlackMaterial = RailwaySceneWorld.pbr(UIColor(red: 0.06, green: 0.06, blue: 0.065, alpha: 1), roughness: 0.9)
     /// Trackside signal lamp heads by travel-frame distance [m]:
     /// the three lamp entities in red / yellow / green order.
     private var signalLampHeads: [Double: [ModelEntity]] = [:]
-    // quality41 expansion: articulated zoo animals on the zoo line.
-    // Each rig is a small hierarchy of part entities (body, head,
-    // legs, tail) posed every frame by a per-animal behaviour state
-    // machine in updateZooAnimals.
-    private struct ZooAnimalRig {
-        var root: Entity
-        var body: Entity
-        var headPivot: Entity
-        var neckPivot: Entity?
-        var trunkPivots: [Entity]
-        var legs: [Entity]
-        var tailPivot: Entity
-        var species: Int // 0 lion, 1 tiger, 2 giraffe, 3 elephant, 4 zebra, 5 penguin
-        var routeDistanceM: Double
-        var paddockCenter: SIMD3<Float>
-        var axisX: SIMD3<Float>
-        var axisZ: SIMD3<Float>
-        var heading: Float
-        var state: Int = 0 // 0 idle, 1 graze, 2 walk, 3 rest
-        var stateUntil: Double = 0
-        var walkTarget: SIMD3<Float>
-        var phase: Float = 0
-        var rngState: UInt64
-        var bodyStandY: Float
-        var bodyRestY: Float
-        var grazeAmount: Float = 0
-        var restAmount: Float = 0
-    }
-    private var zooAnimalRigs: [ZooAnimalRig] = []
-    private var zooLastAnimTime: Double = 0
-    // quality41 final: people. Static/animated figures placed by the
-    // world builders (platforms, crossings, zoo and park), separate
-    // from the traffic simulation's platform passengers, whose crude
-    // two-box dummy is upgraded to the same figure builder below.
+    // Zoo animals (batch47, 2026-11-14): the quality41
+    // articulated primitive-mesh animals (ZooAnimalRig /
+    // makeZooAnimal / updateZooAnimals) are removed — the
+    // user judged the 3D quality too low, so every enclosure
+    // animal is now a static photo-style cutout panel built
+    // by makeZooAnimalPanel, like the people billboards.
+    // People (batch14: the quality41 articulated figures were
+    // replaced by photo billboards — see makePersonFigure). Static
+    // figures placed by the world builders (platforms, crossings,
+    // zoo and park); the traffic simulation's platform passengers
+    // use the same billboard builder via makePlatformPerson below.
     private struct PersonRig {
         var root: Entity
-        var legL: Entity
-        var legR: Entity
-        var armL: Entity
-        var armR: Entity
         var mode: Int // 0 stand, 1 walk
         var routeDistanceM: Double
         var home: SIMD3<Float>
@@ -576,13 +1230,22 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var offset: Float = 0
         var dirSign: Float = 1
         var speed: Float
-        var phase: Float
-        var armBaseR: Float = 0
     }
     private var personRigs: [PersonRig] = []
     private var peopleLastTime: Double = 0
+    // Wind rotors (batch92): one dynamic entity per turbine
+    // (tower + nacelle stay in the static batch), turned by
+    // updateWindRotors. Like the AI trains and the placed
+    // people they are excluded from chunk organizing and
+    // from the static merge, so the per-frame updater can
+    // always reach them through this registry.
+    private struct WindRotor {
+        var entity: Entity
+        var axis: SIMD3<Float>
+        var speed: Float
+    }
+    private var windRotors: [WindRotor] = []
     private var pantographSpark: ModelEntity?
-    private var platformPeopleLegs: [String: (Entity, Entity)] = [:]
     private var dynamicSignalDistance: Double?
     private var dynamicSignalAspect: ThreeAspectSignal?
 
@@ -624,9 +1287,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         previousTrafficSnapshot = nil
         roadCarEntities.removeAll()
         platformPeople.removeAll()
-        platformPeopleLegs.removeAll()
         personRigs.removeAll()
-        zooAnimalRigs.removeAll()
+        windRotors.removeAll()
+        chunkAnchors.removeAll()
+        chunkBounds.removeAll()
+        chunkSweepPosition = nil
+        chunkAttached.removeAll()
+        pendingChunkAttaches.removeAll()
+        // batch80: the deferred organize pass belongs to the
+        // discarded world — cancel it and drop its queue and
+        // the cell index (its own generation/world guards
+        // would abandon it anyway; this just stops it early).
+        chunkUnionBounds.removeAll()
+        chunkAnchorIndexByKey.removeAll()
+        deferredOrganizeQueue.removeAll()
+        deferredOrganizeTask?.cancel()
+        deferredOrganizeTask = nil
+        chunkMergedNameCounter = 0
         pantographSpark = nil
         signalLampHeads.removeAll()
         skyDome = nil
@@ -640,7 +1317,33 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         importedStationEntity = nil
         importedStationKey = nil
         generatedStaticAssetRoots.removeAll(keepingCapacity: true)
+        depotYardRoot = nil
         self.stationModelPlacements = stationModelPlacements
+        // batch75: remember the full build context for the
+        // route-less canonical-anchor helpers (see the
+        // buildTravelDirection declaration).
+        buildRouteVariant = routeVariant
+        buildTravelDirection = travelDirection
+        buildRouteLengthM = route.distanceM
+        // batch56: fresh census + pulled-log state per build.
+        CensusSink.positions.removeAll()
+        CensusSink.chainages.removeAll()
+        CensusSink.texturedPositions.removeAll()
+        CensusSink.active = false
+        censusBuildEnabled = false
+        queuedLogLines.removeAll()
+        queuedLogFlushed = false
+        trafficDiagText = nil
+        trafficDiagFlushed = false
+        // batch62: frame-cost accounting restarts with the
+        // new world (windows never span a rebuild).
+        perfWindowStartUptime = nil
+        perfFrameCount = 0
+        perfUpdateTotalMs = 0
+        perfUpdateMaxMs = 0
+        perfTrafficTotalMs = 0
+        perfTrafficMaxMs = 0
+        pendingPerfLogLines.removeAll()
         lastHighFidelityUpdateTime = nil
         wheelBaseOrientations.removeAll()
         cabModel = nil
@@ -682,6 +1385,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             sampleInterval = min(sampleInterval, 8.5)
         }
         samples = makeSamples(route: route, interval: sampleInterval)
+        computeIslandSpreadZones(routeVariant: routeVariant, travelDirection: travelDirection)
+        // batch100: derive the tunnel spans before the first
+        // consumer (`computeViaductGround` just below; every
+        // scenery builder runs later in this same rebuild).
+        computeTunnelChainageSpans(route: route, travelDirection: travelDirection)
         viaductGround = computeViaductGround(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
         trafficSceneRoute = makeSceneFidelityRoute()
         sceneFidelityRoute = trafficSceneRoute
@@ -709,11 +1417,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // "not real" cue in the CI #213 tour photos). The range is
         // capped at ~250 m so the shadow map stays detailed around
         // the line instead of covering the whole visible distance.
-        if #available(iOS 26.0, *) {
-            var sunlightShadow = DirectionalLightComponent.Shadow()
-            sunlightShadow.shadowProjection = .automatic(maximumDistance: 250)
-            sunlight.components.set(sunlightShadow)
-        }
+        // iOS 17 SDK: Shadow carries maximumDistance directly; the
+        // shadowProjection API (.automatic) exists only in the iOS 18+
+        // SDK, and #available cannot guard a symbol that is absent at
+        // compile time (same trap as MeshResource.generateCylinder).
+        // This also fixes shadows on iOS 17/18 runtimes, where the old
+        // iOS-26-only branch set no shadow component at all.
+        var sunlightShadow = DirectionalLightComponent.Shadow(maximumDistance: 250)
+        sunlight.components.set(sunlightShadow)
         // quality25 (D): the orientation this replaces —
         // simd_quatf(angle: -.pi/3.6, axis: (-0.6, 0.8, -0.3)) —
         // rotates the light's forward vector [0, 0, -1] to
@@ -764,60 +1475,1586 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
         }
 
-        if quality == .high, sceneFidelityRoute != nil {
-            buildSceneFidelityRegion(route: route, chainageM: 0, useLiveCamera: false)
-        } else {
-            sceneFidelityRoute = nil
-            computeCrossingCenters(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildTrack(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildTunnels(route: route)
-            buildSignals(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildCableTrough(route: route, travelDirection: travelDirection)
-            buildLinesideFence(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildSubstations(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildBillboards(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            buildCatenary(route: route, routeVariant: routeVariant, travelDirection: travelDirection, showcaseSection: travelDirection == .up && (routeVariant == .mainline || routeVariant == .throughBranch))
-            if routeVariant != .zooLine && routeVariant != .parkLine {
-                buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-                buildPublicBuildings(route: route, routeVariant: routeVariant)
-                buildRuralDressing(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-                buildTreeLinesAndHills(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-                buildStationCharacter(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-                buildStationFronts(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-                buildStationLandmarks(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-                buildSpeedSigns(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-                buildSignCatalog(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            }
-            buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            if routeVariant != .zooLine && routeVariant != .parkLine {
-                buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
-                buildFictionalCorridorLandmarks(route: route, quality: quality)
-            }
-            buildDepotYard(travelDirection: travelDirection)
-            buildZooAndPark(routeVariant: routeVariant, travelDirection: travelDirection)
-            buildZooLineWorld(routeVariant: routeVariant, travelDirection: travelDirection)
-            buildParkLineWorld(routeVariant: routeVariant, travelDirection: travelDirection)
-            buildShowcaseSection(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-            // quality29: buildDestinationPlatform is gone. It was a
-            // pre-quality25 leftover that laid two rigid 115 m
-            // concrete boxes centred ON the tracks at the demo's
-            // destination (lateral +/-1.9 m, top above rail head),
-            // pitched level while the track climbs ~20 per mille —
-            // at Matsubaracho the boxes sliced through both tracks
-            // diagonally for the whole platform length, which is
-            // the "broken track" in the Codemagic photos. The
-            // curve-following platforms from buildStationPlatforms
-            // below serve every station, the destination included.
+        // batch59: everything from here to the end of the old
+        // synchronous build is the heavy half — tens of seconds
+        // on a real iPhone, dominated by RealityKit material and
+        // shader creation (texturedPBR). Run inside makeUIView
+        // it kept the first frame from ever being presented and
+        // the scene-create watchdog killed the app at launch
+        // (0x8BADF00D, 2026-11-15, Debug and Release alike).
+        // The heavy half is therefore deferred: it runs as
+        // builder-group steps in a task that starts after this
+        // function returns, yielding between groups so the first
+        // frame (title screen over the sky) is presented first.
+        // batch66: the loading screen starts counting from
+        // here; runDeferredBuild advances it per builder group
+        // and organizeWorldChunks finishes it at exactly 100.
+        buildRouteVariant = routeVariant
+        loadingProgress?.begin(status: "線路を敷設しています")
+        scheduleDeferredBuild(
+            route: route, quality: quality, trafficScenario: trafficScenario,
+            routeVariant: routeVariant, travelDirection: travelDirection,
+            vehicleCarCount: vehicleCarCount
+        )
+    }
+
+    /// batch59: the arguments of one deferred build, captured
+    /// by rebuild() and consumed by runDeferredBuild().
+    private struct PendingBuild {
+        let route: RailwayRouteProfile
+        let quality: EnvironmentRenderQuality
+        let trafficScenario: TrafficScenario?
+        let routeVariant: RegionalRouteVariant
+        let travelDirection: RegionalTravelDirection
+        let vehicleCarCount: Int
+    }
+
+    private func scheduleDeferredBuild(
+        route: RailwayRouteProfile,
+        quality: EnvironmentRenderQuality,
+        trafficScenario: TrafficScenario?,
+        routeVariant: RegionalRouteVariant,
+        travelDirection: RegionalTravelDirection,
+        vehicleCarCount: Int
+    ) {
+        pendingBuild = PendingBuild(
+            route: route, quality: quality, trafficScenario: trafficScenario,
+            routeVariant: routeVariant, travelDirection: travelDirection,
+            vehicleCarCount: vehicleCarCount
+        )
+        buildGeneration += 1
+        let generation = buildGeneration
+        buildTask?.cancel()
+        buildInProgress = true
+        buildTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.runDeferredBuild(generation: generation)
         }
+    }
+
+    /// batch66: estimated placement totals per route variant
+    /// for the loading screen's raw percent, anchored on the
+    /// measured full-network census (CENSUS TOTAL 187,211
+    /// placed records for the complete 68 km world, batch56).
+    /// The other variants are estimates scaled by the length
+    /// of world their builders actually lay down. Precision is
+    /// not load-bearing: LoadingProgress clamps every report
+    /// to a monotonic rise, the per-group floors credit each
+    /// finished phase, and organizeWorldChunks always lands
+    /// the bar on exactly 100.
+    private static func estimatedPlacementTotal(for variant: RegionalRouteVariant) -> Int {
+        switch variant {
+        case .mainline: return 170_000
+        case .throughBranch: return 190_000
+        case .branchShuttle: return 25_000
+        case .depotTransfer: return 12_000
+        case .zooLine: return 16_000
+        case .parkLine: return 16_000
+        }
+    }
+
+    /// batch66: one progress report at a builder-group
+    /// boundary. The raw percent reads the census placement
+    /// counter (positions + chainages recorded so far this
+    /// build — the same counter computeCensusLines totals as
+    /// "placed"); on the high-quality path the census window
+    /// never opens, the raw percent stays 0 and the group
+    /// floors carry the bar on their own. The status names
+    /// the phase that runs NEXT, so the text the player reads
+    /// during a group is that group's work.
+    private func reportBuildProgress(floor floorPercent: Int, status: String) {
+        guard let loadingProgress else { return }
+        let placed = CensusSink.positions.count + CensusSink.chainages.count
+        let total = Self.estimatedPlacementTotal(for: buildRouteVariant)
+        // batch70: the census raw can saturate before organize
+        // even starts (the variant totals are estimates), which
+        // pinned the bar at 99% for the whole organize on device
+        // and made the load look frozen. The builder-group raw
+        // is capped at 90; organize's own reports own 93→99.
+        let raw = total > 0 ? min(Int((Double(placed) / Double(total) * 100).rounded()), 90) : 0
+        loadingProgress.report(rawPercent: raw, floor: floorPercent, status: status)
+    }
+
+    private func runDeferredBuild(generation: Int) async {
+        guard let pending = pendingBuild else {
+            buildInProgress = false
+            return
+        }
+        pendingBuild = nil
+        if pending.quality == .high, sceneFidelityRoute != nil {
+            buildHeavyFidelityRegion(pending)
+            reportBuildProgress(floor: 70, status: "駅と車両を整えています")
+        } else {
+            buildHeavyTrackGroup(pending)
+            guard generation == buildGeneration else { return }
+            reportBuildProgress(floor: 40, status: "沿線の建物を配置しています")
+            await Task.yield()
+            buildHeavySuburbGroup(pending)
+            guard generation == buildGeneration else { return }
+            reportBuildProgress(floor: 60, status: "電柱と沿線の交通を配置しています")
+            await Task.yield()
+            buildHeavyPolesAndTrafficGroup(pending)
+            guard generation == buildGeneration else { return }
+            reportBuildProgress(floor: 74, status: "車両基地を整えています")
+            await Task.yield()
+            buildHeavyDepotAndParksGroup(pending)
+            guard generation == buildGeneration else { return }
+            reportBuildProgress(floor: 86, status: "駅と車両を整えています")
+            await Task.yield()
+        }
+        buildHeavyFinalGroup(pending)
+        if generation == buildGeneration {
+            reportBuildProgress(floor: 93, status: "最終調整をしています")
+            await organizeWorldChunks()
+            if generation == buildGeneration {
+                buildInProgress = false
+                loadingProgress?.finish()
+            }
+        }
+    }
+
+    /// batch60: group the world's static children under
+    /// 250 m grid-cell anchors so update() can enable only
+    /// the neighbourhood of the camera. On the real iPhone
+    /// the full 70 km world (tens of thousands of entities)
+    /// rendered every frame made the game unplayably choppy
+    /// (user verdict, 2026-11-15); with chunking, roughly
+    /// the nearest 1.7 km stays live. Re-parenting preserves
+    /// world transforms and object identity, so stored
+    /// references (signals, gates, people rigs) keep working;
+    /// only direct children of `world` move, never the
+    /// internals of a builder's own group.
+    /// batch61: 1.7 km of enabled cells still left ~10,000
+    /// individual ModelEntities live and the device stayed
+    /// choppy (user verdict, 2026-11-15), so the radius is
+    /// down to 850 m and each anchor's pure static leaves are
+    /// merged per material (see
+    /// mergeStaticLeavesUnderChunkAnchors) before the bounds
+    /// are measured — merging bakes identical geometry, so
+    /// the bounds are unaffected.
+    /// batch66: organize is async (its only caller is
+    /// runDeferredBuild) and yields every few dozen items so
+    /// the loading screen can advance through it. The anchor
+    /// bounds are no longer measured with a post-merge
+    /// recursive visualBounds sweep: each anchor is a plain
+    /// identity-transform Entity and children move under it
+    /// with preservingWorldTransform, so a child's bounds
+    /// relative to the world ARE its bounds relative to the
+    /// anchor, and the anchor's bounds are exactly the union
+    /// of its children's. The merge bakes the same triangles
+    /// into anchor space, so the union stays valid after it.
+    /// Per-anchor entity counts ride the merge's own survey
+    /// pass instead of a separate recursive count.
+    /// batch80: the load-time pass used to organize the
+    /// WHOLE 68 km world — re-parenting every child and
+    /// merging every anchor — and updateChunkVisibility then
+    /// immediately detached everything beyond ~1 km, so most
+    /// of that work was thrown away while the loading screen
+    /// sat at 93–99% 「最終調整」 (user verdict on IPA #8 and
+    /// again on IPA #10). Now the load-time pass organizes
+    /// only the neighbourhood of the route start: children
+    /// whose own origin lies within 1,200 m are re-parented
+    /// here, and anchors inside that radius (plus their
+    /// bounds radius) are merged here. Everything else is
+    /// deferred to runDeferredOrganize, which works outward
+    /// after the load lands: far children stay disabled in
+    /// place until organized, far anchors queue a deferred
+    /// merge, and the loading percent is weighted by the
+    /// near work actually processed, reaching 100 when the
+    /// playable neighbourhood is ready.
+    private func organizeWorldChunks() async {
+        chunkAnchors.removeAll()
+        chunkBounds.removeAll()
+        chunkSweepPosition = nil
+        chunkAttached.removeAll()
+        pendingChunkAttaches.removeAll()
+        chunkUnionBounds.removeAll()
+        chunkAnchorIndexByKey.removeAll()
+        deferredOrganizeQueue.removeAll()
+        deferredMergeLeaves = 0
+        deferredMergeEntities = 0
+        let cell: Float = 250
+        var excluded = Set<ObjectIdentifier>()
+        excluded.insert(ObjectIdentifier(trafficActorAdapter.root))
+        excluded.insert(ObjectIdentifier(sceneFidelityAdapter.root))
+        for model in vehicleModels { excluded.insert(ObjectIdentifier(model.root)) }
+        for root in glbCarRoots { excluded.insert(ObjectIdentifier(root)) }
+        if let lead = generatedLeadVehicleRoot { excluded.insert(ObjectIdentifier(lead)) }
+        if let lead = highFidelityLeadVehicle { excluded.insert(ObjectIdentifier(lead.root)) }
+        // Traffic-managed entities (AI trains, road cars,
+        // platform passengers) are created on demand, moved
+        // every update from the traffic snapshot and removed
+        // when stale — they must stay direct children of
+        // world, never chunked by a stale home position.
+        for entity in aiTrainEntities.values { excluded.insert(ObjectIdentifier(entity)) }
+        for entity in roadCarEntities.values { excluded.insert(ObjectIdentifier(entity)) }
+        for entity in platformPeople.values { excluded.insert(ObjectIdentifier(entity)) }
+        for rotor in windRotors { excluded.insert(ObjectIdentifier(rotor.entity)) }
+        // batch80: classification decides WHICH pass
+        // organizes each child, by the child's own origin —
+        // an O(1) read per child. It never decides where the
+        // child belongs: cell assignment and bounds always
+        // come from the real recursive bounds at organize
+        // time, in both passes. Children beyond the
+        // near-organize radius are disabled in place (so
+        // they cannot render before their chunk exists) and
+        // queued for the deferred pass.
+        let startPosition: SIMD3<Float>
+        if let start = samples.first {
+            startPosition = SIMD3<Float>(start.x, start.elevationM, start.z)
+        } else {
+            startPosition = .zero
+        }
+        let nearRadius: Float = 1_200
+        var nearChildren: [Entity] = []
+        let children = Array(world.children)
+        for child in children {
+            if excluded.contains(ObjectIdentifier(child)) { continue }
+            let dx = child.position.x - startPosition.x
+            let dz = child.position.z - startPosition.z
+            let distanceSquared = dx * dx + dz * dz
+            if distanceSquared <= nearRadius * nearRadius {
+                nearChildren.append(child)
+            } else {
+                deferredOrganizeQueue.append(.child(DeferredChunkChild(
+                    entity: child,
+                    wasEnabled: child.isEnabled,
+                    distanceFromStart: distanceSquared.squareRoot()
+                )))
+                child.isEnabled = false
+            }
+        }
+        // Re-parent the near children under their cell
+        // anchors. Progress 93 -> 96 is weighted by the near
+        // children actually processed (batch80: the deferred
+        // remainder is not part of the loading percent — the
+        // bar reaches 100 when the playable neighbourhood is
+        // ready, not when the whole 68 km is organized).
+        // batch80: the anchor dictionaries are keyed by the
+        // packed Int64 cell key, not an interpolated string.
+        for (index, child) in nearChildren.enumerated() {
+            if index > 0, index % 32 == 0 {
+                let fraction = Double(index) / Double(max(nearChildren.count, 1))
+                loadingProgress?.report(rawPercent: 93 + Int(fraction * 3), floor: 93, status: "最終調整をしています")
+                await Task.yield()
+            }
+            let bounds = child.visualBounds(recursive: true, relativeTo: world)
+            let cellX = Int(floor(bounds.center.x / cell))
+            let cellZ = Int(floor(bounds.center.z / cell))
+            let key = Self.chunkCellKey(cellX: cellX, cellZ: cellZ)
+            let anchorIndex: Int
+            let isNewAnchor: Bool
+            if let existing = chunkAnchorIndexByKey[key] {
+                anchorIndex = existing
+                isNewAnchor = false
+            } else {
+                let made = Entity()
+                made.name = "chunk-\(cellX):\(cellZ)"
+                world.addChild(made)
+                anchorIndex = chunkAnchors.count
+                chunkAnchorIndexByKey[key] = anchorIndex
+                chunkAnchors.append(made)
+                chunkUnionBounds.append((center: bounds.center, extents: bounds.extents))
+                chunkBounds.append((center: bounds.center, radius: simd_length(bounds.extents) * 0.5))
+                chunkAttached.append(true)
+                isNewAnchor = true
+            }
+            if !isNewAnchor {
+                let union = Self.chunkBoundsUnion(chunkUnionBounds[anchorIndex], (center: bounds.center, extents: bounds.extents))
+                chunkUnionBounds[anchorIndex] = union
+                chunkBounds[anchorIndex] = (center: union.center, radius: simd_length(union.extents) * 0.5)
+            }
+            chunkAnchors[anchorIndex].addChild(child, preservingWorldTransform: true)
+        }
+        // batch61: merge each anchor's pure static leaves per
+        // material (merging does not move any geometry, so the
+        // union bounds above are the same either way).
+        // batch80: at load, only anchors inside the
+        // load-merge boundary merge — the near radius plus the
+        // anchor's own bounds radius around the route start,
+        // which covers every anchor the first visibility
+        // sweeps can attach (850 m) with margin. Anchors
+        // beyond it (far cells the near pass reached through
+        // an origin-near child) queue a deferred merge
+        // instead of merging the whole route here — the old
+        // pass merged all 68 km and updateChunkVisibility
+        // then immediately detached everything past ~1 km,
+        // throwing most of that work away.
+        var nearAnchorIndices: [Int] = []
+        for (index, bounds) in chunkBounds.enumerated() {
+            let distance = simd_distance(bounds.center, startPosition)
+            if distance <= nearRadius + bounds.radius {
+                nearAnchorIndices.append(index)
+            } else {
+                deferredOrganizeQueue.append(.anchorMerge(anchorIndex: index, distanceFromStart: distance))
+            }
+        }
+        let mergeResult = await mergeStaticLeavesUnderChunkAnchors(anchorIndices: nearAnchorIndices)
+        // batch61: post-merge estimate of the render load the
+        // 850 m visibility radius keeps live at the route
+        // start, recorded with the merge outcome. batch66:
+        // the per-anchor post-merge counts come from the
+        // merge's survey pass (see anchorModelEntitiesAfter).
+        // batch80: the merge result is parallel to
+        // nearAnchorIndices, not to chunkAnchors; every anchor
+        // inside the estimate's 850 m radius is inside the
+        // load-merge boundary, so the lookup always hits.
+        var afterCountByAnchor: [Int: Int] = [:]
+        for (position, anchorIndex) in nearAnchorIndices.enumerated() {
+            afterCountByAnchor[anchorIndex] = mergeResult.anchorModelEntitiesAfter[position]
+        }
+        var estimatedNearEntities = 0
+        for (index, _) in chunkAnchors.enumerated() {
+            let bounds = chunkBounds[index]
+            if simd_distance(bounds.center, startPosition) < 850 + bounds.radius {
+                estimatedNearEntities += afterCountByAnchor[index] ?? 0
+            }
+        }
+        chunkMergeStats = ChunkMergeStats(
+            leafModelEntitiesBefore: mergeResult.leavesBefore,
+            leafModelEntitiesAfter: mergeResult.leavesBefore - mergeResult.mergedLeaves + mergeResult.mergedEntities,
+            mergedLeafCount: mergeResult.mergedLeaves,
+            mergedEntityCount: mergeResult.mergedEntities,
+            estimatedEntitiesWithinVisibleRadius: estimatedNearEntities,
+            rejectionScopeName: mergeResult.rejections.scopeName,
+            rejectionMaterial: mergeResult.rejections.materialMismatch,
+            rejectionMeshShape: mergeResult.rejections.meshShape,
+            rejectionBucketTooSmall: mergeResult.rejections.bucketTooSmall,
+            rejectionIdentity: mergeResult.rejections.identityProtected,
+            rejectionOther: mergeResult.rejections.other
+        )
+        // batch62: every anchor the load-time pass created
+        // starts out parented to the world (organize just
+        // added them, with chunkAttached already true);
+        // updateChunkVisibility detaches the far ones from
+        // here. batch80: anchors the deferred pass creates
+        // later start detached instead (see
+        // runDeferredOrganize).
+        // batch62: prove the merge numerically in the pulled
+        // log. This rides the one-shot queued lines: organize
+        // runs inside the deferred build, before the first
+        // post-build update flushes them.
+        // batch64: the line also carries the per-reason
+        // rejection tallies, so a merge that still does not
+        // bite says exactly which guard is refusing the leaves.
+        // batch80: deferredWork counts the child re-parents
+        // and anchor merges handed to the post-load pass.
+        queuedLogLines.append(String(format: "CHUNK_MERGE anchors=%d leavesBefore=%d leavesAfter=%d mergedLeaves=%d mergedEntities=%d estimatedNear=%d rejName=%d rejMaterial=%d rejMesh=%d rejBucket=%d rejIdentity=%d rejOther=%d deferredWork=%d",
+                                     chunkAnchors.count,
+                                     chunkMergeStats.leafModelEntitiesBefore,
+                                     chunkMergeStats.leafModelEntitiesAfter,
+                                     chunkMergeStats.mergedLeafCount,
+                                     chunkMergeStats.mergedEntityCount,
+                                     chunkMergeStats.estimatedEntitiesWithinVisibleRadius,
+                                     chunkMergeStats.rejectionScopeName,
+                                     chunkMergeStats.rejectionMaterial,
+                                     chunkMergeStats.rejectionMeshShape,
+                                     chunkMergeStats.rejectionBucketTooSmall,
+                                     chunkMergeStats.rejectionIdentity,
+                                     chunkMergeStats.rejectionOther,
+                                     deferredOrganizeQueue.count))
+        // batch80: hand the deferred work to the post-load
+        // pass. The caller lands the load (buildInProgress =
+        // false, progress finish) right after organize
+        // returns; the pass revalidates the build generation
+        // and the world instance every batch, so a route
+        // change abandons it with the old world.
+        if !deferredOrganizeQueue.isEmpty {
+            let generation = buildGeneration
+            let buildWorld = world
+            deferredOrganizeTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.runDeferredOrganize(generation: generation, buildWorld: buildWorld)
+            }
+        }
+    }
+
+    /// batch80: packs a 250 m grid cell's coordinates into a
+    /// single Int64 dictionary key (x in the high word, z in
+    /// the low word). The organize passes used to key their
+    /// anchor dictionaries by an interpolated "x:z" string
+    /// built for every child; the packed integer is the same
+    /// partition with no string work. The anchor's name keeps
+    /// the readable "x:z" form (built once per anchor).
+    private static func chunkCellKey(cellX: Int, cellZ: Int) -> Int64 {
+        (Int64(cellX) << 32) | Int64(UInt32(bitPattern: Int32(clamping: cellZ)))
+    }
+
+    /// batch80: post-load organize for the work
+    /// organizeWorldChunks deferred (see DeferredChunkChild
+    /// and DeferredOrganizeWork). Runs on the main actor in
+    /// small batches, yielding between them so driving never
+    /// hitches on it: each batch re-parents a handful of
+    /// children under their cell anchors and merges the
+    /// anchors it touched. Work proceeds outward from the
+    /// route start, so the organized frontier stays ahead of
+    /// the train (which covers at most ~31 m/s) while the
+    /// visibility attach radius is 850 m.
+    /// A deferred child can render only after this pass has
+    /// organized it: until then it stays disabled, and an
+    /// anchor this pass creates starts detached, so
+    /// updateChunkVisibility attaches it only inside the
+    /// usual attach radius — a chunk is always fully
+    /// organized before it can become visible. The pass
+    /// revalidates the build generation and the world
+    /// instance before touching anything and at every batch;
+    /// a route change (rebuild replaces the world and bumps
+    /// the generation) abandons the rest of the queue with
+    /// the old world.
+    private func runDeferredOrganize(generation: Int, buildWorld: Entity) async {
+        // Let the load's finishing frame present first.
+        await Task.yield()
+        guard generation == buildGeneration, world === buildWorld else { return }
+        let queue = deferredOrganizeQueue.sorted { $0.distanceFromStart < $1.distanceFromStart }
+        deferredOrganizeQueue.removeAll()
+        let cell: Float = 250
+        let identityExcluded = chunkMergeIdentityExclusions()
+        var rejections = ChunkMergeRejectionStats()
+        var leavesByAnchor: [Int: [Entity]] = [:]
+        var itemsSinceYield = 0
+        for item in queue {
+            if Task.isCancelled || generation != buildGeneration || world !== buildWorld {
+                return
+            }
+            switch item {
+            case .child(let deferred):
+                organizeDeferredChild(
+                    deferred,
+                    cell: cell,
+                    buildWorld: buildWorld,
+                    leavesByAnchor: &leavesByAnchor
+                )
+            case .anchorMerge(let anchorIndex, _):
+                // Flush pending per-child merges first: the
+                // full-anchor survey below would otherwise
+                // meet leaves this pass already collected (the
+                // merge's identity walk skips leaves whose
+                // parent chain no longer reaches the anchor,
+                // so a double visit is safe but wasteful).
+                mergeDeferredLeaves(leavesByAnchor, identityExcluded: identityExcluded, rejections: &rejections)
+                leavesByAnchor.removeAll()
+                guard chunkAnchors.indices.contains(anchorIndex) else { continue }
+                let anchor = chunkAnchors[anchorIndex]
+                var leaves: [Entity] = []
+                var modelCount = 0
+                _ = surveyChunkLeaves(anchor, leaves: &leaves, modelCount: &modelCount)
+                mergeStaticLeavesInAnchor(
+                    anchor,
+                    leaves: leaves,
+                    identityExcluded: identityExcluded,
+                    mergedNameCounter: &chunkMergedNameCounter,
+                    mergedLeaves: &deferredMergeLeaves,
+                    mergedEntities: &deferredMergeEntities,
+                    rejections: &rejections
+                )
+            }
+            itemsSinceYield += 1
+            if itemsSinceYield >= 6 {
+                mergeDeferredLeaves(leavesByAnchor, identityExcluded: identityExcluded, rejections: &rejections)
+                leavesByAnchor.removeAll()
+                itemsSinceYield = 0
+                await Task.yield()
+            }
+        }
+        mergeDeferredLeaves(leavesByAnchor, identityExcluded: identityExcluded, rejections: &rejections)
+        // batch80: the deferred totals ride the every-flush
+        // perf-log channel (the one-shot queued lines have
+        // already gone out by now).
+        pendingPerfLogLines.append(String(format: "CHUNK_MERGE_DEFERRED anchors=%d mergedLeaves=%d mergedEntities=%d rejName=%d rejMaterial=%d rejMesh=%d rejBucket=%d rejIdentity=%d rejOther=%d",
+                                          chunkAnchors.count,
+                                          deferredMergeLeaves,
+                                          deferredMergeEntities,
+                                          rejections.scopeName,
+                                          rejections.materialMismatch,
+                                          rejections.meshShape,
+                                          rejections.bucketTooSmall,
+                                          rejections.identityProtected,
+                                          rejections.other))
+    }
+
+    /// batch80: organizes one deferred child (see
+    /// runDeferredOrganize): real recursive bounds, packed
+    /// cell key, re-parent under the cell's anchor (created
+    /// detached on first sight), union-bounds growth, the
+    /// recorded enabled state restored, and the child's
+    /// leaves collected for the batch's merge. A child that
+    /// lifecycle code has claimed or dropped since
+    /// classification (the depot yard root is re-parented by
+    /// its own code, batch52) is skipped with its enabled
+    /// state handed back untouched.
+    private func organizeDeferredChild(
+        _ deferred: DeferredChunkChild,
+        cell: Float,
+        buildWorld: Entity,
+        leavesByAnchor: inout [Int: [Entity]]
+    ) {
+        let child = deferred.entity
+        guard child.parent === buildWorld else {
+            child.isEnabled = deferred.wasEnabled
+            return
+        }
+        let bounds = child.visualBounds(recursive: true, relativeTo: buildWorld)
+        let cellX = Int(floor(bounds.center.x / cell))
+        let cellZ = Int(floor(bounds.center.z / cell))
+        let key = Self.chunkCellKey(cellX: cellX, cellZ: cellZ)
+        let anchorIndex: Int
+        if let existing = chunkAnchorIndexByKey[key] {
+            anchorIndex = existing
+        } else {
+            let made = Entity()
+            made.name = "chunk-\(cellX):\(cellZ)"
+            anchorIndex = chunkAnchors.count
+            chunkAnchorIndexByKey[key] = anchorIndex
+            chunkAnchors.append(made)
+            chunkUnionBounds.append((center: bounds.center, extents: bounds.extents))
+            chunkBounds.append((center: bounds.center, radius: simd_length(bounds.extents) * 0.5))
+            chunkAttached.append(false)
+            // Force the next updateChunkVisibility to sweep,
+            // so an in-range anchor attaches promptly instead
+            // of waiting for the camera to move 120 m.
+            chunkSweepPosition = nil
+        }
+        let anchor = chunkAnchors[anchorIndex]
+        anchor.addChild(child, preservingWorldTransform: true)
+        child.isEnabled = deferred.wasEnabled
+        let union = Self.chunkBoundsUnion(chunkUnionBounds[anchorIndex], (center: bounds.center, extents: bounds.extents))
+        chunkUnionBounds[anchorIndex] = union
+        chunkBounds[anchorIndex] = (center: union.center, radius: simd_length(union.extents) * 0.5)
+        var leaves: [Entity] = []
+        var modelCount = 0
+        _ = surveyChunkLeaves(child, leaves: &leaves, modelCount: &modelCount)
+        if !leaves.isEmpty {
+            leavesByAnchor[anchorIndex, default: []].append(contentsOf: leaves)
+        }
+    }
+
+    /// batch80: merges the leaves the deferred pass has
+    /// collected, anchor by anchor (see
+    /// mergeStaticLeavesInAnchor for the merge itself).
+    private func mergeDeferredLeaves(
+        _ leavesByAnchor: [Int: [Entity]],
+        identityExcluded: Set<ObjectIdentifier>,
+        rejections: inout ChunkMergeRejectionStats
+    ) {
+        for (anchorIndex, leaves) in leavesByAnchor {
+            guard chunkAnchors.indices.contains(anchorIndex) else { continue }
+            mergeStaticLeavesInAnchor(
+                chunkAnchors[anchorIndex],
+                leaves: leaves,
+                identityExcluded: identityExcluded,
+                mergedNameCounter: &chunkMergedNameCounter,
+                mergedLeaves: &deferredMergeLeaves,
+                mergedEntities: &deferredMergeEntities,
+                rejections: &rejections
+            )
+        }
+    }
+
+    /// batch66: union of two centre/extents bounds, used to
+    /// compose a chunk anchor's bounds from its children's
+    /// (see organizeWorldChunks). Corner arithmetic only —
+    /// no RealityKit bounds object is constructed.
+    private static func chunkBoundsUnion(
+        _ a: (center: SIMD3<Float>, extents: SIMD3<Float>),
+        _ b: (center: SIMD3<Float>, extents: SIMD3<Float>)
+    ) -> (center: SIMD3<Float>, extents: SIMD3<Float>) {
+        let minCorner = simd_min(a.center - a.extents * 0.5, b.center - b.extents * 0.5)
+        let maxCorner = simd_max(a.center + a.extents * 0.5, b.center + b.extents * 0.5)
+        return (center: (minCorner + maxCorner) * 0.5, extents: maxCorner - minCorner)
+    }
+
+    /// batch61: name fragments that keep an entity out of
+    /// the static merge. Anything whose state is driven after
+    /// the build (signal lamps, crossing flashers and gates,
+    /// departure boards, doors, people) must never be baked
+    /// into a merged mesh: the merge drops the per-entity
+    /// identity those updaters rely on.
+    /// batch64: the fragments now filter LEAF BY LEAF. They
+    /// used to reject an entire group whenever any name in
+    /// its subtree matched, which in practice disqualified
+    /// nearly every builder group in the world (a station
+    /// group contains a sign somewhere) and left the merge
+    /// with almost nothing to do. Name filtering alone is
+    /// NOT the safety mechanism for state-driven objects,
+    /// though: the signal lamps are UNNAMED ModelEntities
+    /// referenced only through `signalLampHeads`, so no name
+    /// rule can see them. State-driven objects are protected
+    /// by identity instead — see the exclusion set built in
+    /// mergeStaticLeavesUnderChunkAnchors and the ancestor
+    /// walk in chunkMergeIsIdentityProtected.
+    private static let chunkMergeForbiddenNameFragments = [
+        "signal", "gate", "board", "lamp", "light", "door",
+        "person", "people", "sign", "precipitation",
+    ]
+
+    private func chunkMergeNameIsForbidden(_ name: String) -> Bool {
+        let lowered = name.lowercased()
+        return Self.chunkMergeForbiddenNameFragments.contains { lowered.contains($0) }
+    }
+
+    /// One validated static leaf, ready to bake: its material
+    /// fingerprint, the material itself, and its geometry
+    /// already transformed into merge-scope space.
+    private struct ChunkMergeCandidate {
+        var key: String
+        var material: RealityKit.Material
+        var positions: [SIMD3<Float>]
+        var normals: [SIMD3<Float>]
+        var uvs: [SIMD2<Float>]
+        var indices: [UInt32]
+    }
+
+    /// Accumulates the baked geometry of one material group
+    /// inside one merge scope.
+    private struct ChunkMergeBucket {
+        var material: RealityKit.Material
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+        var leaves: [Entity] = []
+
+        mutating func append(candidate: ChunkMergeCandidate, leaf: Entity) {
+            let base = UInt32(positions.count)
+            positions.append(contentsOf: candidate.positions)
+            normals.append(contentsOf: candidate.normals)
+            uvs.append(contentsOf: candidate.uvs)
+            for index in candidate.indices {
+                indices.append(base + index)
+            }
+            leaves.append(leaf)
+        }
+    }
+
+    /// batch61: merge the pure static leaf ModelEntities
+    /// under each chunk anchor into a handful of per-material
+    /// ModelEntities whose geometry is baked in scope space.
+    /// Draw calls, not triangles, are the device bottleneck:
+    /// batch60's chunking still left ~10,000 individual
+    /// ModelEntities enabled inside the visibility radius.
+    /// The merge is restricted to leaves that provably cannot
+    /// change after the build (see chunkMergeCandidate and
+    /// the scope rules in mergeStaticLeavesInAnchor); when in
+    /// doubt a leaf is left exactly as it was. Returns the
+    /// counts organizeWorldChunks records in chunkMergeStats.
+    /// batch64: buckets now span the WHOLE anchor instead of
+    /// one builder group at a time (a material that appears
+    /// once per group but forty times per cell finally
+    /// merges), SimpleMaterial / UnlitMaterial leaves are
+    /// eligible alongside PhysicallyBasedMaterial, and every
+    /// rejection is tallied by reason.
+    /// batch66: the return gains anchorModelEntitiesAfter —
+    /// the post-merge ModelEntity count of each anchor in
+    /// `anchorIndices`, parallel to that argument. The survey
+    /// pass already walks every node under the anchor, so the
+    /// counts cost no extra traversal: post-merge = surveyed
+    /// ModelEntities − leaves the merge consumed + merged
+    /// entities it made. organizeWorldChunks uses them for
+    /// its near-field estimate instead of a separate
+    /// recursive count. The function is async so the anchor
+    /// loop can yield (and feed the loading screen) every few
+    /// dozen anchors; its only caller is organizeWorldChunks.
+    /// batch80: the anchor list is an argument — the
+    /// load-time pass merges only the anchors inside its
+    /// load-merge boundary; the rest merge in the deferred
+    /// pass (which calls mergeStaticLeavesInAnchor directly,
+    /// per anchor, and does not need these totals).
+    private func mergeStaticLeavesUnderChunkAnchors(anchorIndices: [Int]) async -> (leavesBefore: Int, mergedLeaves: Int, mergedEntities: Int, rejections: ChunkMergeRejectionStats, anchorModelEntitiesAfter: [Int]) {
+        let identityExcluded = chunkMergeIdentityExclusions()
+        var leavesBefore = 0
+        var mergedLeaves = 0
+        var mergedEntities = 0
+        var rejections = ChunkMergeRejectionStats()
+        var anchorModelEntitiesAfter: [Int] = []
+        anchorModelEntitiesAfter.reserveCapacity(anchorIndices.count)
+        for (position, anchorIndex) in anchorIndices.enumerated() {
+            if position > 0, position % 16 == 0 {
+                let fraction = Double(position) / Double(max(anchorIndices.count, 1))
+                loadingProgress?.report(rawPercent: 96 + Int(fraction * 3), floor: 96, status: "最終調整をしています")
+                await Task.yield()
+            }
+            let anchor = chunkAnchors[anchorIndex]
+            var leaves: [Entity] = []
+            var modelCount = 0
+            let mergedLeavesBefore = mergedLeaves
+            let mergedEntitiesBefore = mergedEntities
+            leavesBefore += surveyChunkLeaves(anchor, leaves: &leaves, modelCount: &modelCount)
+            mergeStaticLeavesInAnchor(
+                anchor,
+                leaves: leaves,
+                identityExcluded: identityExcluded,
+                mergedNameCounter: &chunkMergedNameCounter,
+                mergedLeaves: &mergedLeaves,
+                mergedEntities: &mergedEntities,
+                rejections: &rejections
+            )
+            anchorModelEntitiesAfter.append(modelCount - (mergedLeaves - mergedLeavesBefore) + (mergedEntities - mergedEntitiesBefore))
+        }
+        return (leavesBefore, mergedLeaves, mergedEntities, rejections, anchorModelEntitiesAfter)
+    }
+
+    /// Entities whose identity must survive the build — the
+    /// complete set of direct-reference holders into chunked
+    /// subtrees, audited for batch64 against every stored
+    /// entity reference and every per-frame updater in this
+    /// file:
+    /// - surface-material targets receive fresh materials
+    ///   from updateSurfaceMaterials when the weather
+    ///   changes;
+    /// - signal lamp heads: the lamps are UNNAMED
+    ///   ModelEntities whose materials applyAspect swaps
+    ///   through signalLampHeads — no name rule can see
+    ///   them, so identity is the only protection;
+    /// - person rig roots are moved by updatePeople;
+    /// - the depot yard root and the imported station
+    ///   model are re-parented / re-posed by their own
+    ///   lifecycle code;
+    /// - precipitation particles and the pantograph spark
+    ///   are toggled and moved by their updaters;
+    /// - the sky dome follows the camera;
+    /// - generated-asset roots are loaded GLB hierarchies
+    ///   kept intact as a whole.
+    /// A leaf anywhere UNDER one of these roots is just as
+    /// protected (see chunkMergeIsIdentityProtected). The
+    /// traffic dictionaries are never parented under the
+    /// anchors, but are listed defensively. Vehicle and
+    /// cab internals never sit under an anchor either
+    /// (organizeWorldChunks excludes their roots), and no
+    /// per-frame code searches the world hierarchy for
+    /// chunked content, so stored references are the only
+    /// channel through which an updater can reach a leaf.
+    /// batch80: factored out of
+    /// mergeStaticLeavesUnderChunkAnchors — the deferred
+    /// organize pass builds the same set when it runs (by
+    /// then every stored reference it reads is final).
+    private func chunkMergeIdentityExclusions() -> Set<ObjectIdentifier> {
+        var identityExcluded = Set<ObjectIdentifier>()
+        for target in surfaceMaterialTargets { identityExcluded.insert(ObjectIdentifier(target.entity)) }
+        for root in generatedStaticAssetRoots { identityExcluded.insert(ObjectIdentifier(root)) }
+        for entity in aiTrainEntities.values { identityExcluded.insert(ObjectIdentifier(entity)) }
+        for entity in roadCarEntities.values { identityExcluded.insert(ObjectIdentifier(entity)) }
+        for entity in platformPeople.values { identityExcluded.insert(ObjectIdentifier(entity)) }
+        for rotor in windRotors { identityExcluded.insert(ObjectIdentifier(rotor.entity)) }
+        for lamps in signalLampHeads.values {
+            for lamp in lamps { identityExcluded.insert(ObjectIdentifier(lamp)) }
+        }
+        for rig in personRigs { identityExcluded.insert(ObjectIdentifier(rig.root)) }
+        for particle in precipitationEntities { identityExcluded.insert(ObjectIdentifier(particle)) }
+        if let depotYardRoot { identityExcluded.insert(ObjectIdentifier(depotYardRoot)) }
+        if let importedStationEntity { identityExcluded.insert(ObjectIdentifier(importedStationEntity)) }
+        if let skyDome { identityExcluded.insert(ObjectIdentifier(skyDome)) }
+        if let pantographSpark { identityExcluded.insert(ObjectIdentifier(pantographSpark)) }
+        return identityExcluded
+    }
+
+    /// One recursive pass over a chunk anchor's subtree:
+    /// collects every leaf ModelEntity (a ModelEntity with no
+    /// children) and counts them. batch64: the pass no longer
+    /// tracks forbidden names per subtree — name filtering is
+    /// per leaf now (see chunkMergeCandidate), so a group is
+    /// never disqualified by what sits inside it.
+    /// batch66: the same walk also counts EVERY ModelEntity
+    /// (leaf or not) into modelCount, which is what lets
+    /// organizeWorldChunks price an anchor's post-merge
+    /// entity total without a second recursive count.
+    private func surveyChunkLeaves(
+        _ entity: Entity,
+        leaves: inout [Entity],
+        modelCount: inout Int
+    ) -> Int {
+        var leafCount = 0
+        if entity is ModelEntity {
+            modelCount += 1
+            if entity.children.isEmpty {
+                leafCount = 1
+                leaves.append(entity)
+            }
+        }
+        for child in entity.children {
+            leafCount += surveyChunkLeaves(child, leaves: &leaves, modelCount: &modelCount)
+        }
+        return leafCount
+    }
+
+    /// Merges the qualifying leaves of one chunk anchor
+    /// into per-material ModelEntities parented to the
+    /// anchor itself, with geometry baked into anchor space.
+    /// batch64 scope rules: buckets span the whole anchor
+    /// (batch61 bucketed per builder group, so a material
+    /// used once per group never reached the two-leaf
+    /// minimum); state-driven objects are filtered per leaf
+    /// — by name in chunkMergeCandidate and by identity in
+    /// chunkMergeIsIdentityProtected — instead of rejecting
+    /// the whole group they happen to sit in.
+    private func mergeStaticLeavesInAnchor(
+        _ anchor: Entity,
+        leaves: [Entity],
+        identityExcluded: Set<ObjectIdentifier>,
+        mergedNameCounter: inout Int,
+        mergedLeaves: inout Int,
+        mergedEntities: inout Int,
+        rejections: inout ChunkMergeRejectionStats
+    ) {
+        // batch80: two-pass candidacy. The old loop built a
+        // full candidate — the material fingerprint string
+        // plus a complete baked copy of the geometry — for
+        // EVERY eligible leaf, then threw that work away for
+        // leaves that ended up alone in their bucket. Pass 1
+        // (chunkMergePrecheck) runs only the cheap checks and
+        // counts leaves by a cheap material digest; pass 2
+        // builds fingerprints and geometry only for leaves
+        // whose digest has company, so singletons skip the
+        // geometry copy entirely. Equal fingerprints always
+        // produce equal digests, so no merge the old loop
+        // found is lost; a digest collision can only cost a
+        // wasted pass-2 build, because pass 2 still separates
+        // by the full fingerprint exactly as before.
+        var preKeyCounts: [ChunkMergePreKey: Int] = [:]
+        var prechecked: [(leaf: Entity, preKey: ChunkMergePreKey)] = []
+        prechecked.reserveCapacity(leaves.count)
+        for leaf in leaves {
+            if chunkMergeIsIdentityProtected(leaf, anchor: anchor, identityExcluded: identityExcluded) {
+                rejections.identityProtected += 1
+                continue
+            }
+            guard let preKey = chunkMergePrecheck(leaf, scope: anchor, rejections: &rejections) else { continue }
+            preKeyCounts[preKey, default: 0] += 1
+            prechecked.append((leaf: leaf, preKey: preKey))
+        }
+        var buckets: [String: ChunkMergeBucket] = [:]
+        var bucketKeys: [String] = []
+        for entry in prechecked {
+            guard let count = preKeyCounts[entry.preKey], count >= 2 else {
+                rejections.bucketTooSmall += 1
+                continue
+            }
+            // The precheck already validated this leaf with
+            // the real tallies, so a nil candidate here is not
+            // a new rejection — build with scratch tallies and
+            // skip silently rather than double-count.
+            var scratchRejections = ChunkMergeRejectionStats()
+            guard let candidate = chunkMergeCandidate(entry.leaf, scope: anchor, rejections: &scratchRejections) else { continue }
+            if var bucket = buckets[candidate.key] {
+                bucket.append(candidate: candidate, leaf: entry.leaf)
+                buckets[candidate.key] = bucket
+            } else {
+                var bucket = ChunkMergeBucket(material: candidate.material)
+                bucket.append(candidate: candidate, leaf: entry.leaf)
+                buckets[candidate.key] = bucket
+                bucketKeys.append(candidate.key)
+            }
+        }
+        for key in bucketKeys {
+            guard let bucket = buckets[key] else { continue }
+            guard bucket.leaves.count >= 2 else {
+                rejections.bucketTooSmall += bucket.leaves.count
+                continue
+            }
+            var descriptor = MeshDescriptor(name: "chunk-merged")
+            descriptor.positions = MeshBuffers.Positions(bucket.positions)
+            descriptor.normals = MeshBuffers.Normals(bucket.normals)
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(bucket.uvs)
+            descriptor.primitives = .triangles(bucket.indices)
+            // If generation fails the leaves stay untouched.
+            guard let mesh = try? MeshResource.generate(from: [descriptor]) else { continue }
+            let merged = ModelEntity(mesh: mesh, materials: [bucket.material])
+            mergedNameCounter += 1
+            merged.name = "chunk-merged-\(mergedNameCounter)"
+            anchor.addChild(merged)
+            for leaf in bucket.leaves {
+                leaf.removeFromParent()
+            }
+            mergedLeaves += bucket.leaves.count
+            mergedEntities += 1
+        }
+    }
+
+    /// True when the leaf itself, or any ancestor up to the
+    /// chunk anchor, is an identity-excluded root (a leaf
+    /// inside a generated GLB asset or a person rig stays
+    /// untouched even when its own name and material are
+    /// clean). A leaf whose parent chain never reaches the
+    /// anchor is treated as protected: it is not this
+    /// anchor's to merge.
+    private func chunkMergeIsIdentityProtected(_ leaf: Entity, anchor: Entity, identityExcluded: Set<ObjectIdentifier>) -> Bool {
+        var node: Entity? = leaf
+        while let current = node {
+            if identityExcluded.contains(ObjectIdentifier(current)) { return true }
+            if current === anchor { return false }
+            node = current.parent
+        }
+        return true
+    }
+
+    /// batch80: cheap merge-digest key for the two-pass
+    /// candidacy in mergeStaticLeavesInAnchor. `digest` is a
+    /// Hasher fold of the same inputs the full fingerprint
+    /// string encodes (see chunkMergeMaterialDigest), so
+    /// leaves with equal fingerprints always share a
+    /// pre-key; the converse is not required, because pass 2
+    /// re-separates by the full fingerprint. Digests are only
+    /// ever compared within one organize pass, so the
+    /// per-process Hasher seed is not a concern.
+    private struct ChunkMergePreKey: Hashable {
+        var kind: Int
+        var digest: UInt64
+    }
+
+    /// batch80: pass 1 of merge candidacy — every validation
+    /// chunkMergeCandidate performs EXCEPT building the
+    /// fingerprint string and baking the geometry. Returns
+    /// the leaf's cheap pre-key, or nil with the reason
+    /// tallied in `rejections`, exactly as the candidate
+    /// would. The mesh-structure checks read buffer counts
+    /// and index values only; no vertex data is copied or
+    /// transformed here.
+    private func chunkMergePrecheck(_ leaf: Entity, scope: Entity, rejections: inout ChunkMergeRejectionStats) -> ChunkMergePreKey? {
+        guard leaf.children.isEmpty else { rejections.other += 1; return nil }
+        guard leaf.isEnabled else { rejections.other += 1; return nil }
+        guard !chunkMergeNameIsForbidden(leaf.name) else { rejections.scopeName += 1; return nil }
+        guard let modelEntity = leaf as? ModelEntity,
+              let model = modelEntity.model else { rejections.other += 1; return nil }
+        guard model.materials.count == 1,
+              let rawMaterial = model.materials.first else { rejections.materialMismatch += 1; return nil }
+        let preKey: ChunkMergePreKey
+        var consumesTangents = false
+        if let pbm = rawMaterial as? PhysicallyBasedMaterial {
+            preKey = ChunkMergePreKey(kind: 0, digest: chunkMergeMaterialDigest(pbm))
+            consumesTangents = pbm.normal.texture != nil
+        } else if let simple = rawMaterial as? SimpleMaterial {
+            var hasher = Hasher()
+            hasher.combine(chunkMergeSimpleMaterialKey(simple))
+            preKey = ChunkMergePreKey(kind: 1, digest: UInt64(bitPattern: Int64(hasher.finalize())))
+        } else if let unlit = rawMaterial as? UnlitMaterial {
+            var hasher = Hasher()
+            hasher.combine(chunkMergeUnlitMaterialKey(unlit))
+            preKey = ChunkMergePreKey(kind: 2, digest: UInt64(bitPattern: Int64(hasher.finalize())))
+        } else {
+            rejections.materialMismatch += 1
+            return nil
+        }
+
+        let contents = model.mesh.contents
+        guard contents.instances.isEmpty else { rejections.meshShape += 1; return nil }
+        let models = Array(contents.models)
+        guard models.count == 1 else { rejections.meshShape += 1; return nil }
+        let parts = Array(models[0].parts)
+        guard parts.count == 1 else { rejections.meshShape += 1; return nil }
+        let part = parts[0]
+        guard part.materialIndex == 0,
+              part.buffers.count <= (part.tangents == nil ? 3 : 4),
+              let normalsBuffer = part.normals,
+              let uvBuffer = part.textureCoordinates,
+              let indexBuffer = part.triangleIndices
+        else { rejections.meshShape += 1; return nil }
+        if part.tangents != nil, consumesTangents {
+            rejections.meshShape += 1
+            return nil
+        }
+        let positionCount = part.positions.elements.count
+        guard positionCount > 0,
+              normalsBuffer.elements.count == positionCount,
+              uvBuffer.elements.count == positionCount,
+              indexBuffer.elements.count % 3 == 0,
+              indexBuffer.elements.allSatisfy({ $0 < UInt32(positionCount) })
+        else { rejections.meshShape += 1; return nil }
+        let matrix = leaf.transformMatrix(relativeTo: scope)
+        let determinant = simd_determinant(matrix)
+        guard determinant.isFinite, determinant > 1e-6 else { rejections.meshShape += 1; return nil }
+        return preKey
+    }
+
+    /// batch80: folds a PhysicallyBasedMaterial's
+    /// fingerprint inputs into one UInt64 without building
+    /// the fingerprint string (chunkMergeMaterialKey is the
+    /// canonical encoding). Every input the string encodes
+    /// is folded in a form the string determines exactly —
+    /// texture identities and uv indices, float bit
+    /// patterns, the tint's rounded bytes (see
+    /// chunkMergeTintPacked), and the few fragments whose
+    /// string form is not a pure function of a bit pattern
+    /// (the two CGColors' "%.4f" components, the faceCulling
+    /// description), folded as those strings themselves —
+    /// so equal fingerprints always fold to equal digests.
+    private func chunkMergeMaterialDigest(_ material: PhysicallyBasedMaterial) -> UInt64 {
+        var hasher = Hasher()
+        hasher.combine(chunkMergeTintPacked(material.baseColor.tint))
+        chunkMergeDigestTexture(material.baseColor.texture, into: &hasher)
+        hasher.combine(material.metallic.scale.bitPattern)
+        chunkMergeDigestTexture(material.metallic.texture, into: &hasher)
+        hasher.combine(material.roughness.scale.bitPattern)
+        chunkMergeDigestTexture(material.roughness.texture, into: &hasher)
+        chunkMergeDigestTexture(material.normal.texture, into: &hasher)
+        hasher.combine(chunkMergeCGColorKey(material.emissiveColor.__color))
+        chunkMergeDigestTexture(material.emissiveColor.texture, into: &hasher)
+        hasher.combine(material.emissiveIntensity.bitPattern)
+        hasher.combine(material.specular.scale.bitPattern)
+        chunkMergeDigestTexture(material.specular.texture, into: &hasher)
+        hasher.combine(material.clearcoat.scale.bitPattern)
+        chunkMergeDigestTexture(material.clearcoat.texture, into: &hasher)
+        hasher.combine(material.clearcoatRoughness.scale.bitPattern)
+        chunkMergeDigestTexture(material.clearcoatRoughness.texture, into: &hasher)
+        chunkMergeDigestTexture(material.ambientOcclusion.texture, into: &hasher)
+        hasher.combine(material.anisotropyLevel.scale.bitPattern)
+        chunkMergeDigestTexture(material.anisotropyLevel.texture, into: &hasher)
+        hasher.combine(material.anisotropyAngle.scale.bitPattern)
+        chunkMergeDigestTexture(material.anisotropyAngle.texture, into: &hasher)
+        if let sheen = material.sheen {
+            hasher.combine(1)
+            hasher.combine(chunkMergeCGColorKey(sheen.__tint))
+            chunkMergeDigestTexture(sheen.texture, into: &hasher)
+        } else {
+            hasher.combine(0)
+        }
+        if let threshold = material.opacityThreshold {
+            hasher.combine(1)
+            hasher.combine(threshold.bitPattern)
+        } else {
+            hasher.combine(0)
+        }
+        // The fingerprint stringifies faceCulling; fold that
+        // same description (one short string — the only one
+        // the digest builds besides the CGColor fragments).
+        hasher.combine(String(describing: material.faceCulling))
+        switch material.blending {
+        case .opaque:
+            hasher.combine(0)
+        case .transparent(let opacity):
+            hasher.combine(1)
+            hasher.combine(opacity.scale.bitPattern)
+            chunkMergeDigestTexture(opacity.texture, into: &hasher)
+        }
+        let transform = material.textureCoordinateTransform
+        hasher.combine(transform.offset.x.bitPattern)
+        hasher.combine(transform.offset.y.bitPattern)
+        hasher.combine(transform.scale.x.bitPattern)
+        hasher.combine(transform.scale.y.bitPattern)
+        hasher.combine(transform.rotation.bitPattern)
+        let secondary = material.secondaryTextureCoordinateTransform
+        hasher.combine(secondary.offset.x.bitPattern)
+        hasher.combine(secondary.offset.y.bitPattern)
+        hasher.combine(secondary.scale.x.bitPattern)
+        hasher.combine(secondary.scale.y.bitPattern)
+        hasher.combine(secondary.rotation.bitPattern)
+        return UInt64(bitPattern: Int64(hasher.finalize()))
+    }
+
+    private func chunkMergeDigestTexture(_ texture: PhysicallyBasedMaterial.Texture?, into hasher: inout Hasher) {
+        guard let texture else {
+            hasher.combine(-1)
+            return
+        }
+        hasher.combine(ObjectIdentifier(texture.resource))
+        hasher.combine(texture.uvIndex)
+    }
+
+    /// The tint's fingerprint bytes (see chunkMergeTintKey)
+    /// packed into one word, for the digest.
+    private func chunkMergeTintPacked(_ color: UIColor) -> UInt64 {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let r = UInt64(Int((red * 255).rounded()) & 0xFF)
+        let g = UInt64(Int((green * 255).rounded()) & 0xFF)
+        let b = UInt64(Int((blue * 255).rounded()) & 0xFF)
+        let a = UInt64(Int((alpha * 255).rounded()) & 0xFF)
+        return (r << 24) | (g << 16) | (b << 8) | a
+    }
+
+    /// Validates one leaf under a merge scope (the chunk
+    /// anchor) as a pure static leaf and, if it qualifies,
+    /// returns its material fingerprint plus its geometry
+    /// baked into scope space. Anything doubtful returns nil
+    /// (the leaf stays as is) and tallies the reason in
+    /// `rejections`: non-ModelEntity or non-leaf entities,
+    /// disabled leaves, forbidden names, materials that are
+    /// not a single PhysicallyBasedMaterial / SimpleMaterial
+    /// / UnlitMaterial, meshes that are instanced /
+    /// multi-part / missing normals, UVs or indices /
+    /// carrying unrecognised vertex buffers, and mirrored or
+    /// degenerate transforms. Identity protection is the
+    /// caller's job (chunkMergeIsIdentityProtected).
+    /// batch64 tangents rule: a mesh's tangent buffer is
+    /// consumed only when the material samples a normal map.
+    /// A leaf whose material has no normal texture renders
+    /// identically without tangents, so tangents alone no
+    /// longer disqualify it (the baked descriptor carries
+    /// none); a normal-mapped leaf with tangents is still
+    /// refused, because dropping them would change its
+    /// shading.
+    private func chunkMergeCandidate(_ leaf: Entity, scope: Entity, rejections: inout ChunkMergeRejectionStats) -> ChunkMergeCandidate? {
+        guard leaf.children.isEmpty else { rejections.other += 1; return nil }
+        guard leaf.isEnabled else { rejections.other += 1; return nil }
+        guard !chunkMergeNameIsForbidden(leaf.name) else { rejections.scopeName += 1; return nil }
+        guard let modelEntity = leaf as? ModelEntity,
+              let model = modelEntity.model else { rejections.other += 1; return nil }
+        guard model.materials.count == 1,
+              let rawMaterial = model.materials.first else { rejections.materialMismatch += 1; return nil }
+        let material: RealityKit.Material
+        let key: String
+        var consumesTangents = false
+        if let pbm = rawMaterial as? PhysicallyBasedMaterial {
+            material = pbm
+            key = chunkMergeMaterialKey(pbm)
+            consumesTangents = pbm.normal.texture != nil
+        } else if let simple = rawMaterial as? SimpleMaterial {
+            material = simple
+            key = chunkMergeSimpleMaterialKey(simple)
+        } else if let unlit = rawMaterial as? UnlitMaterial {
+            material = unlit
+            key = chunkMergeUnlitMaterialKey(unlit)
+        } else {
+            rejections.materialMismatch += 1
+            return nil
+        }
+
+        let contents = model.mesh.contents
+        guard contents.instances.isEmpty else { rejections.meshShape += 1; return nil }
+        let models = Array(contents.models)
+        guard models.count == 1 else { rejections.meshShape += 1; return nil }
+        let parts = Array(models[0].parts)
+        guard parts.count == 1 else { rejections.meshShape += 1; return nil }
+        let part = parts[0]
+        guard part.materialIndex == 0,
+              part.buffers.count <= (part.tangents == nil ? 3 : 4),
+              let normalsBuffer = part.normals,
+              let uvBuffer = part.textureCoordinates,
+              let indexBuffer = part.triangleIndices
+        else { rejections.meshShape += 1; return nil }
+        if part.tangents != nil, consumesTangents {
+            rejections.meshShape += 1
+            return nil
+        }
+        let sourcePositions = part.positions.elements
+        let sourceNormals = normalsBuffer.elements
+        let sourceUVs = uvBuffer.elements
+        let sourceIndices = indexBuffer.elements
+        guard !sourcePositions.isEmpty,
+              sourceNormals.count == sourcePositions.count,
+              sourceUVs.count == sourcePositions.count,
+              sourceIndices.count % 3 == 0,
+              sourceIndices.allSatisfy({ $0 < UInt32(sourcePositions.count) })
+        else { rejections.meshShape += 1; return nil }
+
+        // Bake the leaf's transform (relative to the merge
+        // scope) into the geometry. Mirrored transforms
+        // (negative determinant, e.g. the sky dome's flipped
+        // sphere) are refused: baking one would flip the
+        // triangle winding and turn the surface inside out.
+        let matrix = leaf.transformMatrix(relativeTo: scope)
+        let determinant = simd_determinant(matrix)
+        guard determinant.isFinite, determinant > 1e-6 else { rejections.meshShape += 1; return nil }
+        let upper = simd_float3x3(
+            SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z),
+            SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z),
+            SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
+        )
+        let normalMatrix = simd_transpose(simd_inverse(upper))
+        var bakedPositions: [SIMD3<Float>] = []
+        bakedPositions.reserveCapacity(sourcePositions.count)
+        for point in sourcePositions {
+            let homogeneous = matrix * SIMD4<Float>(point.x, point.y, point.z, 1)
+            bakedPositions.append(SIMD3<Float>(homogeneous.x, homogeneous.y, homogeneous.z))
+        }
+        var bakedNormals: [SIMD3<Float>] = []
+        bakedNormals.reserveCapacity(sourceNormals.count)
+        for normal in sourceNormals {
+            let transformed = normalMatrix * normal
+            let lengthSquared = simd_length_squared(transformed)
+            if lengthSquared > 1e-12 {
+                bakedNormals.append(transformed / lengthSquared.squareRoot())
+            } else {
+                bakedNormals.append(normal)
+            }
+        }
+        return ChunkMergeCandidate(
+            key: key,
+            material: material,
+            positions: bakedPositions,
+            normals: bakedNormals,
+            uvs: sourceUVs,
+            indices: sourceIndices
+        )
+    }
+
+    /// A fingerprint of every publicly readable
+    /// PhysicallyBasedMaterial parameter. Two materials with
+    /// the same fingerprint are parameter-identical, so
+    /// baking their leaves into one entity carrying one of
+    /// the materials cannot change how anything renders.
+    /// (Texture samplers are not part of the fingerprint:
+    /// every texture in the project is installed with the
+    /// default sampler via MaterialParameters.Texture's
+    /// init(_:).)
+    /// Shared fingerprint fragments for the three eligible
+    /// material kinds (batch64: hoisted out of
+    /// chunkMergeMaterialKey so the Simple / Unlit
+    /// fingerprints use the exact same encodings).
+    private func chunkMergeTextureKey(_ texture: PhysicallyBasedMaterial.Texture?) -> String {
+        guard let texture else { return "-" }
+        return "\(ObjectIdentifier(texture.resource))#\(texture.uvIndex)"
+    }
+
+    private func chunkMergeFloatKey(_ value: Float) -> String { "\(value.bitPattern)" }
+
+    private func chunkMergeCGColorKey(_ color: CGColor) -> String {
+        (color.components ?? []).map { String(format: "%.4f", Double($0)) }.joined(separator: ",")
+    }
+
+    private func chunkMergeTintKey(_ color: UIColor) -> String {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return "\(Int((red * 255).rounded()))/\(Int((green * 255).rounded()))/\(Int((blue * 255).rounded()))/\(Int((alpha * 255).rounded()))"
+    }
+
+    private func chunkMergeMaterialKey(_ material: PhysicallyBasedMaterial) -> String {
+        var key = ""
+        key += "bc:" + chunkMergeTintKey(material.baseColor.tint) + ":" + chunkMergeTextureKey(material.baseColor.texture)
+        key += "|m:" + chunkMergeFloatKey(material.metallic.scale) + ":" + chunkMergeTextureKey(material.metallic.texture)
+        key += "|r:" + chunkMergeFloatKey(material.roughness.scale) + ":" + chunkMergeTextureKey(material.roughness.texture)
+        key += "|n:" + chunkMergeTextureKey(material.normal.texture)
+        key += "|e:" + chunkMergeCGColorKey(material.emissiveColor.__color) + ":" + chunkMergeTextureKey(material.emissiveColor.texture) + ":" + chunkMergeFloatKey(material.emissiveIntensity)
+        key += "|s:" + chunkMergeFloatKey(material.specular.scale) + ":" + chunkMergeTextureKey(material.specular.texture)
+        key += "|cc:" + chunkMergeFloatKey(material.clearcoat.scale) + ":" + chunkMergeTextureKey(material.clearcoat.texture)
+        key += "|cr:" + chunkMergeFloatKey(material.clearcoatRoughness.scale) + ":" + chunkMergeTextureKey(material.clearcoatRoughness.texture)
+        key += "|ao:" + chunkMergeTextureKey(material.ambientOcclusion.texture)
+        key += "|al:" + chunkMergeFloatKey(material.anisotropyLevel.scale) + ":" + chunkMergeTextureKey(material.anisotropyLevel.texture)
+        key += "|aa:" + chunkMergeFloatKey(material.anisotropyAngle.scale) + ":" + chunkMergeTextureKey(material.anisotropyAngle.texture)
+        if let sheen = material.sheen {
+            key += "|sh:" + chunkMergeCGColorKey(sheen.__tint) + ":" + chunkMergeTextureKey(sheen.texture)
+        } else {
+            key += "|sh:-"
+        }
+        if let threshold = material.opacityThreshold {
+            key += "|ot:" + chunkMergeFloatKey(threshold)
+        } else {
+            key += "|ot:-"
+        }
+        key += "|fc:" + "\(material.faceCulling)"
+        switch material.blending {
+        case .opaque:
+            key += "|bl:opaque"
+        case .transparent(let opacity):
+            key += "|bl:transparent:" + chunkMergeFloatKey(opacity.scale) + ":" + chunkMergeTextureKey(opacity.texture)
+        }
+        let transform = material.textureCoordinateTransform
+        key += "|uv:" + chunkMergeFloatKey(transform.offset.x) + "," + chunkMergeFloatKey(transform.offset.y) + "," + chunkMergeFloatKey(transform.scale.x) + "," + chunkMergeFloatKey(transform.scale.y) + "," + chunkMergeFloatKey(transform.rotation)
+        let secondary = material.secondaryTextureCoordinateTransform
+        key += "|uv2:" + chunkMergeFloatKey(secondary.offset.x) + "," + chunkMergeFloatKey(secondary.offset.y) + "," + chunkMergeFloatKey(secondary.scale.x) + "," + chunkMergeFloatKey(secondary.scale.y) + "," + chunkMergeFloatKey(secondary.rotation)
+        return key
+    }
+
+    /// batch64: fingerprint of a SimpleMaterial's publicly
+    /// readable parameters — both colour parameters (the
+    /// project sets `color` at construction and `baseColor`
+    /// when a texture is bound over it, so both are keyed),
+    /// the standalone tint, and the roughness / metallic
+    /// scales. Same contract as the PhysicallyBasedMaterial
+    /// fingerprint: equal keys are parameter-identical.
+    private func chunkMergeSimpleMaterialKey(_ material: SimpleMaterial) -> String {
+        var key = "s:" + chunkMergeTintKey(material.color.tint) + ":" + chunkMergeTextureKey(material.color.texture)
+        key += "|bc:" + String(describing: material.baseColor)
+        key += "|tc:" + chunkMergeTintKey(material.tintColor)
+        key += "|r:" + String(describing: material.roughness)
+        key += "|m:" + String(describing: material.metallic)
+        return key
+    }
+
+    /// batch64: fingerprint of an UnlitMaterial — its colour
+    /// parameter (tint + texture) is the only appearance
+    /// input the project ever sets on one.
+    private func chunkMergeUnlitMaterialKey(_ material: UnlitMaterial) -> String {
+        "u:" + chunkMergeTintKey(material.color.tint) + ":" + chunkMergeTextureKey(material.color.texture)
+    }
+
+    /// batch60: enable only the chunks whose bounds come
+    /// within the visibility radius of the camera. Runs a
+    /// sweep when the camera has moved 120 m since the last
+    /// one, so the per-frame cost between sweeps is a single
+    /// distance check.
+    /// batch61: the radius drops from 1.7 km to 850 m — with
+    /// the static-leaf merge above, what stays live inside
+    /// 850 m is a few hundred merged entities instead of
+    /// ~10,000 individual ones.
+    /// batch62: disabling was not enough — a disabled subtree
+    /// is still walked by the renderer's scene traversal, and
+    /// the device stayed choppy. Far anchors are now DETACHED
+    /// from the world (removeFromParent) and re-attached as
+    /// the camera approaches, so their subtrees leave the
+    /// scene graph entirely. Attach and detach use different
+    /// radii (850 m / 1,000 m, each plus the anchor's own
+    /// bounds radius): the 150 m hysteresis band keeps an
+    /// anchor in whatever state it already has, so a camera
+    /// hovering near the boundary cannot flap a chunk in and
+    /// out on consecutive sweeps. Detaching is safe for the
+    /// updaters that hold direct references into chunked
+    /// subtrees — signal lamp heads (signalLampHeads),
+    /// surface material targets, person rigs, the depot yard
+    /// root: they all write properties (materials, position,
+    /// orientation) on the entity objects themselves, which
+    /// works identically on a detached subtree, and the
+    /// current state simply becomes visible again on
+    /// re-attach. Nothing per-frame searches the world
+    /// hierarchy for chunked content (the only world.children
+    /// scans are build-time, before organize runs), and the
+    /// always-live roots (traffic adapter, scene fidelity,
+    /// vehicles, precipitation, sky, lights, camera) are
+    /// never under an anchor.
+    /// batch85: attaches are frame-budgeted. A sweep used to
+    /// attach EVERY anchor that had crossed the 850 m radius
+    /// in a single call, and the boundary crescent is densest
+    /// exactly where the driving load peaks — station
+    /// approaches are the braking zones, and the device
+    /// verdict on IPA #10 (crashes while braking; the user's
+    /// own diagnosis was that the app is too heavy to keep
+    /// up) made that burst the prime remaining load suspect.
+    /// A sweep now attaches immediately only (a) any
+    /// candidate inside the critical radius — half the attach
+    /// radius, 425 m, plus the anchor's own bounds radius,
+    /// the same form as the attach test — and (b) up to
+    /// sweepAttachBudget more, nearest first. The rest queue
+    /// in pendingChunkAttaches, and the per-frame drain
+    /// attaches one more per update (critical candidates
+    /// first, uncounted), so a burst spreads over a few
+    /// frames while the train covers metres, not one frame.
+    /// Budget sizes: cells are 250 m and the settled corridor
+    /// is a handful of cells wide, so a 120 m sweep step
+    /// normally brings only ~2–5 occupied anchors across the
+    /// boundary — the sweep budget of 2 plus the drain covers
+    /// the common case with no added latency, and even a
+    /// 12-deep burst drains in ~12 frames (~0.2 s, ≤6 m of
+    /// travel at the 110 km/h line maximum), two orders of
+    /// magnitude inside the 425 m critical lead (~14 s of
+    /// travel). Detaches stay immediate and unbudgeted: a
+    /// detach only unregisters an already-realized subtree
+    /// (the expensive half of an attach is the first-touch
+    /// realization of a fresh subtree), per-sweep detach
+    /// counts are the same small crescent numbers, and
+    /// delaying a detach would keep far subtrees in the
+    /// render traversal — the exact cost batch62 detached
+    /// them to remove.
+    /// Interplay with batch80's deferred organize: budgeting
+    /// can only ever DELAY an attach, never accelerate one,
+    /// so it cannot expose unorganized content. An
+    /// unorganized deferred child is under no anchor at all
+    /// (it waits disabled as a direct child of world), so no
+    /// anchor attach can make it visible; it joins its anchor
+    /// only inside runDeferredOrganize, which restores its
+    /// enabled state there — one child per batch step,
+    /// unchanged. Anchors the deferred pass creates start
+    /// detached and are discovered by the next sweep like any
+    /// other; if one lands in the pending queue, the drain
+    /// re-validates it against the live arrays first.
+    private func updateChunkVisibility(cameraPosition: SIMD3<Float>) {
+        guard !chunkAnchors.isEmpty, chunkAttached.count == chunkAnchors.count else { return }
+        let attachRadius: Float = 850
+        let detachRadius: Float = 1_000
+        let criticalRadius: Float = 425
+        if !pendingChunkAttaches.isEmpty {
+            drainPendingChunkAttaches(cameraPosition: cameraPosition, attachRadius: attachRadius, criticalRadius: criticalRadius)
+        }
+        if let last = chunkSweepPosition, simd_distance(last, cameraPosition) < 120 { return }
+        chunkSweepPosition = cameraPosition
+        let sweepAttachBudget = 2
+        var candidates: [(index: Int, distance: Float)] = []
+        for (index, anchor) in chunkAnchors.enumerated() {
+            let bounds = chunkBounds[index]
+            let distance = simd_distance(bounds.center, cameraPosition)
+            if chunkAttached[index] {
+                if distance > detachRadius + bounds.radius {
+                    anchor.removeFromParent()
+                    chunkAttached[index] = false
+                }
+            } else if distance < attachRadius + bounds.radius {
+                candidates.append((index: index, distance: distance))
+            }
+        }
+        candidates.sort { $0.distance < $1.distance }
+        var budget = sweepAttachBudget
+        var pending: [Int] = []
+        for candidate in candidates {
+            let bounds = chunkBounds[candidate.index]
+            let isCritical = candidate.distance < criticalRadius + bounds.radius
+            if isCritical || budget > 0 {
+                if !isCritical { budget -= 1 }
+                attachChunkAnchor(at: candidate.index)
+            } else {
+                pending.append(candidate.index)
+            }
+        }
+        pendingChunkAttaches = pending
+    }
+
+    /// batch85: attaches one chunk anchor (see
+    /// updateChunkVisibility) — the exact three steps the
+    /// pre-budget sweep performed inline.
+    private func attachChunkAnchor(at index: Int) {
+        let anchor = chunkAnchors[index]
+        anchor.isEnabled = true
+        world.addChild(anchor)
+        chunkAttached[index] = true
+    }
+
+    /// batch85: per-frame drain of the attaches a sweep
+    /// deferred (see updateChunkVisibility). Re-scores the
+    /// queued anchors against the CURRENT camera position:
+    /// anything now inside the critical radius attaches at
+    /// once (uncounted — the nearby-world guarantee is
+    /// structural, not a drain-speed statistic), one further
+    /// in-range anchor attaches under the frame budget,
+    /// still-in-range remainders stay queued, and entries the
+    /// camera has moved away from are dropped — a later
+    /// sweep's full scan re-discovers them if they re-enter.
+    private func drainPendingChunkAttaches(cameraPosition: SIMD3<Float>, attachRadius: Float, criticalRadius: Float) {
+        let frameAttachBudget = 1
+        var scored: [(index: Int, distance: Float)] = []
+        scored.reserveCapacity(pendingChunkAttaches.count)
+        for index in pendingChunkAttaches {
+            guard chunkAnchors.indices.contains(index), chunkBounds.indices.contains(index) else { continue }
+            guard !chunkAttached[index] else { continue }
+            scored.append((index: index, distance: simd_distance(chunkBounds[index].center, cameraPosition)))
+        }
+        scored.sort { $0.distance < $1.distance }
+        var budget = frameAttachBudget
+        var remaining: [Int] = []
+        for entry in scored {
+            let bounds = chunkBounds[entry.index]
+            if entry.distance < criticalRadius + bounds.radius {
+                attachChunkAnchor(at: entry.index)
+            } else if entry.distance < attachRadius + bounds.radius, budget > 0 {
+                budget -= 1
+                attachChunkAnchor(at: entry.index)
+            } else if entry.distance < attachRadius + bounds.radius {
+                remaining.append(entry.index)
+            }
+        }
+        pendingChunkAttaches = remaining
+    }
+
+    private func buildHeavyFidelityRegion(_ pending: PendingBuild) {
+        buildSceneFidelityRegion(route: pending.route, chainageM: 0, useLiveCamera: false)
+    }
+
+    private func buildHeavyTrackGroup(_ pending: PendingBuild) {
+        let route = pending.route
+        let routeVariant = pending.routeVariant
+        let travelDirection = pending.travelDirection
+        sceneFidelityRoute = nil
+        computeCrossingCenters(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        // batch56: the scenery census records placements
+        // from here to the end of the build (the vehicle
+        // build further down is fenced out — it places
+        // parts in train-local coordinates, not world
+        // placements).
+        CensusSink.active = true
+        censusBuildEnabled = true
+        buildTrack(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildTunnels(route: route)
+        buildSignals(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildStationFrontStreets(routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM)
+        buildCableTrough(route: route, travelDirection: travelDirection)
+        buildLinesideFence(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildSubstations(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildBillboards(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildCatenary(route: route, routeVariant: routeVariant, travelDirection: travelDirection, showcaseSection: travelDirection == .up && (routeVariant == .mainline || routeVariant == .throughBranch))
+    }
+
+    private func buildHeavySuburbGroup(_ pending: PendingBuild) {
+        let route = pending.route
+        let routeVariant = pending.routeVariant
+        let travelDirection = pending.travelDirection
+        let trafficScenario = pending.trafficScenario
+        let safeCarCount = min(max(pending.vehicleCarCount, 1), 12)
+        if routeVariant != .zooLine && routeVariant != .parkLine {
+            buildSuburb(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildPublicBuildings(route: route, routeVariant: routeVariant)
+            buildRuralDressing(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildTreeLinesAndHills(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildRoadsideLife(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildBatch57Variety(route: route, routeVariant: routeVariant, travelDirection: travelDirection, trafficScenario: trafficScenario)
+            buildFishingPort(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildLandmarkMountain(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildStationCharacter(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildStationFronts(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildStationLandmarks(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildSpeedSigns(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildSignCatalog(route: route, routeVariant: routeVariant, travelDirection: travelDirection, scoringCarCount: safeCarCount)
+        }
+    }
+
+    private func buildHeavyPolesAndTrafficGroup(_ pending: PendingBuild) {
+        let route = pending.route
+        let quality = pending.quality
+        let routeVariant = pending.routeVariant
+        let travelDirection = pending.travelDirection
+        let trafficScenario = pending.trafficScenario
+        buildUtilityPoles(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        if routeVariant != .zooLine && routeVariant != .parkLine {
+            buildRoadTraffic(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildLineFill(route: route, scenario: trafficScenario, routeVariant: routeVariant, travelDirection: travelDirection)
+            buildFictionalCorridorLandmarks(route: route, quality: quality)
+        }
+    }
+
+    private func buildHeavyDepotAndParksGroup(_ pending: PendingBuild) {
+        let route = pending.route
+        let routeVariant = pending.routeVariant
+        let travelDirection = pending.travelDirection
+        buildDepotYard(travelDirection: travelDirection)
+        buildZooAndPark(routeVariant: routeVariant, travelDirection: travelDirection)
+        buildZooLineWorld(routeVariant: routeVariant, travelDirection: travelDirection)
+        buildParkLineWorld(routeVariant: routeVariant, travelDirection: travelDirection)
+        buildShowcaseSection(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        // quality29: buildDestinationPlatform is gone. It was a
+        // pre-quality25 leftover that laid two rigid 115 m
+        // concrete boxes centred ON the tracks at the demo's
+        // destination (lateral +/-1.9 m, top above rail head),
+        // pitched level while the track climbs ~20 per mille —
+        // at Matsubaracho the boxes sliced through both tracks
+        // diagonally for the whole platform length, which is
+        // the "broken track" in the Codemagic photos. The
+        // curve-following platforms from buildStationPlatforms
+        // below serve every station, the destination included.
+    }
+
+    private func buildHeavyFinalGroup(_ pending: PendingBuild) {
+        let route = pending.route
+        let quality = pending.quality
+        let routeVariant = pending.routeVariant
+        let travelDirection = pending.travelDirection
+        let safeCarCount = min(max(pending.vehicleCarCount, 1), 12)
         buildLevelCrossings(route: route)
+        // batch56: vehicle parts are placed in train-local
+        // coordinates — outside the census window (see above).
+        CensusSink.active = false
         buildConsist(carCount: safeCarCount, useHighFidelityLead: quality == .high)
+        if censusBuildEnabled { CensusSink.active = true }
         // quality25 (A): curve-following platforms at the corrected
         // lengths; the station GLBs keep only their cores (see
         // stripGeneratedPlatformParts).
         buildStationPlatforms(routeVariant: routeVariant, travelDirection: travelDirection)
+        buildPlatformEndSignatures(travelDirection: travelDirection)
         buildStationSurroundings(routeVariant: routeVariant, travelDirection: travelDirection)
         buildTouristTerminus(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
-        buildGenerated3DAssets(route: route)
+        // batch76: buildGenerated3DAssets is gone — its three
+        // static GLB placements (track panel / equipment module /
+        // corridor modules) stood ON the track centre at fixed
+        // chainages on every route, and the corridor module's
+        // built-in buildings blocked the line (the user's branch
+        // screenshot, 2026-11-15). Station GLBs still pose via
+        // setGeneratedAssetPose in updateGeneratedStationModel.
+        // batch56: close the census window and queue the
+        // per-segment table for the pulled demo-drive log
+        // (flushed by update() once the model starts the log).
+        CensusSink.active = false
+        if censusBuildEnabled {
+            queuedLogLines.append(contentsOf: computeCensusLines())
+        }
     }
 
     func update(
@@ -848,6 +3085,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let stationSignature = stationModelPlacements.map { "\($0.stationId):\($0.chainageM):\($0.asset.rawValue)" }.joined(separator: ",")
         let signature = "\(route.lineName)|\(route.distanceM)|\(environmentSelection.renderQuality.rawValue)|\(routeVariant.rawValue)|\(travelDirection.rawValue)|cars:\(safeCarCount)|cab:\(cabDesk.family.rawValue)|svc:\(serviceCategory.rawValue)|stations:\(stationSignature)"
         if !didBuild || routeSignature != signature {
+            // batch59: never start a second build over an
+            // in-flight deferred one; the pending signature is
+            // picked up by the first update after it lands.
+            if buildInProgress { return }
             rebuild(
                 route: route, quality: environmentSelection.renderQuality,
                 trafficScenario: trafficScenario, routeVariant: routeVariant,
@@ -855,35 +3096,49 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 cabDesk: cabDesk, serviceCategory: serviceCategory, stationModelPlacements: stationModelPlacements
             )
         }
+        // batch59: the world is incomplete until the deferred
+        // build lands; scene updates resume on the next tick.
+        if buildInProgress { return }
+        // batch62: frame-cost accounting (see recordFramePerf).
+        // The defer records on every exit path below, including
+        // the samples-empty guard.
+        let perfFrameStart = ProcessInfo.processInfo.systemUptime
+        defer { recordFramePerf(milliseconds: (ProcessInfo.processInfo.systemUptime - perfFrameStart) * 1_000) }
+        // batch52: if anything ever orphans the depot yard
+        // root, put it back under the world on the next frame
+        // (see buildDepotYard's render-loss note).
+        if let depotYardRoot, depotYardRoot.parent == nil {
+            world.addChild(depotYardRoot)
+        }
         guard !samples.isEmpty else { return }
         updateSignalAspect(positionM: signalPositionM, aspect: signalAspect)
-        if routeVariant == .zooLine {
-            updateZooAnimals(trainPositionM: positionM, time: simulationTime)
-        }
         updatePeople(trainPositionM: positionM, time: simulationTime)
+        updateWindRotors(time: simulationTime)
         updatePantographSpark(speedKmh: speedKmh, time: simulationTime, inTunnel: route.condition(at: positionM).tunnelResistanceMultiplier > 1.01)
         updateGeneratedStationModel(positionM: positionM)
         let centerSample = sample(at: positionM)
         // Passing wait (2026-11-11): when the traffic snapshot
         // reports the player on a siding track, the consist and
         // the camera follow the fan profile out to the loop line
-        // (9.64 m) and back — each car by its own chainage, the
-        // way a real train threads the crossover.
+        // (the station's loop target) and back — each car by
+        // its own chainage, the way a real train threads the
+        // crossover.
         let playerOnSiding = trafficSnapshot?.playerTrain?.trackID.hasSuffix("-siding") ?? false
         func playerTrackLateral(at chainage: Double) -> Float {
             let base: Float = travelDirection == .up ? -2.1 : 2.1
-            guard playerOnSiding else { return base }
-            let side: Float = base < 0 ? -1 : 1
-            for spec in throatFanSpecs() where abs(chainage - spec.center) <= spec.half + 340 {
-                if chainage < spec.center - spec.half {
-                    return side * throatFanLateral(u: (chainage - (spec.center - spec.half - 340)) / 340, tag: "in")
-                }
-                if chainage > spec.center + spec.half {
-                    return side * throatFanLateral(u: (chainage - (spec.center + spec.half)) / 340, tag: "out")
-                }
-                return side * Float(9.64)
+            // batch42: on the running line the player follows
+            // the island-station spread like every drawn track;
+            // on a siding the fan takes over, rooted on the
+            // spread running line (fanSpreadLateral).
+            guard playerOnSiding else { return spreadTrackLateral(base, at: chainage) }
+            // batch46: the fan threading lives in
+            // sidingTrackLateral, shared with the AI trains —
+            // at the widened island stations the loop runs at
+            // 11.54 m and the player follows it out and back.
+            if let siding = sidingTrackLateral(base, at: chainage) {
+                return siding
             }
-            return base
+            return spreadTrackLateral(base, at: chainage)
         }
         let playerLateral: Float = playerTrackLateral(at: positionM)
         let sample = RouteSample(
@@ -895,6 +3150,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             elevationM: centerSample.elevationM
         )
         currentSample = sample
+        // batch60: keep only the camera's neighbourhood of
+        // the chunked world enabled (see organizeWorldChunks).
+        updateChunkVisibility(cameraPosition: SIMD3<Float>(sample.x, sample.elevationM, sample.z))
         currentSimulationTime = simulationTime
         for (index, model) in vehicleModels.enumerated() {
             let consistIndex = index + (highFidelityLeadVehicle == nil ? 0 : 1)
@@ -1023,6 +3281,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         updateCabGauges(speedKmh: speedKmh, brakePipePressureKPa: brakePipePressureKPa, mainReservoirPressureKPa: mainReservoirPressureKPa, brakeCylinderPressureKPa: brakeCylinderPressureKPa, indicator: vehicleCabIndicatorState, controls: controls)
         updateWheels(speedKmh: speedKmh, simulationTime: simulationTime)
         renderingCoordinator.cameraController.viewMode = environmentSelection.cameraViewMode
+        updateLeadExteriorVisibilityForCab(cameraViewMode: environmentSelection.cameraViewMode)
         renderingCoordinator.qualityController = RenderQualityController(
             selectedProfile: environmentSelection.renderQuality.profile, thermalCondition: .nominal
         )
@@ -1072,6 +3331,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             travelDirection: travelDirection,
             simulationTime: simulationTime
         )
+        // batch58 (diagnosis §2): the pulled-log flush runs
+        // AFTER updateTrafficActors — batch56 called it before,
+        // so a TRAFFIC_DIAG born in this very update could never
+        // leave in its birth cycle, and the one-shot flags then
+        // marked it sent.
+        flushPulledLogIfNeeded()
         updateSceneFidelity(route: route, positionM: positionM)
     }
 
@@ -1224,15 +3489,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
     /// Coastal stretches with beach and open sea on one side, about
     /// 14 km in total across three windows. The middle window starts
-    /// exactly at the 42.1-43.6 km tunnel's exit portal, so the train
-    /// bursts out of the tunnel straight into the sea view.
+    /// exactly at tunnel 2's BUILT exit portal (43,500 — the shell
+    /// the factory builds from the 42.1-43.6 km design span; derived
+    /// as `coastalTunnelExitM`, batch104), so the train bursts out
+    /// of the tunnel straight into the sea view.
     ///   38.5-40.5 km: a first taste of the sea around Kaigandori
-    ///   43.6-48.6 km: the tunnel-exit reveal
+    ///   43.5-48.6 km: the tunnel-exit reveal
     ///   53.0-60.0 km: Shirahama to the Higashihama terminus
     private func isCoastal(distanceM: Double, route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) -> Bool {
         guard isMainlineSection(distanceM: distanceM, routeVariant: routeVariant, travelDirection: travelDirection) else { return false }
         let c = chainageFromCenter(distanceM: distanceM, route: route, travelDirection: travelDirection)
-        return (c >= 38_500 && c <= 40_500) || (c >= 43_600 && c <= 48_600) || c >= 53_000
+        return (c >= 38_500 && c <= 40_500) || (c >= coastalTunnelExitM && c <= 48_600) || c >= 53_000
     }
 
     /// Lateral sign of the sea in travel-frame coordinates. The single
@@ -1254,12 +3521,60 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         48_484, 50_710, 52_935, 55_161, 57_387, 60_000
     ]
 
+    /// Derives `tunnelChainageSpans` from the built profile.
+    /// `TunnelSpans.builtSpans(in:)` reports spans in the
+    /// profile's own travel-direction frame, so mirror them
+    /// into the direction-independent frame
+    /// `chainageFromCenter` reports (for .up the two frames
+    /// coincide; for .down a profile span [a, b] sits at
+    /// [distanceM − b, distanceM − a] geographically — the
+    /// batch98 pinning test's down literals, e.g. profile
+    /// (40,750, 42,250) ↔ geographic 17,750–19,250, confirm
+    /// the mirror), then widen each by the portal clearance.
+    /// Routes whose profiles carry no tunnel sections (depot /
+    /// zoo / park) yield no spans, exactly as the old table
+    /// behaved for them; the branch bore now yields its span
+    /// on both the shuttle-local and through axes. Also derives
+    /// `coastalTunnelExitM` from the unwidened shell spans
+    /// (batch104).
+    private func computeTunnelChainageSpans(route: RailwayRouteProfile, travelDirection: RegionalTravelDirection) {
+        // Geographic shell spans first (no clearance):
+        // `tunnelChainageSpans` is just these widened, and the
+        // coastal derivation below needs the true shell exit.
+        let shellSpans: [(startM: Double, endM: Double)] = TunnelSpans.builtSpans(in: route).map { span -> (startM: Double, endM: Double) in
+            if travelDirection == .up {
+                return (startM: span.startM, endM: span.endM)
+            }
+            return (startM: route.distanceM - span.endM,
+                    endM: route.distanceM - span.startM)
+        }
+        tunnelChainageSpans = shellSpans.map { span -> (startM: Double, endM: Double) in
+            (startM: span.startM - Self.tunnelPortalClearanceM,
+             endM: span.endM + Self.tunnelPortalClearanceM)
+        }
+        // batch104: the tunnel that discharges into the middle
+        // coastal window is the one whose built exit falls
+        // between the first window's end (40,500) and the middle
+        // window's end (48,600) — tunnel 2 on the mainline. Its
+        // built exit opens the coastal window (see
+        // `coastalTunnelExitM`). Reset first so a route switch
+        // can never observe a previous route's exit.
+        coastalTunnelExitM = 43_600
+        if let discharging = shellSpans.first(where: { $0.endM > 40_500 && $0.endM < 48_600 }) {
+            coastalTunnelExitM = discharging.endM
+        }
+    }
+
     /// Chainages of the physical tunnels, where the ground must stay
-    /// at track level (the tunnel bore carries the line, not piers).
+    /// at track level (the tunnel bore carries the line, not piers)
+    /// and lineside scenery must not be placed. Derived from the
+    /// built profile at rebuild time (see
+    /// `computeTunnelChainageSpans`); before batch100 this was a
+    /// hardcoded table that invented a 24,000–25,846 m tunnel
+    /// through 東央千原 (S12), sat 50–100 m off both real shells,
+    /// and had no branch case.
     private func isTunnelChainage(_ chainageM: Double) -> Bool {
-        (chainageM >= 17_800 && chainageM <= 19_300)
-            || (chainageM >= 24_000 && chainageM <= 25_846)
-            || (chainageM >= 42_100 && chainageM <= 43_600)
+        tunnelChainageSpans.contains { chainageM >= $0.startM && chainageM <= $0.endM }
     }
 
     /// Ground level under the track, one value per sample. A viaduct
@@ -1500,6 +3815,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                                        tileLength: 2_000, material: runUrban ? skylineMaterial : backdropMaterial,
                                                        range: runStart..<runEnd) {
                         world.addChild(wall)
+                        // batch56: background panel — 1 per
+                        // panel for the scenery census.
+                        CensusSink.recordChainage(samples[runStart].distanceM)
                     }
                     runStart = i
                     runUrban = urban
@@ -1544,6 +3862,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                                              tileLength: 600, material: forestMaterial,
                                                              range: runStart..<runEnd) {
                             world.addChild(forest)
+                            // batch56: background panel — 1
+                            // per panel for the scenery census.
+                            CensusSink.recordChainage(samples[runStart].distanceM)
                         }
                     } else if runKey >= 10 {
                         // quality34: urban run of the mid layer —
@@ -1553,6 +3874,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                                            tileLength: 900, material: citylineMaterial,
                                                            range: runStart..<runEnd) {
                             world.addChild(city)
+                            // batch56: background panel — 1
+                            // per panel for the scenery census.
+                            CensusSink.recordChainage(samples[runStart].distanceM)
                         }
                     }
                     runStart = i
@@ -1574,6 +3898,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // sit at 0.80–0.84 tints and are left as they are.
             let apronTint = UIColor(red: 0.68, green: 0.68, blue: 0.68, alpha: 1)
             let grassApron = Self.texturedPBR(apronTint, roughness: 1, textureName: "scenery_grass")
+            // batch15 (2026-11-13, user verdict "焼け野原"): the
+            // grass texture itself is dry straw (measured average
+            // RGB 106/92/48), and on the zoo/park lines nothing
+            // covers it, so the whole world read as burnt field.
+            // A green multiplier pulls the same texture to a
+            // living green at the same brightness for those two
+            // leisure lines.
+            let greenApron = Self.texturedPBR(UIColor(red: 0.62, green: 0.85, blue: 0.55, alpha: 1), roughness: 1, textureName: "scenery_grass")
             let cityApron = Self.texturedPBR(apronTint, roughness: 1, textureName: "scenery_asphalt", normalName: "normal_asphalt")
             var runStart = 0
             var runBand = urbanBand(distanceM: samples[0].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
@@ -1588,7 +3920,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // instead of covering the sand and the near sea.
                     if let apron = ribbonEntity(name: "ground-apron-\(runStart)", width: runCoastal ? 46 : 150, y: -0.04, tileLength: 12,
                                                 offsets: apronOffsets,
-                                                material: runBand > 0 ? cityApron : grassApron,
+                                                material: runBand > 0 ? cityApron : ((routeVariant == .parkLine || routeVariant == .zooLine) ? greenApron : grassApron),
                                                 range: runStart..<runEnd, uTileLength: 12, yOffsets: groundOffsets) {
                         world.addChild(apron)
                     }
@@ -1644,7 +3976,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                             // at grazing angles (CI #213 photos).
                             if let far = ribbonEntity(name: "far-ground-\(sideSign > 0 ? "r" : "l")-\(farRunStart)", width: 600, y: 0.02, tileLength: 30,
                                                       offsets: farSpan.centers,
-                                                      material: farRunKey >= 100 ? farCityMaterial : ((farRunKey / 10) % 2 == 0 ? farGrassMaterial : farFieldMaterial),
+                                                      material: farRunKey >= 100 ? farCityMaterial : (((farRunKey / 10) % 2 == 0 && routeVariant != .parkLine && routeVariant != .zooLine) ? farGrassMaterial : farFieldMaterial),
                                                       range: farRunStart..<farRunEnd, uTileLength: 30, yOffsets: farGroundOffsets, widths: farSpan.widths) {
                                 world.addChild(far)
                             }
@@ -1669,6 +4001,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // approach instead of stopping on a cliff edge.
         if samples.count > 1 {
             let deckOffsets = [Float](repeating: 0, count: samples.count)
+            // batch42: where the island spread moves the tracks
+            // out to ±4.0 the 8.4 m deck would end 2.1 m inside
+            // the outer trackbed edge, so the deck widens by the
+            // spread on each side (the fan decks set the
+            // precedent for widening the structure under a
+            // diverging track).
+            let deckWidths: [Float] = samples.map { Float(8.4) + 2 * islandTrackSpread(at: $0.distanceM) }
             let deckMaterial = Self.pbr(UIColor(red: 0.46, green: 0.48, blue: 0.47, alpha: 1), roughness: 0.84)
             func deckLift(_ i: Int) -> Float { samples[i].elevationM - groundLevelM(at: samples[i]) }
             var deckRunStart = 0
@@ -1679,7 +4018,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let runEnd = min(i + 1, samples.count)
                     if deckRunOn {
                         if let deck = ribbonEntity(name: "viaduct-deck-\(deckRunStart)", width: 8.4, y: -0.49, tileLength: 12,
-                                                   offsets: deckOffsets, material: deckMaterial, range: deckRunStart..<runEnd) {
+                                                   offsets: deckOffsets, material: deckMaterial, range: deckRunStart..<runEnd, widths: deckWidths) {
                             world.addChild(deck)
                         }
                     }
@@ -1730,7 +4069,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let beachOffsets = samples.map { _ in seaSign * 31 }
             let seaSpan = clampedRibbonSpan(route: route, centerOffset: seaSign * 369, width: 660)
             let beachMaterial = Self.pbr(UIColor(red: 0.76, green: 0.69, blue: 0.52, alpha: 1), roughness: 1)
-            let seaMaterial = Self.texturedPBR(.white, roughness: 0.55, textureName: "scenery_sea")
+            // 2026-11-13 (Mac photo verdict): roughness 0.55 let the bright sky
+            // reflect off the near-horizontal sea ribbon and wash it pale grey-white
+            // (25-st22). The texture itself is deep blue; roughness 0.9 keeps the
+            // diffuse texture colour instead of the sky glare.
+            let seaMaterial = Self.texturedPBR(.white, roughness: 0.9, textureName: "scenery_sea")
             let bluffMaterial = Self.pbr(UIColor(red: 0.52, green: 0.48, blue: 0.40, alpha: 1), roughness: 1)
             let bluffLaterals = samples.map { _ in seaSign * 23.5 }
             var runStart = 0
@@ -1759,6 +4102,48 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                                             range: runStart..<runEnd) {
                             world.addChild(bluff)
                         }
+                        // batch22 (2026-11-13): a coast road at the
+                        // foot of the bluff with a promenade strip
+                        // on its sea edge — the shore was beach
+                        // directly against the embankment before,
+                        // with no road anywhere along the coast.
+                        // Road centre 19.2 (6.0 wide: 16.2..22.2),
+                        // promenade cap 22.2..23.5 over the beach
+                        // edge, both flat at the run datum.
+                        let roadMaterial = Self.pbr(UIColor(red: 0.16, green: 0.16, blue: 0.17, alpha: 1), roughness: 0.95)
+                        let roadOffsets = samples.map { _ in seaSign * 19.2 }
+                        if let road = ribbonEntity(name: "coastroad-\(runStart)", width: 6.0, y: 0.02, tileLength: 12,
+                                                   offsets: roadOffsets, material: roadMaterial, range: runStart..<runEnd,
+                                                   absoluteY: datum + 0.02) {
+                            world.addChild(road)
+                        }
+                        let lineMaterial = Self.pbr(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.9)
+                        for edge in [Float(16.5), Float(21.9)] {
+                            let lineOffsets = samples.map { _ in seaSign * edge }
+                            if let line = ribbonEntity(name: "coastroad-line-\(runStart)-\(edge)", width: 0.14, y: 0.035, tileLength: 12,
+                                                       offsets: lineOffsets, material: lineMaterial, range: runStart..<runEnd,
+                                                       absoluteY: datum + 0.035) {
+                                world.addChild(line)
+                            }
+                        }
+                        let promenadeMaterial = Self.pbr(UIColor(red: 0.62, green: 0.60, blue: 0.56, alpha: 1), roughness: 1)
+                        let promenadeOffsets = samples.map { _ in seaSign * 22.85 }
+                        if let promenade = ribbonEntity(name: "promenade-\(runStart)", width: 1.3, y: 0.045, tileLength: 12,
+                                                        offsets: promenadeOffsets, material: promenadeMaterial, range: runStart..<runEnd,
+                                                        absoluteY: datum + 0.045) {
+                            world.addChild(promenade)
+                        }
+                        // batch30 (2026-11-13, front-view study): an
+                        // offshore breakwater line — real Boso
+                        // coast is armoured almost everywhere, and
+                        // the bare sand-to-water edge read empty.
+                        let breakwaterMaterial = Self.pbr(UIColor(red: 0.55, green: 0.56, blue: 0.55, alpha: 1), roughness: 1)
+                        let breakwaterOffsets = samples.map { _ in seaSign * 47 }
+                        if let breakwater = ribbonEntity(name: "breakwater-\(runStart)", width: 3.2, y: 0.45, tileLength: 12,
+                                                         offsets: breakwaterOffsets, material: breakwaterMaterial, range: runStart..<runEnd,
+                                                         absoluteY: datum + 0.45) {
+                            world.addChild(breakwater)
+                        }
                     }
                     runStart = i
                     runCoastal = coastal
@@ -1783,7 +4168,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for offset in trackOffsetsSeen {
             let offsets = samples.map { sample -> Float in
                 let available = offsetsFor(sample: sample)
-                return available.contains(offset) ? offset : available[0]
+                // batch42: the ribbon follows the island-station
+                // spread per sample; elsewhere the spread is 0
+                // and this is the base lateral unchanged.
+                let base = available.contains(offset) ? offset : available[0]
+                return spreadTrackLateral(base, at: sample.distanceM)
             }
             if let ribbon = ribbonEntity(name: "trackbed-\(offset)", width: 4.6, y: 0.18, tileLength: 5, offsets: offsets, material: trackbedMaterial) {
                 world.addChild(ribbon)
@@ -1793,6 +4182,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         buildRailsAndShoulders(trackOffsetsSeen: trackOffsetsSeen, availableOffsets: offsetsFor)
         buildThroatFans(routeVariant: routeVariant)
         buildTerminusDivergence(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildTerminalThroats(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
         buildTracksideMarkers(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
         // Utility poles are built from prepare() after buildSuburb,
         // so urban poles can avoid the tower footprints.
@@ -1846,8 +4236,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             if sample.distanceM >= nextSleeperChainage {
                 nextSleeperChainage = sample.distanceM + 42.5
                 for (trackIndex, lateral) in trackOffsets.enumerated() {
-                    let x = sample.x + lateral * cos(sample.heading)
-                    let z = sample.z + lateral * sin(sample.heading)
+                    // batch42: sleepers follow the spread too.
+                    let sleeperLateral = spreadTrackLateral(lateral, at: sample.distanceM)
+                    let x = sample.x + sleeperLateral * cos(sample.heading)
+                    let z = sample.z + sleeperLateral * sin(sample.heading)
                     // Per-sleeper shade variation: real sleepers weather
                     // unevenly, and a perfectly uniform row reads fake.
                     let sleeperShade = 0.82 + Float((index * 37 + trackIndex * 11) % 5) * 0.09
@@ -1890,7 +4282,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // (±4.08 m) with its foot at deck level.
                 let endSample = samples[spanEnd]
                 let elevated = sample.elevationM - groundLevelM(at: sample) >= 2
-                let wallLateral: Float = elevated ? 4.08 : 5.6
+                // batch42: the wall holds its distance from the
+                // running track through the island spread (on a
+                // structure it stands on the widened deck edge —
+                // see the deck widths below).
+                let wallLateral: Float = (elevated ? Float(4.08) : Float(5.6)) + islandTrackSpread(at: sample.distanceM)
                 let footDrop: Float = elevated ? 0.49 : 0
                 func wallPoint(_ s: RouteSample, side: Double) -> SIMD3<Float> {
                     let bc = cos(s.bankRadians)
@@ -1949,15 +4345,48 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// stand every 1.5 km, plus a home signal 400 m before every
     /// mainline station, the way real lines mix automatic block
     /// signals with station entry signals.
+    /// batch73: two placement defects made the equipped line read
+    /// as signal-less from the cab (user report, 2026-11-15:
+    /// 「信号機全然設置されてない」). (1) The 1.5 km grid did not
+    /// match the game's own block design: SimulatorModel cuts the
+    /// line into 500 m blocks (blockLengthM), so two of every
+    /// three block boundaries carried no signal. The grid now
+    /// stands every 500 m, on the block boundaries themselves.
+    /// (2) Only the player's direction was equipped — the
+    /// opposing track carried no signals at all, so half the
+    /// lineside furniture of a double-track line was missing.
+    /// Both directions now receive the full plan (grid + home +
+    /// departure); the opposing heads face their own traffic,
+    /// stand on their own track's left, and are not registered
+    /// in signalLampHeads (the model drives only the player's
+    /// aspects). The branch shuttle joins the plan too.
     private func buildSignals(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
-        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .zooLine || routeVariant == .parkLine else { return }
-        let headMaterial = Self.pbr(UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1), metallic: 0.3, roughness: 0.6)
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle || routeVariant == .zooLine || routeVariant == .parkLine else { return }
+        // batch86: the housing takes the weathered-steel photo
+        // texture under a dark painted-metal tint instead of
+        // the flat near-black PBR it wore through batch76 —
+        // a large untextured surface is what made the head
+        // read as CG even after its shape was fixed.
+        let headMaterial = Self.texturedPBR(UIColor(red: 0.16, green: 0.16, blue: 0.17, alpha: 1), metallic: 0.35, roughness: 0.58, textureName: "scenery_steel")
         let plateMaterial = Self.pbr(.white, roughness: 0.6)
+        // batch86: cast-concrete foundation blocks under the
+        // posts (photo texture + normal map, as elsewhere).
+        let foundationMaterial = Self.texturedPBR(UIColor(red: 0.62, green: 0.62, blue: 0.60, alpha: 1), roughness: 0.95, textureName: "scenery_concrete", normalName: "normal_concrete")
         // quality41: beige relay/equipment boxes cluster beside
         // real signals (survey cat05: 2-5 cabinets in the 3.5-4.5 m
         // band); until now the signals stood alone in empty grass.
         let relayMaterial = Self.pbr(UIColor(red: 0.76, green: 0.72, blue: 0.62, alpha: 1), metallic: 0.05, roughness: 0.8)
-        var targets: [Double] = stride(from: 0.0, to: (routeVariant == .zooLine || routeVariant == .parkLine) ? route.distanceM : 60_000.0, by: 1_500.0).map { $0 }
+        var gridTargets: [Double] = stride(from: 0.0, to: route.distanceM, by: 500.0).map { $0 }
+        // batch69: drop the grid point at the line origin
+        // (centre-frame 0). It stood behind the origin
+        // terminal's train, and its 250 m dedupe shadow would
+        // eat the origin terminal's new departure point at
+        // 240 (240 - 0 < 250). batch73: the drop now applies to
+        // every variant (a grid point at a branch/park origin
+        // terminal has the same problem), and targets past the
+        // built samples are dropped by the 100 m sample-delta
+        // guard in bestSample below.
+        gridTargets.removeAll { $0 < 40 }
         // quality41 final: signal roles — the 1,500 m grid signals
         // are block signals （閉そく）, the station-approach signals
         // are home signals （場内）, and every station also gets a
@@ -1966,22 +4395,59 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // built signal is kept in its entity name.
         var approachPoints: [Double] = []
         var departurePoints: [Double] = []
+        var terminalDeparturePoints: [Double] = []
+        // batch73: the opposing direction's station points,
+        // mirrored: its home signal stands 400 m before the
+        // station in ITS direction of travel, its departure
+        // signal just past the far end from its side.
+        var oppApproachPoints: [Double] = []
+        var oppDeparturePoints: [Double] = []
+        var oppTerminalDeparturePoints: [Double] = []
+        // batch69: the station loop used to skip any station
+        // whose centre sat within 600 m of either line end,
+        // which removed BOTH terminal stations (S01 Kaibukuro
+        // at 0 and S28 Kamogawa at 60,000) from the signal plan
+        // entirely — the terminals had no home signal and no
+        // departure signal at all (user report: 「海袋駅に
+        // 出発信号機がない」). The station guard is gone; each
+        // point is range-checked on its own instead, so a
+        // terminal keeps the points that lie on the line (its
+        // home signal in the arrival direction, its departure
+        // signal in the departure direction) and drops only
+        // the ones past the end of the line. Mid-line stations
+        // are unaffected: every point of theirs already fell
+        // inside the old guard's range.
         for placement in stationModelPlacements {
             let center = chainageFromCenter(distanceM: placement.chainageM, route: route, travelDirection: travelDirection)
-            guard center > 600, center < 59_400 else { continue }
             let approach = center + (travelDirection == .up ? -400 : 400)
-            targets.append(approach)
-            approachPoints.append(approach)
-            let departure = center + (travelDirection == .up ? 170 : -170)
-            if departure > 600, departure < 59_400 {
-                targets.append(departure)
-                departurePoints.append(departure)
+            if approach > 40, approach < 59_960 {
+                approachPoints.append(approach)
             }
-        }
-        targets.sort()
-        var dedupedTargets: [Double] = []
-        for target in targets where dedupedTargets.last.map({ target - $0 >= 250 }) ?? true {
-            dedupedTargets.append(target)
+            let oppApproach = center + (travelDirection == .up ? 400 : -400)
+            if oppApproach > 40, oppApproach < 59_960 {
+                oppApproachPoints.append(oppApproach)
+            }
+            // batch69: a terminal's departure point sits 240 m
+            // out, not 170 m. The origin consist starts with
+            // its front half a train length past the canonical
+            // platform centre — up to 197.5 m from the line end
+            // for a 10-car set — so the standard 170 m point
+            // would stand behind the train it serves. These
+            // points are also exempt from the fan-span shift
+            // below: 240 m out, the fan has swept to about
+            // 6.6 m, clear of the post at 4.0 m.
+            let isTerminal = placement.archetype == "terminal_3platform" || placement.archetype == "junction_3platform"
+            let departureOffset = isTerminal ? 240.0 : 170.0
+            let departure = center + (travelDirection == .up ? departureOffset : -departureOffset)
+            if departure > 40, departure < 59_960 {
+                departurePoints.append(departure)
+                if isTerminal { terminalDeparturePoints.append(departure) }
+            }
+            let oppDeparture = center + (travelDirection == .up ? -departureOffset : departureOffset)
+            if oppDeparture > 40, oppDeparture < 59_960 {
+                oppDeparturePoints.append(oppDeparture)
+                if isTerminal { oppTerminalDeparturePoints.append(oppDeparture) }
+            }
         }
         // quality37: a signal post at ±3.7 m would stand on a throat
         // fan siding (the siding sweeps from 2.1 m out to 6.3 m), so
@@ -1993,25 +4459,52 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let b = chainageFromCenter(distanceM: span.end, route: route, travelDirection: travelDirection)
             return (start: min(a, b), end: max(a, b))
         }
-        if routeVariant != .zooLine && routeVariant != .parkLine {
-            dedupedTargets = dedupedTargets.map { target in
-                for span in fanSpansCenter where target > span.start && target < span.end {
-                    return target - span.start < span.end - target ? span.start - 12 : span.end + 12
-                }
-                return target
+        // batch73: sort + 250 m dedupe + fan shift, run once per
+        // direction over (grid + that direction's station points).
+        func preparedTargets(extras: [Double], terminalDepartures: [Double]) -> [Double] {
+            var deduped: [Double] = []
+            for target in (gridTargets + extras).sorted() where deduped.last.map({ target - $0 >= 250 }) ?? true {
+                deduped.append(target)
             }
+            if routeVariant != .zooLine && routeVariant != .parkLine {
+                deduped = deduped.map { target in
+                    if terminalDepartures.contains(where: { abs($0 - target) < 1 }) { return target }
+                    for span in fanSpansCenter where target > span.start && target < span.end {
+                        return target - span.start < span.end - target ? span.start - 12 : span.end + 12
+                    }
+                    return target
+                }
+            }
+            return deduped
         }
-        for target in dedupedTargets {
+        // batch73: nearest eligible sample for a target, shared
+        // by both directions. A target whose nearest eligible
+        // sample is more than 100 m away sits off the built line
+        // (grid points past a variant's samples used to pile onto
+        // the nearest end sample); it is skipped.
+        func bestSample(for target: Double) -> RouteSample? {
             var best: RouteSample?
             var bestDelta = Double.greatestFiniteMagnitude
-            for sample in samples where routeVariant == .zooLine || routeVariant == .parkLine || isMainlineSection(distanceM: sample.distanceM, routeVariant: routeVariant, travelDirection: travelDirection) {
+            for sample in samples {
+                let eligible = routeVariant == .zooLine || routeVariant == .parkLine || routeVariant == .branchShuttle
+                    || isMainlineSection(distanceM: sample.distanceM, routeVariant: routeVariant, travelDirection: travelDirection)
+                    || (routeVariant == .throughBranch && sample.distanceM >= 59_900)
+                guard eligible else { continue }
                 let delta = abs(chainageFromCenter(distanceM: sample.distanceM, route: route, travelDirection: travelDirection) - target)
                 if delta < bestDelta {
                     bestDelta = delta
                     best = sample
                 }
             }
-            guard let sample = best else { continue }
+            return bestDelta <= 100 ? best : nil
+        }
+        // batch73: one signal unit. sideSign picks the served
+        // track's side; faceSign picks the way the head faces
+        // (-1: toward traffic approaching in the travel
+        // direction, the way the player's signals have always
+        // faced; +1: toward the opposing traffic). Only the
+        // player's units register their lamps for aspect updates.
+        func placeSignal(sample: RouteSample, target: Double, sideSign: Float, faceSign: Float, role: String, tag: String, registerLamps: Bool) {
             let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
             // quality37: the post used to stand 1.6 m from the
             // running track's centre — inside the structure gauge
@@ -2022,19 +4515,66 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // unit: backboard, hooded round lenses in the real
             // order (yellow over red over green), ladder, plate.
             let lift = sample.elevationM - groundLevelM(at: sample)
-            let sideSign: Float = travelDirection == .up ? -1 : 1
             // quality41: the post now stands at the unified spec's
             // 1,900 mm from its track's centre (2.1 + 1.9 = 4.0);
             // on a viaduct the deck edge gives the 2,000 mm
-            // variant (4.08), as before.
-            let lateral = sideSign * (lift >= 2 ? Float(4.08) : Float(4.0))
+            // variant (4.08), as before. batch42: the 1,900 mm is
+            // measured from the track wherever the island spread
+            // has moved it, so the post follows its track through
+            // the station approaches instead of standing on the
+            // swept path (or on the island) — the relay cabinets
+            // below derive from this lateral and follow too.
+            let lateral = sideSign * ((lift >= 2 ? Float(4.08) : Float(4.0)) + islandTrackSpread(at: sample.distanceM))
             let base = routeOffsetPoint(sample, lateral: lateral)
             let footY = base.y - (lift >= 2 ? Float(0.49) : Float(0.10))
             let postTop = base.y + 5.62
             let forward = SIMD3<Float>(sin(sample.heading), 0, -cos(sample.heading))
-            let signalRole = approachPoints.contains(where: { abs($0 - target) < 60 }) ? "home" : (departurePoints.contains(where: { abs($0 - target) < 60 }) ? "departure" : "block")
-            addBox(parent: world, name: "signal-\(signalRole)-\(Int(target))", size: SIMD3<Float>(0.16, postTop - footY, 0.16),
+            // batch76: part positions in the signal's own frame
+            // (x = lateral, y = height above the post base,
+            // z = along the head axis; under `yaw`, local -z
+            // maps to `forward`, so a part at local z sits at
+            // base - forward * z). The ladder / platform side of
+            // the head is local z = +0.15..0.18 * faceSign, the
+            // lamp face is local z = -0.104 * faceSign (batch86:
+            // seated in from -0.13).
+            let side = SIMD3<Float>(cos(sample.heading), 0, sin(sample.heading))
+            func partPos(x: Float, y: Float, z: Float) -> SIMD3<Float> {
+                SIMD3<Float>(base.x + side.x * x - forward.x * z,
+                             base.y + y,
+                             base.z + side.z * x - forward.z * z)
+            }
+            addBox(parent: world, name: "\(tag)-\(role)-\(Int(target))", size: SIMD3<Float>(0.16, postTop - footY, 0.16),
                    position: SIMD3<Float>(base.x, (footY + postTop) / 2, base.z), material: poleMaterial, orientation: yaw)
+            // batch76: base plate under the post (0.46 m square,
+            // 60 mm thick) — the post used to meet the ground
+            // bare.
+            // batch86: the post now stands on a cast-concrete
+            // foundation block (0.70 m square, buried 0.15 m,
+            // 0.40 m proud) and the flange sits on top of it
+            // with four bolt heads; on a viaduct there is no
+            // block and the flange bolts straight to the deck,
+            // as before. The small equipment cabinet every real
+            // signal carries stands at the post's foot on the
+            // ladder side, its door panel on the back face.
+            let onViaduct = lift >= 2
+            if !onViaduct {
+                addBox(parent: world, name: "\(tag)-foundation-\(Int(target))", size: SIMD3<Float>(0.70, 0.55, 0.70),
+                       position: SIMD3<Float>(base.x, footY + 0.125, base.z), material: foundationMaterial, orientation: yaw)
+            }
+            let flangeY = onViaduct ? footY + 0.03 : footY + 0.43
+            addBox(parent: world, name: "\(tag)-baseplate-\(Int(target))", size: SIMD3<Float>(0.46, 0.06, 0.46),
+                   position: SIMD3<Float>(base.x, flangeY, base.z), material: poleMaterial, orientation: yaw)
+            for boltX: Float in [-0.17, 0.17] {
+                for boltZ: Float in [-0.17, 0.17] {
+                    addBox(parent: world, name: "\(tag)-basebolt-\(Int(target))-\(Int(boltX * 100))-\(Int(boltZ * 100))", size: SIMD3<Float>(0.035, 0.05, 0.035),
+                           position: partPos(x: boltX, y: flangeY - base.y + 0.055, z: boltZ), material: headMaterial, orientation: yaw)
+                }
+            }
+            let cabinetBaseY = onViaduct ? footY : footY + 0.40
+            addBox(parent: world, name: "\(tag)-basecabinet-\(Int(target))", size: SIMD3<Float>(0.52, 0.78, 0.26),
+                   position: partPos(x: 0, y: cabinetBaseY - base.y + 0.39, z: 0.34 * faceSign), material: relayMaterial, orientation: yaw)
+            addBox(parent: world, name: "\(tag)-basecabinet-panel-\(Int(target))", size: SIMD3<Float>(0.44, 0.66, 0.015),
+                   position: partPos(x: 0, y: cabinetBaseY - base.y + 0.39, z: 0.475 * faceSign), material: headMaterial, orientation: yaw)
             // quality41: the head is now the TOO RAILWAY standard
             // 4-aspect A unit at catalogue size (maker data in
             // cat13: housing W580 x D169 mm, H 1,240 mm for four
@@ -2045,34 +4585,144 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // (double Y) and stop (R). The model still supplies
             // three aspects, so the warning pair lights only when
             // the model grows it — the hardware is ready.
-            addBox(parent: world, name: "signal-backboard-\(Int(target))", size: SIMD3<Float>(0.74, 1.42, 0.04),
-                   position: SIMD3<Float>(base.x + forward.x * 0.10, base.y + 4.9, base.z + forward.z * 0.10), material: headMaterial, orientation: yaw)
-            addBox(parent: world, name: "signal-head-\(Int(target))", size: SIMD3<Float>(0.58, 1.24, 0.17),
+            addBox(parent: world, name: "\(tag)-backboard-\(Int(target))", size: SIMD3<Float>(0.74, 1.42, 0.04),
+                   position: SIMD3<Float>(base.x - forward.x * 0.10 * faceSign, base.y + 4.9, base.z - forward.z * 0.10 * faceSign), material: headMaterial, orientation: yaw)
+            addBox(parent: world, name: "\(tag)-head-\(Int(target))", size: SIMD3<Float>(0.58, 1.24, 0.17),
                    position: SIMD3<Float>(base.x, base.y + 4.9, base.z), material: headMaterial, orientation: yaw)
-            addBox(parent: world, name: "signal-ladder-\(Int(target))", size: SIMD3<Float>(0.3, postTop - footY - 0.4, 0.04),
-                   position: SIMD3<Float>(base.x + forward.x * 0.15, (footY + postTop) / 2, base.z + forward.z * 0.15), material: headMaterial, orientation: yaw)
+            // batch86: the housing gains its real furniture —
+            // a front face plate standing 20 mm proud of the
+            // case (the bezels seat on it), a rain lip over the
+            // top edge, and the back access door: a panel proud
+            // of the rear face with a latch at its edge, so the
+            // back of the head is no longer a blank slab either.
+            addBox(parent: world, name: "\(tag)-faceplate-\(Int(target))", size: SIMD3<Float>(0.62, 1.28, 0.02),
+                   position: partPos(x: 0, y: 4.9, z: -0.095 * faceSign), material: headMaterial, orientation: yaw)
+            addBox(parent: world, name: "\(tag)-rainlip-\(Int(target))", size: SIMD3<Float>(0.66, 0.03, 0.26),
+                   position: partPos(x: 0, y: 5.535, z: -0.02 * faceSign), material: headMaterial, orientation: yaw)
+            addBox(parent: world, name: "\(tag)-backpanel-\(Int(target))", size: SIMD3<Float>(0.48, 1.08, 0.015),
+                   position: partPos(x: 0, y: 4.9, z: 0.0925 * faceSign), material: headMaterial, orientation: yaw)
+            addBox(parent: world, name: "\(tag)-backlatch-\(Int(target))", size: SIMD3<Float>(0.03, 0.10, 0.02),
+                   position: partPos(x: 0.19, y: 4.9, z: 0.10 * faceSign), material: poleMaterial, orientation: yaw)
+            // batch76: the ladder is a ladder — two stiles with
+            // rungs every 300 mm — not the flat plate it used to
+            // be. Same span and stand-off as the old plate.
+            let ladderZ = 0.15 * faceSign
+            let ladderHeight = postTop - footY - 0.4
+            let ladderCenterY = (footY + postTop) / 2 - base.y
+            for stileSign: Float in [-1, 1] {
+                addBox(parent: world, name: "\(tag)-ladder-stile-\(Int(target))-\(Int(stileSign))", size: SIMD3<Float>(0.045, ladderHeight, 0.045),
+                       position: partPos(x: stileSign * 0.13, y: ladderCenterY, z: ladderZ), material: headMaterial, orientation: yaw)
+            }
+            var rungY = footY - base.y + 0.5
+            while rungY < ladderCenterY + ladderHeight / 2 - 0.15 {
+                addBox(parent: world, name: "\(tag)-ladder-rung-\(Int(target))-\(Int(rungY * 10))", size: SIMD3<Float>(0.30, 0.03, 0.03),
+                       position: partPos(x: 0, y: rungY, z: ladderZ), material: headMaterial, orientation: yaw)
+                rungY += 0.3
+            }
             // Inspection platform 0.7 m below the lowest lens.
-            addBox(parent: world, name: "signal-platform-\(Int(target))", size: SIMD3<Float>(0.72, 0.05, 0.55),
-                   position: SIMD3<Float>(base.x + forward.x * 0.18, base.y + 3.75, base.z + forward.z * 0.18), material: headMaterial, orientation: yaw)
-            addBox(parent: world, name: "signal-plate-\(Int(target))", size: SIMD3<Float>(0.22, 0.3, 0.02),
-                   position: SIMD3<Float>(base.x - forward.x * 0.1, base.y + 2.55, base.z - forward.z * 0.1), material: plateMaterial, orientation: yaw)
+            addBox(parent: world, name: "\(tag)-platform-\(Int(target))", size: SIMD3<Float>(0.72, 0.05, 0.55),
+                   position: SIMD3<Float>(base.x - forward.x * 0.18 * faceSign, base.y + 3.75, base.z - forward.z * 0.18 * faceSign), material: headMaterial, orientation: yaw)
+            // batch76: platform furniture — two diagonal braces
+            // from the post up to the platform's outer edge, and
+            // a handrail (uprights + top rails) around the outer
+            // and side edges. The platform used to float bare.
+            let braceTilt = simd_quatf(angle: 0.588 * faceSign, axis: SIMD3<Float>(1, 0, 0))
+            for braceSign: Float in [-1, 1] {
+                addBox(parent: world, name: "\(tag)-platform-brace-\(Int(target))-\(Int(braceSign))", size: SIMD3<Float>(0.04, 0.685, 0.04),
+                       position: partPos(x: braceSign * 0.30, y: 3.435, z: 0.21 * faceSign), material: headMaterial, orientation: yaw * braceTilt)
+            }
+            for uprightX: Float in [-0.345, 0.345] {
+                for uprightZ: Float in [0.42, -0.02] {
+                    addBox(parent: world, name: "\(tag)-platform-rail-post-\(Int(target))-\(Int(uprightX * 100))-\(Int(uprightZ * 100))", size: SIMD3<Float>(0.03, 0.85, 0.03),
+                           position: partPos(x: uprightX, y: 4.20, z: uprightZ * faceSign), material: headMaterial, orientation: yaw)
+                }
+            }
+            addBox(parent: world, name: "\(tag)-platform-rail-back-\(Int(target))", size: SIMD3<Float>(0.72, 0.03, 0.03),
+                   position: partPos(x: 0, y: 4.62, z: 0.42 * faceSign), material: headMaterial, orientation: yaw)
+            for railSign: Float in [-1, 1] {
+                addBox(parent: world, name: "\(tag)-platform-rail-side-\(Int(target))-\(Int(railSign))", size: SIMD3<Float>(0.03, 0.03, 0.47),
+                       position: partPos(x: railSign * 0.345, y: 4.62, z: 0.20 * faceSign), material: headMaterial, orientation: yaw)
+            }
+            // batch86: the handrail gains its mid rail on the
+            // back and both sides, so the platform reads as a
+            // railed working deck (posts + two horizontal rails)
+            // instead of a single top bar.
+            addBox(parent: world, name: "\(tag)-platform-railmid-back-\(Int(target))", size: SIMD3<Float>(0.72, 0.03, 0.03),
+                   position: partPos(x: 0, y: 4.19, z: 0.42 * faceSign), material: headMaterial, orientation: yaw)
+            for railSign: Float in [-1, 1] {
+                addBox(parent: world, name: "\(tag)-platform-railmid-side-\(Int(target))-\(Int(railSign))", size: SIMD3<Float>(0.03, 0.03, 0.47),
+                       position: partPos(x: railSign * 0.345, y: 4.19, z: 0.20 * faceSign), material: headMaterial, orientation: yaw)
+            }
+            // batch86: the number plate gets its dark frame —
+            // a slightly larger dark plate behind the white
+            // one, so the plate reads as a framed sign on the
+            // post instead of a white sticker floating on it.
+            addBox(parent: world, name: "\(tag)-plateframe-\(Int(target))", size: SIMD3<Float>(0.26, 0.34, 0.012),
+                   position: SIMD3<Float>(base.x + forward.x * 0.086 * faceSign, base.y + 2.55, base.z + forward.z * 0.086 * faceSign), material: headMaterial, orientation: yaw)
+            addBox(parent: world, name: "\(tag)-plate-\(Int(target))", size: SIMD3<Float>(0.22, 0.3, 0.02),
+                   position: SIMD3<Float>(base.x + forward.x * 0.1 * faceSign, base.y + 2.55, base.z + forward.z * 0.1 * faceSign), material: plateMaterial, orientation: yaw)
             // Lamps sit on the face turned toward the approaching
-            // train (opposite the direction of travel).
-            let lampX = base.x - forward.x * 0.13
-            let lampZ = base.z - forward.z * 0.13
+            // train (opposite that direction's direction of travel).
+            // batch86: the lamp centre moves in from 0.13 to
+            // 0.104, so the lens seats INTO the face plate
+            // (front at 0.085, plate front at 0.105) instead of
+            // floating proud of the case.
+            let lampX = base.x + forward.x * 0.104 * faceSign
+            let lampZ = base.z + forward.z * 0.104 * faceSign
+            // batch76: each lamp wears a real hood — an open
+            // tube (phi 210 mm, 260 mm long) around the lens,
+            // replacing the flat shade plate. The material is
+            // the head's own, double-sided so the tube's inside
+            // renders.
+            // batch86: the full tube becomes a half-tube visor
+            // (open below, projecting about one lens diameter
+            // from the face) and each lamp becomes a seated
+            // assembly: a galvanized bezel ring proud of the
+            // face plate, the lens recessed inside it, and a
+            // glow disc behind the lens front that applyAspect
+            // enables with the lamp. The glow disc is the lamp
+            // entity's only child, so the chunk merge's
+            // identity walk (which protects every registered
+            // lamp) protects it too, and its name carries the
+            // forbidden "lamp" fragment as a second guard.
+            let hoodTilt = simd_quatf(angle: -Float.pi / 2, axis: SIMD3<Float>(1, 0, 0))
             var lamps: [ModelEntity] = []
-            for lampY in [5.35, 5.05, 4.75, 4.45] {
-                addBox(parent: world, name: "signal-hood-\(Int(target))-\(lampY)", size: SIMD3<Float>(0.21, 0.05, 0.24),
-                       position: SIMD3<Float>(lampX, base.y + Float(lampY) + 0.11, lampZ), material: headMaterial, orientation: yaw)
+            for (lampIndex, lampY) in [5.35, 5.05, 4.75, 4.45].enumerated() {
+                let bezel = ModelEntity(mesh: signalBezelMesh, materials: [signalBezelMaterial])
+                bezel.name = "\(tag)-bezel-\(Int(target))-\(lampIndex)"
+                bezel.position = SIMD3<Float>(lampX + forward.x * 0.008 * faceSign, base.y + Float(lampY), lampZ + forward.z * 0.008 * faceSign)
+                bezel.orientation = yaw * hoodTilt
+                world.addChild(bezel)
+                let hood = ModelEntity(mesh: signalVisorMesh, materials: [signalVisorMaterial])
+                hood.name = "\(tag)-hood-\(Int(target))-\(lampY)"
+                hood.position = SIMD3<Float>(lampX + forward.x * 0.059 * faceSign, base.y + Float(lampY), lampZ + forward.z * 0.059 * faceSign)
+                hood.orientation = yaw * hoodTilt
+                world.addChild(hood)
                 let lamp = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.075),
-                                       materials: [signalDarkLampMaterial])
+                                       materials: [signalDarkLampMaterials[lampIndex]])
                 lamp.scale = SIMD3<Float>(1, 1, 0.45)
                 lamp.position = SIMD3<Float>(lampX, base.y + Float(lampY), lampZ)
                 lamp.orientation = yaw
+                // batch86: glow disc, 10 mm in front of the
+                // lens centre in world terms — inside the
+                // squashed lens's front third, so its visible
+                // part is the annulus around the lens's cross-
+                // section at that depth. In lamp-local terms
+                // the offset runs along -forward (local +z is
+                // -forward under yaw) and is divided by the
+                // lamp's 0.45 z scale.
+                let glow = ModelEntity(mesh: signalGlowMesh, materials: [signalGlowLampMaterials[lampIndex]])
+                glow.name = "lampglow-\(lampIndex)"
+                glow.position = SIMD3<Float>(0, 0, -0.0222 * faceSign)
+                glow.orientation = hoodTilt
+                glow.isEnabled = false
+                lamp.addChild(glow)
                 world.addChild(lamp)
                 lamps.append(lamp)
             }
-            signalLampHeads[sample.distanceM] = lamps
+            if registerLamps {
+                signalLampHeads[sample.distanceM] = lamps
+            }
             applyAspect(lamps, aspect: .green)
             // Relay cabinets behind the post, a little further out.
             let relayCount = 2 + Int(abs(target)) % 3
@@ -2080,23 +4730,40 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let relayLateral = lateral + sideSign * 0.85
                 let relayBase = routeOffsetPoint(sample, lateral: relayLateral)
                 let back = Float(relayIndex) * 1.05 + 0.6
-                let rx = relayBase.x - forward.x * back
-                let rz = relayBase.z - forward.z * back
-                addBox(parent: world, name: "signal-relay-\(Int(target))-\(relayIndex)", size: SIMD3<Float>(0.42, 1.15, 0.85),
+                let rx = relayBase.x + forward.x * back * faceSign
+                let rz = relayBase.z + forward.z * back * faceSign
+                addBox(parent: world, name: "\(tag)-relay-\(Int(target))-\(relayIndex)", size: SIMD3<Float>(0.42, 1.15, 0.85),
                        position: SIMD3<Float>(rx, footY + 0.575, rz), material: relayMaterial, orientation: yaw)
             }
             // quality41: the TO-ATS-P transponder coils between
             // the rails of the served track, at the spec mounting
             // (track centre, top 70 mm below the rail head): two
-            // dark slabs 25 m and 5 m in rear of the signal.
+            // dark slabs 25 m and 5 m in rear of the signal (in
+            // the served direction's rear: behind the travel
+            // frame for the player's signals, ahead of it for
+            // the opposing ones).
             let coilMaterial = Self.pbr(UIColor(red: 0.16, green: 0.16, blue: 0.17, alpha: 1), roughness: 0.8)
             for back in [25.0, 5.0] {
-                let coilSample = self.sample(at: max(target - back, 0))
-                let coilPoint = routeOffsetPoint(coilSample, lateral: sideSign * 2.1)
+                let coilTarget = min(max(target + back * Double(faceSign), 0), route.distanceM)
+                let coilSample = self.sample(at: coilTarget)
+                // batch42: between the rails of the served track,
+                // wherever the island spread has moved it.
+                let coilPoint = routeOffsetPoint(coilSample, lateral: sideSign * (2.1 + islandTrackSpread(at: coilSample.distanceM)))
                 let coilYaw = simd_quatf(angle: -coilSample.heading, axis: SIMD3<Float>(0, 1, 0))
-                addBox(parent: world, name: "ats-coil-\(Int(target))-\(Int(back))", size: SIMD3<Float>(0.5, 0.07, 0.34),
+                addBox(parent: world, name: "\(tag == "signal" ? "ats-coil" : "ats-coil-opp")-\(Int(target))-\(Int(back))", size: SIMD3<Float>(0.5, 0.07, 0.34),
                        position: SIMD3<Float>(coilPoint.x, coilPoint.y + 0.20, coilPoint.z), material: coilMaterial, orientation: coilYaw)
             }
+        }
+        let playerSideSign: Float = travelDirection == .up ? -1 : 1
+        for target in preparedTargets(extras: approachPoints + departurePoints, terminalDepartures: terminalDeparturePoints) {
+            guard let sample = bestSample(for: target) else { continue }
+            let role = approachPoints.contains(where: { abs($0 - target) < 60 }) ? "home" : (departurePoints.contains(where: { abs($0 - target) < 60 }) ? "departure" : "block")
+            placeSignal(sample: sample, target: target, sideSign: playerSideSign, faceSign: -1, role: role, tag: "signal", registerLamps: true)
+        }
+        for target in preparedTargets(extras: oppApproachPoints + oppDeparturePoints, terminalDepartures: oppTerminalDeparturePoints) {
+            guard let sample = bestSample(for: target) else { continue }
+            let role = oppApproachPoints.contains(where: { abs($0 - target) < 60 }) ? "home" : (oppDeparturePoints.contains(where: { abs($0 - target) < 60 }) ? "departure" : "block")
+            placeSignal(sample: sample, target: target, sideSign: -playerSideSign, faceSign: 1, role: role, tag: "signal-opp", registerLamps: false)
         }
     }
 
@@ -2113,8 +4780,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// throat fans (the siding diverges through the fence line),
     /// tunnels, and high structures, where the ground falls away
     /// and a ground-anchored fence would float beside the piers.
+    /// batch73: the fence is rebuilt as a real protective fence
+    /// (user report, 2026-11-15: 「線路にフェンスもなく」). The
+    /// old build strung two 4-5 cm rails between posts 17 m
+    /// apart and tied the top rail to 0.75 m above RAIL level,
+    /// so (a) where it stood it was two hairlines — invisible
+    /// from a moving cab — and (b) it skipped every stretch
+    /// whose ground at the fence line sat outside the narrow
+    /// band 0.05-2.75 m below the rail head, which erased it
+    /// from most embankments and shallow cuttings. The fence
+    /// now carries chainlink mesh panels (the depot compound's
+    /// photo-texture recipe) between posts every 8.5 m, 1.5 m
+    /// above the LOCAL ground, so it follows the terrain the
+    /// way the real one does; only true structures (ground
+    /// more than 3.2 m below the rail, where the deck parapet
+    /// takes over) and cutting walls (ground above the rail)
+    /// still break it, beside the station / crossing / fan /
+    /// tunnel breaks above. It also runs on the branch, zoo
+    /// and park lines now, not only the main line.
     private func buildLinesideFence(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
-        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        guard routeVariant != .depotTransfer else { return }
         let fanSpans = throatFanSpans()
         func blocked(_ d: Double) -> Bool {
             if inStationZone(d, extraMargin: 6) { return true }
@@ -2124,48 +4809,68 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             if isTunnelChainage(centre) { return true }
             return false
         }
+        var meshMaterial = Self.texturedPBR(.white, metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
+        meshMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
+        meshMaterial.faceCulling = .none
         for side: Float in [-1, 1] {
-            var batch = MeshBatchBuilder()
+            var postBatch = MeshBatchBuilder()
+            var meshBatch = MeshBatchBuilder()
             var batchIndex = 0
+            var prevGround: SIMD3<Float>? = nil
             var prevTop: SIMD3<Float>? = nil
-            var prevMid: SIMD3<Float>? = nil
             var postsInBatch = 0
+            func flushBatches() {
+                if let mesh = postBatch.build(name: "lineside-fence-\(Int(side))-\(batchIndex)", material: poleMaterial) { world.addChild(mesh) }
+                if let mesh = meshBatch.build(name: "lineside-fencemesh-\(Int(side))-\(batchIndex)", material: meshMaterial, censusTexture: "scenery_fence_chainlink") { world.addChild(mesh) }
+                postBatch = MeshBatchBuilder()
+                meshBatch = MeshBatchBuilder()
+                batchIndex += 1
+                postsInBatch = 0
+                prevGround = nil
+                prevTop = nil
+            }
             var d = 40.0
             while d < route.distanceM - 40 {
-                defer { d += 17 }
+                defer { d += 8.5 }
                 if blocked(d) {
+                    prevGround = nil
                     prevTop = nil
-                    prevMid = nil
                     continue
                 }
                 let s = sample(at: d)
-                let base = groundOffsetPoint(s, lateral: side * 5.3)
-                let postH = (s.elevationM + 0.75) - base.y
-                if postH < 0.8 || postH > 3.5 {
+                // batch42: the fence holds its 5.3 m from the
+                // route centre only where the tracks are unspread;
+                // through an island station's ramps it steps out
+                // with the formation so it never crosses the
+                // widened gauge (5.475 m at full spread).
+                let base = groundOffsetPoint(s, lateral: spreadTrackLateral(side * 5.3, at: d))
+                // batch73: the post stands 1.5 m above the local
+                // ground (a real protective fence is 1.5-1.8 m);
+                // the run breaks only where the ground falls
+                // more than 3.2 m below the rail (structures) or
+                // rises above it (cutting walls).
+                let drop = s.elevationM - base.y
+                if drop < -1.0 || drop > 3.2 {
+                    prevGround = nil
                     prevTop = nil
-                    prevMid = nil
                     continue
                 }
-                batch.addBox(center: SIMD3<Float>(base.x, base.y + postH / 2, base.z), size: SIMD3<Float>(0.09, postH, 0.09), yaw: -s.heading)
-                let top = SIMD3<Float>(base.x, base.y + postH, base.z)
-                let mid = SIMD3<Float>(base.x, base.y + postH * 0.55, base.z)
-                if let pt = prevTop, let pm = prevMid {
-                    batch.addSegment(from: pm, to: mid, thickness: 0.04)
-                    batch.addSegment(from: pt, to: top, thickness: 0.05)
+                postBatch.addBox(center: SIMD3<Float>(base.x, base.y + 0.75, base.z), size: SIMD3<Float>(0.09, 1.5, 0.09), yaw: -s.heading)
+                let top = SIMD3<Float>(base.x, base.y + 1.5, base.z)
+                if let pg = prevGround, let pt = prevTop {
+                    let mid = (pg + base) / 2
+                    let span = simd_distance(SIMD2<Float>(pg.x, pg.z), SIMD2<Float>(base.x, base.z))
+                    meshBatch.addBox(center: SIMD3<Float>(mid.x, mid.y + 0.81, mid.z), size: SIMD3<Float>(0.03, 1.38, span + 0.1), yaw: -s.heading)
+                    postBatch.addSegment(from: pt, to: top, thickness: 0.05)
                 }
+                prevGround = base
                 prevTop = top
-                prevMid = mid
                 postsInBatch += 1
-                if postsInBatch >= 420 {
-                    if let mesh = batch.build(name: "lineside-fence-\(Int(side))-\(batchIndex)", material: poleMaterial) { world.addChild(mesh) }
-                    batch = MeshBatchBuilder()
-                    batchIndex += 1
-                    postsInBatch = 0
-                    prevTop = nil
-                    prevMid = nil
+                if postsInBatch >= 200 {
+                    flushBatches()
                 }
             }
-            if let mesh = batch.build(name: "lineside-fence-\(Int(side))-\(batchIndex)", material: poleMaterial) { world.addChild(mesh) }
+            flushBatches()
         }
     }
 
@@ -2255,8 +4960,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var idx = 0
         var d = 2_600.0
         while d < route.distanceM - 700 {
-            defer { d += 2_300; idx += 1 }
-            if stableIndex("billboard-\(idx)", count: 5) >= 3 { continue }
+            // batch29 fix (2026-11-13): the 2,300 m step with a
+            // 3-in-5 skip left only ~15 boards on the whole
+            // line — effectively none, as the front-view study
+            // found. Step 950 m and a 1-in-5 skip now.
+            defer { d += 950; idx += 1 }
+            if stableIndex("billboard-\(idx)", count: 5) >= 4 { continue }
             if inStationZone(d, extraMargin: 350) || nearCrossing(d, margin: 60) || nearThroatFan(d) { continue }
             let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
             if isTunnelChainage(centre) { continue }
@@ -2299,7 +5008,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             if !blocked {
                 let lift = s.elevationM - groundLevelM(at: s)
                 let footY = s.elevationM - (lift >= 2 ? Float(0.45) : Float(0.52))
-                let p = routeOffsetPoint(s, lateral: -3.35)
+                // batch42: the trough keeps its 1.25 m from the
+                // up track's centre through the island spread.
+                let p = routeOffsetPoint(s, lateral: spreadTrackLateral(-3.35, at: d))
                 troughBatch.addBox(center: SIMD3<Float>(p.x, footY + 0.13, p.z), size: SIMD3<Float>(0.5, 0.26, 8.7), yaw: -s.heading)
             }
             d += 8.5
@@ -2308,7 +5019,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         while postD < last.distanceM {
             if !inStationZone(postD, extraMargin: 6) {
                 let s = sample(at: postD)
-                let p = routeOffsetPoint(s, lateral: 3.35)
+                // batch42: same spread-following as the trough.
+                let p = routeOffsetPoint(s, lateral: spreadTrackLateral(3.35, at: postD))
                 let lift = s.elevationM - groundLevelM(at: s)
                 let footY = s.elevationM - (lift >= 2 ? Float(0.49) : Float(0.55))
                 postBatch.addBox(center: SIMD3<Float>(p.x, footY + 0.42, p.z), size: SIMD3<Float>(0.13, 0.85, 0.13), yaw: -s.heading)
@@ -2320,87 +5032,2192 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         if let mesh = postBatch.build(name: "kilometre-posts", material: postMaterial) { world.addChild(mesh) }
     }
 
-    /// quality41: the TOO RAILWAY depot yard beside the main
-    /// line at 27,580-27,820 (inland side): inspection shed with
-    /// three tall doors (the middle one open onto a lit
-    /// interior), two yard tracks with buffer stops, an office,
-    /// stored materials, yard lights and a chain-link perimeter.
-    /// ChatGPT's depot review ranked exactly these: shed doors,
-    /// yard tracks, clutter along the work paths, fence, lights.
+    /// batch53 (2026-11-14, user directive: "a depot with
+    /// five tracks is far too few — at least fifteen"):
+    /// the TOO RAILWAY depot yard beside the main line at
+    /// 27,550-27,960 (inland side), expanded from batch52's
+    /// five roads to SIXTEEN tracks on 5.0-5.5 m centres,
+    /// following the Kotesashi / JR East vehicle-centre
+    /// study (hidden_files/depot-research.md): a lead, eleven
+    /// stabling roads, a wash road with a portal wash gantry,
+    /// two inspection roads through a widened 120 m shed,
+    /// and a pull-out road, fanning off an east-end ladder
+    /// that leads out to the running line. Twelve consists
+    /// (E231 10-car / E231 8-car / 117-series 8-car, noses
+    /// staggered) fill the stabling, wash and shed roads, so
+    /// the yard reads occupied like a real one. Inside the
+    /// fence the ground is a full ballast apron with a staff
+    /// road along the back fence, work platforms between the
+    /// stabling pairs and a concrete shed forecourt; portal
+    /// catenary gantries span all sixteen roads, floodlight
+    /// masts and yard lights light it, and the office, crew
+    /// hut, oil store and gate hut sit along the back fence.
+    /// Outside the fence a public road and a row of houses
+    /// on grass plots replace the bare fields.
+    ///
+    /// Render-loss fix (kept from batch52): the quality41
+    /// yard's output never appeared in any chain photo
+    /// although the call site, the guard, the ground heights
+    /// and the placement math all verify statically — the
+    /// yard's entities simply never survived to a frame, by
+    /// a mechanism static analysis could not isolate. The
+    /// yard is therefore built under one dedicated root
+    /// (depotYardRoot): buildDepotYard queues a DEPOT_BUILD
+    /// line (child + descendant counts, parent check) into
+    /// the pulled demo-drive log — batch58 moved it off the
+    /// old Swift print(), which never reached the pulled
+    /// logs — and update() re-parents the root if a frame
+    /// ever finds it orphaned, so the next chain's log +
+    /// photo split the failure space decisively. The
+    /// surroundings are parented to
+    /// the world instead, so even a yard-side loss would
+    /// leave the road and houses as evidence.
     private func buildDepotYard(travelDirection: RegionalTravelDirection) {
-        guard let first = samples.first, let last = samples.last, first.distanceM <= 27_560, last.distanceM >= 27_840 else { return }
+        guard let first = samples.first, let last = samples.last, first.distanceM <= 27_540, last.distanceM >= 27_960 else { return }
         let sideSign: Float = -seaSideSign(travelDirection: travelDirection)
-        func pt(_ d: Double, _ lateral: Float) -> SIMD3<Float> { self.groundOffsetPoint(self.sample(at: d), lateral: lateral) }
-        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -self.sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0)) }
+        func pt(_ d: Double, _ lateral: Float) -> SIMD3<Float> { groundOffsetPoint(sample(at: d), lateral: lateral) }
+        // batch56 (diagnosis §2.3 H2): everything INSIDE the
+        // fence stands on the rail height frame, not the
+        // valley-floor ground datum — the yard is a graded pad
+        // at rail level, and mixing the two frames sank the
+        // whole yard (beds, rails, shed) below the running
+        // line wherever the stretch is classified as viaduct.
+        // The ground-frame helper survives only for the
+        // outside-fence block, which stands on real ground.
+        func ptRail(_ d: Double, _ lateral: Float) -> SIMD3<Float> { routeOffsetPoint(sample(at: d), lateral: lateral) }
+        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0)) }
         let shedMaterial = Self.pbr(UIColor(red: 0.76, green: 0.77, blue: 0.76, alpha: 1), metallic: 0.18, roughness: 0.62)
         let doorMaterial = Self.pbr(UIColor(red: 0.23, green: 0.25, blue: 0.27, alpha: 1), metallic: 0.4, roughness: 0.55)
         let litMaterial = Self.pbr(UIColor(red: 0.98, green: 0.84, blue: 0.55, alpha: 1), roughness: 1)
-        let bedMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_trackbed", normalName: "normal_trackbed")
-        let railMaterial = Self.pbr(UIColor(red: 0.52, green: 0.57, blue: 0.60, alpha: 1), metallic: 0.85, roughness: 0.36)
+        let darkMaterial = Self.pbr(UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1), roughness: 1)
+        // batch55: the yard beds no longer carry the painted-
+        // sleeper trackbed texture. MeshBatchBuilder maps a
+        // texture once per box face, so on a 17 m bed segment
+        // the texture's 8 painted sleepers stretched to a
+        // 2.125 m pitch and 4.5 m length — the "sparse
+        // oversized planks" of the batch54 depot photos. The
+        // beds now wear plain ballast (the same values as the
+        // world ballastMaterial, RailwaySceneView.swift:460)
+        // and the batched 3D sleeper ticks below are the
+        // sleepers, at a real pitch.
+        let bedMaterial = Self.texturedPBR(UIColor(red: 0.74, green: 0.68, blue: 0.62, alpha: 1), roughness: 0.96, textureName: "scenery_ballast", normalName: "normal_ballast")
+        let yardRailMaterial = Self.pbr(UIColor(red: 0.52, green: 0.57, blue: 0.60, alpha: 1), metallic: 0.85, roughness: 0.36)
+        let yardSteelMaterial = Self.pbr(UIColor(red: 0.32, green: 0.34, blue: 0.35, alpha: 1), metallic: 0.6, roughness: 0.5)
+        let washSteelMaterial = Self.pbr(UIColor(red: 0.62, green: 0.68, blue: 0.70, alpha: 1), metallic: 0.3, roughness: 0.5)
+        let brushMaterial = Self.pbr(UIColor(red: 0.10, green: 0.23, blue: 0.24, alpha: 1), roughness: 0.9)
+        let bufferRedMaterial = Self.pbr(UIColor(red: 0.75, green: 0.16, blue: 0.12, alpha: 1), roughness: 0.6)
+        let grassMaterial = Self.pbr(UIColor(red: 0.36, green: 0.48, blue: 0.27, alpha: 1), roughness: 1)
+        let hedgeMaterial = Self.pbr(UIColor(red: 0.20, green: 0.32, blue: 0.17, alpha: 1), roughness: 1)
         var fenceMaterial = Self.texturedPBR(.white, metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
         fenceMaterial.blending = .transparent(opacity: .init(floatLiteral: 1))
         fenceMaterial.faceCulling = .none
-        // Ground pad.
-        var padD = 27_580.0
-        while padD <= 27_820 {
-            let p = pt(padD, sideSign * 29)
-            _ = addBox(parent: world, name: "depot-pad-\(Int(padD))", size: SIMD3<Float>(34, 0.1, 17.6), position: SIMD3<Float>(p.x, p.y + 0.05, p.z), material: roadMaterial, orientation: yawAt(padD))
-            padD += 17
-        }
-        // Inspection shed and its doors.
-        let shed = pt(27_700, sideSign * 34)
-        let shedYaw = yawAt(27_700)
-        _ = addBox(parent: world, name: "depot-shed", size: SIMD3<Float>(21, 9, 66), position: SIMD3<Float>(shed.x, shed.y + 4.5, shed.z), material: shedMaterial, orientation: shedYaw)
-        _ = addBox(parent: world, name: "depot-shed-roof", size: SIMD3<Float>(22, 0.35, 67), position: SIMD3<Float>(shed.x, shed.y + 9.15, shed.z), material: roofMaterials[1], orientation: shedYaw)
-        _ = addBox(parent: world, name: "depot-shed-clerestory", size: SIMD3<Float>(21.15, 1.1, 58), position: SIMD3<Float>(shed.x, shed.y + 7.5, shed.z), material: glassMaterial, orientation: shedYaw)
-        for doorIndex in 0..<3 {
-            let doorD = 27_700 + Double(doorIndex - 1) * 21
-            let doorP = pt(doorD, sideSign * 23.35)
-            if doorIndex == 1 {
-                _ = addBox(parent: world, name: "depot-door-open", size: SIMD3<Float>(0.3, 5.8, 5.0), position: SIMD3<Float>(doorP.x, shed.y + 2.9, doorP.z), material: litMaterial, orientation: yawAt(doorD))
-            } else {
-                _ = addBox(parent: world, name: "depot-door-\(doorIndex)", size: SIMD3<Float>(0.22, 5.6, 4.8), position: SIMD3<Float>(doorP.x, shed.y + 2.8, doorP.z), material: doorMaterial, orientation: yawAt(doorD))
-            }
-        }
-        // Two yard tracks with buffer stops.
-        for trackLateral in [sideSign * 19.5, sideSign * 24.5] {
-            var td = 27_605.0
-            while td <= 27_795 {
-                let bp = pt(td, trackLateral)
-                _ = addBox(parent: world, name: "depot-bed-\(Int(trackLateral))-\(Int(td))", size: SIMD3<Float>(4.6, 0.16, 17.4), position: SIMD3<Float>(bp.x, bp.y + 0.10, bp.z), material: bedMaterial, orientation: yawAt(td))
+
+        let yardRoot = Entity()
+        yardRoot.name = "depot-yard-root"
+        var bedBatch = MeshBatchBuilder()
+        bedBatch.censusExcluded = true
+        var railBatch = MeshBatchBuilder()
+        railBatch.censusExcluded = true
+        var sleeperBatch = MeshBatchBuilder()
+        sleeperBatch.censusExcluded = true
+        var steelBatch = MeshBatchBuilder()
+        var wireBatch = MeshBatchBuilder()
+        var concreteBatch = MeshBatchBuilder()
+        var fenceBatch = MeshBatchBuilder()
+        var apronBatch = MeshBatchBuilder()
+        var staffRoadBatch = MeshBatchBuilder()
+
+        // One yard track: ballast bed, two rails and sleeper
+        // ticks along a lateral profile — constant for the
+        // parallel roads, interpolated for the ladder and the
+        // lead-out (depths are inland distances; the closure
+        // returns the signed lateral).
+        func trackRun(_ from: Double, _ to: Double, _ lat: (Double) -> Float) {
+            var d = from
+            while d < to - 0.5 {
+                let segEnd = min(d + 17, to)
+                let mid = (d + segEnd) / 2
+                let segLen: Float = Float(segEnd - d) + 0.4
+                let heading: Float = -sample(at: mid).heading
+                let bedCentre = ptRail(mid, lat(mid))
+                bedBatch.addBox(center: SIMD3<Float>(bedCentre.x, bedCentre.y + 0.10, bedCentre.z), size: SIMD3<Float>(4.6, 0.16, segLen), yaw: heading)
                 for railOff in [Float(-0.72), Float(0.72)] {
-                    let rp = pt(td, trackLateral + railOff)
-                    _ = addBox(parent: world, name: "depot-rail-\(Int(trackLateral))-\(Int(td))-\(railOff)", size: SIMD3<Float>(0.09, 0.13, 17.4), position: SIMD3<Float>(rp.x, rp.y + 0.245, rp.z), material: railMaterial, orientation: yawAt(td))
+                    let railCentre = ptRail(mid, lat(mid) + railOff)
+                    railBatch.addBox(center: SIMD3<Float>(railCentre.x, railCentre.y + 0.245, railCentre.z), size: SIMD3<Float>(0.09, 0.13, segLen), yaw: heading)
                 }
-                td += 17
+                var sleeperD = d + 1.4
+                while sleeperD < segEnd - 0.5 {
+                    let tick = ptRail(sleeperD, lat(sleeperD))
+                    sleeperBatch.addBox(center: SIMD3<Float>(tick.x, tick.y + 0.185, tick.z), size: SIMD3<Float>(2.3, 0.05, 0.26), yaw: -sample(at: sleeperD).heading)
+                    // batch55: 0.65 m pitch (real yard track),
+                    // was 2.8 m — the sparse-plank read of the
+                    // batch54 depot photos. The ticks ride in
+                    // sleeperBatch, so the ~4.3x count costs no
+                    // extra entities.
+                    sleeperD += 0.65
+                }
+                d = segEnd
             }
-            let bufP = pt(27_800, trackLateral)
-            _ = addBox(parent: world, name: "depot-buffer-\(Int(trackLateral))", size: SIMD3<Float>(2.2, 0.4, 0.3), position: SIMD3<Float>(bufP.x, bufP.y + 0.85, bufP.z), material: poleMaterial, orientation: yawAt(27_800))
         }
-        // Office, clutter, lights, fence.
-        let office = pt(27_635, sideSign * 43)
-        _ = addBox(parent: world, name: "depot-office", size: SIMD3<Float>(13, 7, 11), position: SIMD3<Float>(office.x, office.y + 3.5, office.z), material: officePhotoFacadeMaterial, orientation: yawAt(27_635))
-        _ = addBox(parent: world, name: "depot-office-roof", size: SIMD3<Float>(13.5, 0.3, 11.5), position: SIMD3<Float>(office.x, office.y + 7.15, office.z), material: roofMaterials[0], orientation: yawAt(27_635))
-        let stackP = pt(27_660, sideSign * 26.5)
-        for railLevel in 0..<3 {
-            _ = addBox(parent: world, name: "depot-railstack-\(railLevel)", size: SIMD3<Float>(0.16, 0.16, 12), position: SIMD3<Float>(stackP.x, stackP.y + 0.25 + Float(railLevel) * 0.17, stackP.z), material: railMaterial, orientation: yawAt(27_660))
+        func straight(_ depth: Float) -> (Double) -> Float { { _ in sideSign * depth } }
+        // The sixteen parallel roads: lead, eleven stabling,
+        // wash, two inspection, pull-out. Each road's east
+        // end stops where the ladder diagonal crosses its
+        // depth, so the fan closes prototypically; buffer
+        // chainages sit just inside the west ends.
+        let roads: [(depth: Float, west: Double, east: Double, buffer: Double)] = [
+            (14.0, 27_560, 27_903, 27_566),
+            (19.5, 27_585, 27_890, 27_592),
+            (24.5, 27_585, 27_878, 27_592),
+            (29.5, 27_585, 27_866, 27_592),
+            (34.5, 27_585, 27_854, 27_592),
+            (39.5, 27_585, 27_842, 27_592),
+            (44.5, 27_585, 27_830, 27_592),
+            (49.5, 27_585, 27_818, 27_592),
+            (54.5, 27_585, 27_806, 27_592),
+            (59.5, 27_585, 27_794, 27_592),
+            (64.5, 27_585, 27_782, 27_592),
+            (69.5, 27_585, 27_770, 27_592),
+            (74.5, 27_560, 27_758, 27_567),
+            (80.0, 27_560, 27_745, 27_567),
+            (85.0, 27_560, 27_733, 27_567),
+            (90.5, 27_560, 27_720, 27_567),
+        ]
+        for road in roads {
+            trackRun(road.west, road.east, straight(road.depth))
         }
-        let drumP = pt(27_748, sideSign * 26)
-        _ = addBox(parent: world, name: "depot-drum-a", size: SIMD3<Float>(1.3, 1.3, 1.3), position: SIMD3<Float>(drumP.x, drumP.y + 0.65, drumP.z), material: roofMaterials[1], orientation: yawAt(27_748))
-        let drum2P = pt(27_751.5, sideSign * 26)
-        _ = addBox(parent: world, name: "depot-drum-b", size: SIMD3<Float>(1.3, 1.3, 1.3), position: SIMD3<Float>(drum2P.x, drum2P.y + 0.65, drum2P.z), material: doorMaterial, orientation: yawAt(27_748))
-        let cartP = pt(27_720, sideSign * 27.5)
-        _ = addBox(parent: world, name: "depot-cart", size: SIMD3<Float>(1.8, 0.85, 3.1), position: SIMD3<Float>(cartP.x, cartP.y + 0.62, cartP.z), material: doorMaterial, orientation: yawAt(27_720))
-        for lightD in [27_630.0, 27_710.0, 27_790.0] {
-            let lp = pt(lightD, sideSign * 15.5)
-            _ = addBox(parent: world, name: "depot-light-\(Int(lightD))", size: SIMD3<Float>(0.13, 6.8, 0.13), position: SIMD3<Float>(lp.x, lp.y + 3.4, lp.z), material: poleMaterial)
-            _ = addBox(parent: world, name: "depot-light-head-\(Int(lightD))", size: SIMD3<Float>(0.95, 0.14, 0.32), position: SIMD3<Float>(lp.x, lp.y + 6.85, lp.z), material: litMaterial, orientation: yawAt(lightD))
+        // The ladder across the fan ends, then the lead-out
+        // down to the running line's cess.
+        trackRun(27_715, 27_905) { d in sideSign * Float(92.5 - (d - 27_715) * 0.41737) }
+        trackRun(27_905, 27_960) { d in sideSign * Float(13.2 - (d - 27_905) * 0.17455) }
+
+        // Contact wires over the parallel roads (the
+        // inspection roads' wires stop at the shed mouth).
+        func wireRun(_ from: Double, _ to: Double, _ depth: Float) {
+            var d = from
+            while d < to - 0.5 {
+                let segEnd = min(d + 25, to)
+                let mid = (d + segEnd) / 2
+                let p = ptRail(mid, sideSign * depth)
+                wireBatch.addBox(center: SIMD3<Float>(p.x, p.y + 5.7, p.z), size: SIMD3<Float>(0.05, 0.05, Float(segEnd - d) + 0.3), yaw: -sample(at: mid).heading)
+                d = segEnd
+            }
         }
-        var fenceD = 27_578.0
-        while fenceD <= 27_822 {
-            let fp = pt(fenceD, sideSign * 12.6)
-            _ = addBox(parent: world, name: "depot-fence-\(Int(fenceD))", size: SIMD3<Float>(0.05, 1.9, 17.2), position: SIMD3<Float>(fp.x, fp.y + 0.95, fp.z), material: fenceMaterial, orientation: yawAt(fenceD))
-            fenceD += 17
+        for road in roads {
+            var wireTo = road.east - 8
+            if road.depth == 80.0 || road.depth == 85.0 { wireTo = 27_648 }
+            wireRun(road.west + 10, wireTo, road.depth)
+        }
+
+        // Buffer stops at the west end of every road: a
+        // steel beam on two raking struts with a red marker
+        // disc.
+        func bufferStop(_ d: Double, _ depth: Float) {
+            let centre = ptRail(d, sideSign * depth)
+            let beamY: Float = centre.y + 0.95
+            _ = addBox(parent: yardRoot, name: "depot-buffer-\(Int(depth))", size: SIMD3<Float>(2.4, 0.35, 0.3), position: SIMD3<Float>(centre.x, beamY, centre.z), material: yardSteelMaterial, orientation: yawAt(d))
+            for strutOff in [Float(-0.7), Float(0.7)] {
+                let base = ptRail(d - 1.7, sideSign * depth + strutOff)
+                let top = ptRail(d, sideSign * depth + strutOff)
+                steelBatch.addSegment(from: SIMD3<Float>(base.x, base.y + 0.2, base.z), to: SIMD3<Float>(top.x, beamY, top.z), thickness: 0.12)
+            }
+            let disc = ptRail(d - 0.25, sideSign * depth)
+            _ = addBox(parent: yardRoot, name: "depot-buffer-disc-\(Int(depth))", size: SIMD3<Float>(0.55, 0.55, 0.06), position: SIMD3<Float>(disc.x, beamY, disc.z), material: bufferRedMaterial, orientation: yawAt(d))
+        }
+        for road in roads {
+            bufferStop(road.buffer, road.depth)
+        }
+
+        // Ballast apron over the whole fenced site — no bare
+        // dirt inside the fence (research: yards are grey
+        // throughout). The strip along the back fence is
+        // asphalt: the staff road and building forecourt.
+        var apronD = 27_550.0
+        while apronD < 27_855 {
+            let mid = apronD + 8.5
+            for strip in [Float(16), Float(25), Float(34), Float(43), Float(52), Float(61), Float(70), Float(79), Float(88)] {
+                let p = ptRail(mid, sideSign * strip)
+                apronBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.05, p.z), size: SIMD3<Float>(9, 0.1, 17.4), yaw: -sample(at: mid).heading)
+            }
+            let roadP2 = ptRail(mid, sideSign * 95.25)
+            staffRoadBatch.addBox(center: SIMD3<Float>(roadP2.x, roadP2.y + 0.05, roadP2.z), size: SIMD3<Float>(5.5, 0.1, 17.4), yaw: -sample(at: mid).heading)
+            apronD += 17
+        }
+        // Raised work platforms between the stabling pairs,
+        // with power/water cabinets along them (the Kotesashi
+        // ground photo's defining detail).
+        for platformDepth in [Float(22.0), Float(32.0), Float(42.0), Float(52.0), Float(62.0), Float(67.0)] {
+            var platformD = 27_615.0
+            while platformD < 27_785 {
+                let mid = platformD + 8.5
+                let p = ptRail(mid, sideSign * platformDepth)
+                concreteBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.46, p.z), size: SIMD3<Float>(1.9, 0.92, 17.2), yaw: -sample(at: mid).heading)
+                platformD += 17
+            }
+            for cabinetD in [27_645.0, 27_735.0] {
+                let p = ptRail(cabinetD, sideSign * platformDepth)
+                steelBatch.addBox(center: SIMD3<Float>(p.x, p.y + 1.35, p.z), size: SIMD3<Float>(0.7, 0.85, 0.45), yaw: -sample(at: cabinetD).heading)
+            }
+        }
+        // Hand-wash platform along the wash road, in the
+        // pocket between the wash consist and the first
+        // inspection road, with its control cabinet.
+        var washPlatformD = 27_640.0
+        while washPlatformD < 27_730 {
+            let mid = washPlatformD + 8.5
+            let p = ptRail(mid, sideSign * 76.6)
+            concreteBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.45, p.z), size: SIMD3<Float>(1.2, 0.9, 17.2), yaw: -sample(at: mid).heading)
+            washPlatformD += 17
+        }
+        let washCabinetP = ptRail(27_645, sideSign * 76.6)
+        steelBatch.addBox(center: SIMD3<Float>(washCabinetP.x, washCabinetP.y + 1.33, washCabinetP.z), size: SIMD3<Float>(0.7, 0.85, 0.45), yaw: -sample(at: 27_645).heading)
+        // Concrete forecourt aprons flanking the shed.
+        var shedApronD = 27_630.0
+        while shedApronD < 27_790 {
+            let mid = shedApronD + 8.5
+            for strip in [Float(76.0), Float(89.0)] {
+                let p = ptRail(mid, sideSign * strip)
+                concreteBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.075, p.z), size: SIMD3<Float>(6.4, 0.15, 17.2), yaw: -sample(at: mid).heading)
+            }
+            shedApronD += 17
+        }
+
+        // Inspection shed over BOTH inspection roads: two
+        // side walls, a roof with glass bands, end lintels
+        // over each track and piers leaving a full-height
+        // opening per track at both ends, and a dark inner
+        // shell with a lit far wall and ceiling strips so
+        // the openings read deep.
+        let shedCentre = ptRail(27_710, sideSign * 82.5)
+        let shedYaw = yawAt(27_710)
+        let shedBaseY: Float = shedCentre.y
+        for wallOff in [Float(-7.5), Float(7.5)] {
+            let wallP = ptRail(27_710, sideSign * 82.5 + wallOff)
+            _ = addBox(parent: yardRoot, name: "depot-shed-wall", size: SIMD3<Float>(0.25, 7.2, 120), position: SIMD3<Float>(wallP.x, shedBaseY + 3.6, wallP.z), material: shedMaterial, orientation: shedYaw)
+            _ = addBox(parent: yardRoot, name: "depot-shed-glassband", size: SIMD3<Float>(0.3, 1.1, 108), position: SIMD3<Float>(wallP.x, shedBaseY + 6.35, wallP.z), material: glassMaterial, orientation: shedYaw)
+        }
+        _ = addBox(parent: yardRoot, name: "depot-shed-roof", size: SIMD3<Float>(16.6, 0.3, 121), position: SIMD3<Float>(shedCentre.x, shedBaseY + 7.35, shedCentre.z), material: roofMaterials[1], orientation: shedYaw)
+        _ = addBox(parent: yardRoot, name: "depot-shed-interior", size: SIMD3<Float>(14.6, 5.6, 112), position: SIMD3<Float>(shedCentre.x, shedBaseY + 2.8, shedCentre.z), material: darkMaterial, orientation: shedYaw)
+        for endD in [27_650.0, 27_770.0] {
+            for trackDepth in [Float(80.0), Float(85.0)] {
+                let lintelP = ptRail(endD, sideSign * trackDepth)
+                _ = addBox(parent: yardRoot, name: "depot-shed-lintel-\(Int(endD))-\(Int(trackDepth))", size: SIMD3<Float>(6.1, 1.6, 0.3), position: SIMD3<Float>(lintelP.x, shedBaseY + 6.4, lintelP.z), material: shedMaterial, orientation: yawAt(endD))
+            }
+            for (pierOff, pierWidth) in [(Float(-7.5), Float(2.2)), (Float(0), Float(1.6)), (Float(7.5), Float(2.2))] {
+                let pierP = ptRail(endD, sideSign * 82.5 + pierOff)
+                _ = addBox(parent: yardRoot, name: "depot-shed-pier-\(Int(endD))-\(Int(pierOff))", size: SIMD3<Float>(pierWidth, 7.2, 0.3), position: SIMD3<Float>(pierP.x, shedBaseY + 3.6, pierP.z), material: shedMaterial, orientation: yawAt(endD))
+            }
+        }
+        let shutterP = ptRail(27_770, sideSign * 85.0)
+        _ = addBox(parent: yardRoot, name: "depot-shed-shutter", size: SIMD3<Float>(6.1, 2.4, 0.14), position: SIMD3<Float>(shutterP.x, shedBaseY + 5.9, shutterP.z), material: doorMaterial, orientation: yawAt(27_770))
+        let glowP = ptRail(27_655.5, sideSign * 82.5)
+        _ = addBox(parent: yardRoot, name: "depot-shed-glow", size: SIMD3<Float>(13.5, 3.2, 0.2), position: SIMD3<Float>(glowP.x, shedBaseY + 2.6, glowP.z), material: litMaterial, orientation: yawAt(27_655.5))
+        for trackDepth in [Float(80.0), Float(85.0)] {
+            let stripP = ptRail(27_710, sideSign * trackDepth)
+            _ = addBox(parent: yardRoot, name: "depot-shed-lightstrip-\(Int(trackDepth))", size: SIMD3<Float>(0.3, 0.08, 100), position: SIMD3<Float>(stripP.x, shedBaseY + 6.0, stripP.z), material: litMaterial, orientation: yawAt(27_710))
+        }
+        for ventD in [27_675.0, 27_710.0, 27_745.0] {
+            let ventP = ptRail(ventD, sideSign * 82.5)
+            _ = addBox(parent: yardRoot, name: "depot-shed-vent-\(Int(ventD))", size: SIMD3<Float>(1.2, 0.7, 1.8), position: SIMD3<Float>(ventP.x, shedBaseY + 7.85, ventP.z), material: yardSteelMaterial, orientation: yawAt(ventD))
+        }
+
+        // Portal wash gantry over the wash road: two columns,
+        // a beam and two brush drums on a concrete slab.
+        let washCentre = ptRail(27_700, sideSign * 74.5)
+        _ = addBox(parent: yardRoot, name: "depot-wash-apron", size: SIMD3<Float>(7.5, 0.16, 26), position: SIMD3<Float>(washCentre.x, washCentre.y + 0.08, washCentre.z), material: concreteMaterial, orientation: yawAt(27_700))
+        for columnOff in [Float(-2.6), Float(2.6)] {
+            let columnP = ptRail(27_700, sideSign * 74.5 + columnOff)
+            _ = addBox(parent: yardRoot, name: "depot-wash-column", size: SIMD3<Float>(0.55, 5.9, 0.55), position: SIMD3<Float>(columnP.x, columnP.y + 2.95, columnP.z), material: washSteelMaterial, orientation: yawAt(27_700))
+        }
+        _ = addBox(parent: yardRoot, name: "depot-wash-beam", size: SIMD3<Float>(6.4, 0.85, 0.7), position: SIMD3<Float>(washCentre.x, washCentre.y + 5.6, washCentre.z), material: washSteelMaterial, orientation: yawAt(27_700))
+        for brushOff in [Float(-1.5), Float(1.5)] {
+            let brushP = ptRail(27_700, sideSign * 74.5 + brushOff)
+            let brush = ModelEntity(mesh: FallbackCylinderMesh.make(height: 3.6, radius: 0.34), materials: [brushMaterial])
+            brush.name = "depot-wash-brush"
+            brush.position = SIMD3<Float>(brushP.x, brushP.y + 2.2, brushP.z)
+            yardRoot.addChild(brush)
+        }
+        // Water tank beside the shed's west mouth.
+        let tankP = ptRail(27_645, sideSign * 88.0)
+        let tank = ModelEntity(mesh: FallbackCylinderMesh.make(height: 2.6, radius: 1.1), materials: [shedMaterial])
+        tank.name = "depot-wash-tank"
+        tank.position = SIMD3<Float>(tankP.x, tankP.y + 1.3, tankP.z)
+        yardRoot.addChild(tank)
+
+        // Portal catenary gantries spanning the whole yard:
+        // masts at both edges, a beam across all sixteen
+        // roads, drop rods down to each wire.
+        for gantryD in [27_620.0, 27_710.0, 27_800.0] {
+            let gantryHeading: Float = -sample(at: gantryD).heading
+            for edge in [Float(11.5), Float(93.5)] {
+                let mastP = ptRail(gantryD, sideSign * edge)
+                steelBatch.addBox(center: SIMD3<Float>(mastP.x, mastP.y + 4.1, mastP.z), size: SIMD3<Float>(0.3, 8.2, 0.3), yaw: gantryHeading)
+            }
+            let beamP = ptRail(gantryD, sideSign * 52.5)
+            steelBatch.addBox(center: SIMD3<Float>(beamP.x, beamP.y + 7.9, beamP.z), size: SIMD3<Float>(84, 0.38, 0.3), yaw: gantryHeading)
+            for dropDepth in [Float(14.0), Float(19.5), Float(24.5), Float(29.5), Float(34.5), Float(39.5), Float(44.5), Float(49.5), Float(54.5), Float(59.5), Float(64.5), Float(69.5), Float(74.5), Float(80.0), Float(85.0), Float(90.5)] {
+                let dropP = ptRail(gantryD, sideSign * dropDepth)
+                steelBatch.addBox(center: SIMD3<Float>(dropP.x, dropP.y + 6.8, dropP.z), size: SIMD3<Float>(0.09, 2.2, 0.09), yaw: gantryHeading)
+            }
+        }
+
+        // High-mast floodlights and low yard lights.
+        for (mastD, mastDepth) in [(27_640.0, Float(16.8)), (27_700.0, Float(47.0)), (27_765.0, Float(88.0))] {
+            let mastP = ptRail(mastD, sideSign * mastDepth)
+            _ = addBox(parent: yardRoot, name: "depot-mast-\(Int(mastD))", size: SIMD3<Float>(0.22, 16, 0.22), position: SIMD3<Float>(mastP.x, mastP.y + 8, mastP.z), material: yardSteelMaterial)
+            _ = addBox(parent: yardRoot, name: "depot-mast-head-\(Int(mastD))", size: SIMD3<Float>(2.6, 0.25, 0.7), position: SIMD3<Float>(mastP.x, mastP.y + 16.1, mastP.z), material: litMaterial, orientation: yawAt(mastD))
+        }
+        for (lightD, lightDepth) in [(27_630.0, Float(16.8)), (27_710.0, Float(16.8)), (27_790.0, Float(16.8)), (27_660.0, Float(72.0)), (27_760.0, Float(72.0))] {
+            let lightP = ptRail(lightD, sideSign * lightDepth)
+            _ = addBox(parent: yardRoot, name: "depot-light-\(Int(lightD))-\(Int(lightDepth))", size: SIMD3<Float>(0.13, 6.8, 0.13), position: SIMD3<Float>(lightP.x, lightP.y + 3.4, lightP.z), material: poleMaterial)
+            _ = addBox(parent: yardRoot, name: "depot-light-head-\(Int(lightD))-\(Int(lightDepth))", size: SIMD3<Float>(0.95, 0.14, 0.32), position: SIMD3<Float>(lightP.x, lightP.y + 6.85, lightP.z), material: litMaterial, orientation: yawAt(lightD))
+        }
+
+        // Perimeter fence with posts: track side, back, and
+        // both ends (the west end leaves a gate gap on the
+        // staff road; the east end stops at the fan, which is
+        // open at the throat like a real yard).
+        func fenceRun(_ from: Double, _ to: Double, _ depth: Float) {
+            var d = from
+            while d < to - 0.5 {
+                let segEnd = min(d + 17, to)
+                let mid = (d + segEnd) / 2
+                let p = ptRail(mid, sideSign * depth)
+                fenceBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.95, p.z), size: SIMD3<Float>(0.05, 1.9, Float(segEnd - d) + 0.4), yaw: -sample(at: mid).heading)
+                d = segEnd
+            }
+            var postD = from
+            while postD <= to {
+                let p = ptRail(postD, sideSign * depth)
+                steelBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.95, p.z), size: SIMD3<Float>(0.09, 1.9, 0.09), yaw: -sample(at: postD).heading)
+                postD += 8.5
+            }
+        }
+        func fenceAcross(_ d: Double, _ fromDepth: Float, _ toDepth: Float) {
+            let midDepth: Float = (fromDepth + toDepth) / 2
+            let p = ptRail(d, sideSign * midDepth)
+            fenceBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.95, p.z), size: SIMD3<Float>(toDepth - fromDepth, 1.9, 0.05), yaw: -sample(at: d).heading)
+            var postDepth = fromDepth
+            while postDepth <= toDepth {
+                let postP = ptRail(d, sideSign * postDepth)
+                steelBatch.addBox(center: SIMD3<Float>(postP.x, postP.y + 0.95, postP.z), size: SIMD3<Float>(0.09, 1.9, 0.09), yaw: -sample(at: d).heading)
+                postDepth += 4.4
+            }
+        }
+        fenceRun(27_548, 27_858, 11.8)
+        fenceRun(27_548, 27_862, 98.0)
+        fenceAcross(27_548, 11.8, 91.0)
+        fenceAcross(27_862, 92.0, 98.0)
+        let hutP = ptRail(27_556, sideSign * 94.8)
+        _ = addBox(parent: yardRoot, name: "depot-gate-hut", size: SIMD3<Float>(2.6, 2.6, 2.6), position: SIMD3<Float>(hutP.x, hutP.y + 1.3, hutP.z), material: shedMaterial, orientation: yawAt(27_556))
+        _ = addBox(parent: yardRoot, name: "depot-gate-hut-roof", size: SIMD3<Float>(3.0, 0.15, 3.0), position: SIMD3<Float>(hutP.x, hutP.y + 2.7, hutP.z), material: roofMaterials[0], orientation: yawAt(27_556))
+
+        // Buildings along the back fence: the office on the
+        // staff road, an oil store, and a crew hut by the fan.
+        let officeP = ptRail(27_640, sideSign * 95.4)
+        _ = addBox(parent: yardRoot, name: "depot-office", size: SIMD3<Float>(5, 6.5, 24), position: SIMD3<Float>(officeP.x, officeP.y + 3.25, officeP.z), material: officePhotoFacadeMaterial, orientation: yawAt(27_640))
+        _ = addBox(parent: yardRoot, name: "depot-office-roof", size: SIMD3<Float>(5.5, 0.3, 24.5), position: SIMD3<Float>(officeP.x, officeP.y + 6.65, officeP.z), material: roofMaterials[0], orientation: yawAt(27_640))
+        let annexP = ptRail(27_690, sideSign * 95.2)
+        _ = addBox(parent: yardRoot, name: "depot-annex", size: SIMD3<Float>(4.5, 2.8, 7), position: SIMD3<Float>(annexP.x, annexP.y + 1.4, annexP.z), material: doorMaterial, orientation: yawAt(27_690))
+        let crewP = ptRail(27_850, sideSign * 95.0)
+        _ = addBox(parent: yardRoot, name: "depot-crew-hut", size: SIMD3<Float>(5, 3.2, 10), position: SIMD3<Float>(crewP.x, crewP.y + 1.6, crewP.z), material: houseFacadeMaterial5, orientation: yawAt(27_850))
+        _ = addBox(parent: yardRoot, name: "depot-crew-hut-roof", size: SIMD3<Float>(5.4, 0.25, 10.4), position: SIMD3<Float>(crewP.x, crewP.y + 3.3, crewP.z), material: roofMaterials[1], orientation: yawAt(27_850))
+
+        // Working clutter on the shed forecourt (research:
+        // yards keep parts along the work paths): a rail
+        // stack, oil drums, a hand cart, wheelsets and
+        // material pallets.
+        let railStackP = ptRail(27_660, sideSign * 77.4)
+        for railIndex in 0..<3 {
+            _ = addBox(parent: yardRoot, name: "depot-stored-rail-\(railIndex)", size: SIMD3<Float>(0.14, 0.16, 12), position: SIMD3<Float>(railStackP.x, railStackP.y + 0.15 + Float(railIndex) * 0.17, railStackP.z), material: yardRailMaterial, orientation: yawAt(27_660))
+        }
+        for (drumIndex, drumD) in [27_748.0, 27_751.5].enumerated() {
+            let drumP = ptRail(drumD, sideSign * 77.4)
+            let drum = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.9, radius: 0.3), materials: [doorMaterial])
+            drum.name = "depot-drum-\(drumIndex)"
+            drum.position = SIMD3<Float>(drumP.x, drumP.y + 0.45, drumP.z)
+            yardRoot.addChild(drum)
+        }
+        let cartP = ptRail(27_720, sideSign * 77.4)
+        _ = addBox(parent: yardRoot, name: "depot-cart", size: SIMD3<Float>(1.1, 0.12, 1.7), position: SIMD3<Float>(cartP.x, cartP.y + 0.55, cartP.z), material: yardSteelMaterial, orientation: yawAt(27_720))
+        _ = addBox(parent: yardRoot, name: "depot-cart-handle", size: SIMD3<Float>(0.06, 0.8, 0.06), position: SIMD3<Float>(cartP.x, cartP.y + 0.4, cartP.z), material: yardSteelMaterial, orientation: yawAt(27_720))
+        for (wheelIndex, wheelD) in [27_643.0, 27_646.5].enumerated() {
+            let wheelP = ptRail(wheelD, sideSign * 77.4)
+            let wheelset = ModelEntity(mesh: FallbackCylinderMesh.make(height: 1.4, radius: 0.42), materials: [yardSteelMaterial])
+            wheelset.name = "depot-wheelset-\(wheelIndex)"
+            wheelset.position = SIMD3<Float>(wheelP.x, wheelP.y + 0.42, wheelP.z)
+            wheelset.orientation = yawAt(wheelD) * simd_quatf(angle: Float.pi / 2, axis: SIMD3<Float>(0, 0, 1))
+            yardRoot.addChild(wheelset)
+        }
+        for (palletIndex, palletD) in [27_668.0, 27_672.0].enumerated() {
+            let palletP = ptRail(palletD, sideSign * 89.0)
+            _ = addBox(parent: yardRoot, name: "depot-pallet-\(palletIndex)", size: SIMD3<Float>(1.3, 0.9, 1.3), position: SIMD3<Float>(palletP.x, palletP.y + 0.6, palletP.z), material: doorMaterial, orientation: yawAt(palletD))
+        }
+
+        // The stabled consists. The first two are unchanged
+        // from quality41 (same tracks, same noses — the
+        // tour's sign catalog points at them); the rest fill
+        // the fan so the yard reads occupied: E231 10-car,
+        // E231 8-car (cars 1-7 + 10 of the 10-car model, the
+        // traffic system's own convention) and 117-series
+        // 8-car formations with staggered noses, one consist
+        // under the wash gantry and one through the shed.
+        // One stabling road (49.5) is left empty.
+        // Loaded GLB roots for the stabled consists, kept so
+        // their car nodes stay valid as clone prototypes (the
+        // traffic adapter's pattern); each asset loads once.
+        var depotPrototypeRoots: [String: Entity] = [:]
+        // batch56-diag: remove after proof — filled in by
+        // stableConsist for one 8-car consist (diagnosis §2.5).
+        var depotDiagConsistLine: String? = nil
+        func stableConsist(modelName: String, modelCarCount: Int, carCount: Int, noseDistance: Double, lateral: Float, directionSign: Float) {
+            // The models load through the generated-asset
+            // loader — the same synchronous path as the player
+            // consist (buildGLBConsist) and the AI traffic
+            // adapter. (RealityKit has no .glb loader, so the
+            // Entity(contentsOf:) attempt this replaces could
+            // never produce a train.)
+            guard let asset = RailwayGenerated3DAsset(rawValue: modelName) else { return }
+            let loaded: Entity
+            if let cached = depotPrototypeRoots[modelName] {
+                loaded = cached
+            } else if let fresh = try? RailwayGeneratedAssetLoader.loadModel(for: asset) {
+                depotPrototypeRoots[modelName] = fresh
+                loaded = fresh
+            } else {
+                return
+            }
+            func findNode(_ entity: Entity, _ name: String) -> Entity? {
+                if entity.name == name { return entity }
+                for child in entity.children {
+                    if let found = findNode(child, name) { return found }
+                }
+                return nil
+            }
+            let nodeNames: [String]
+            if modelCarCount == 10 && carCount == 8 {
+                nodeNames = (1...7).map { "car_\($0)" } + ["car_10"]
+            } else {
+                nodeNames = (1...carCount).map { "car_\($0)" }
+            }
+            var carRoots: [Entity] = []
+            for name in nodeNames {
+                if let car = findNode(loaded, name) {
+                    carRoots.append(car.clone(recursive: true))
+                }
+            }
+            guard carRoots.count == carCount else { return }
+            // batch56 (diagnosis §2.3 H1): the placement is
+            // rewritten on the player-consist pattern. The old
+            // code positioned every car inside one wrapper by a
+            // hand-derived `along` whose index terms cancelled
+            // exactly (along == +9.75 for every index), so all
+            // 102 stabled cars stacked interpenetrating at one
+            // car-length spot by each nose and the yard read as
+            // empty. Now each car gets its own wrapper, posed
+            // exactly like a player GLB car (the per-frame pose
+            // loop in update()): centre chainage =
+            // nose − (index·19.5 + 9.75), position from
+            // routeOffsetPoint at that sample with y =
+            // elevation + 0.31 (the yard rails' top surface:
+            // rail centre +0.245 plus half height 0.065 over
+            // the rail frame), orientation = heading × pitch ×
+            // bank, and the cloned car node carries the same
+            // −π/2 yaw buildGLBConsist applies. directionSign
+            // is retained for call-site compatibility: every
+            // listed consist stables nose-high, so its cars
+            // run toward decreasing chainage, which the centre
+            // formula already encodes. No scale mirroring.
+            var firstCarPosition: SIMD3<Float>? = nil
+            var lastCarPosition: SIMD3<Float>? = nil
+            for index in carRoots.indices {
+                let car = carRoots[index]
+                let centre = noseDistance - Double(index) * 19.5 - 9.75
+                let cs = sample(at: centre)
+                let cp = routeOffsetPoint(cs, lateral: lateral)
+                let carWrapper = Entity()
+                carWrapper.name = "depot-\(modelName)-car-\(index + 1)"
+                carWrapper.position = SIMD3<Float>(cp.x, cs.elevationM + 0.31, cp.z)
+                let carPitch = RegionalRouteGeometrySampler.carBodyPitchRadians(
+                    frontBogieElevationM: sample(at: centre + 6.35).elevationM,
+                    rearBogieElevationM: sample(at: centre - 6.35).elevationM
+                )
+                carWrapper.orientation = simd_quatf(angle: -cs.heading, axis: SIMD3<Float>(0, 1, 0)) *
+                    simd_quatf(angle: carPitch, axis: SIMD3<Float>(1, 0, 0)) *
+                    simd_quatf(angle: -cs.bankRadians, axis: SIMD3<Float>(0, 0, 1))
+                car.orientation = simd_quatf(angle: -Float.pi / 2, axis: SIMD3<Float>(0, 1, 0))
+                carWrapper.addChild(car)
+                yardRoot.addChild(carWrapper)
+                if index == 0 { firstCarPosition = carWrapper.position }
+                if index == carRoots.count - 1 { lastCarPosition = carWrapper.position }
+                // batch56: one placement per car for the
+                // scenery census.
+                CensusSink.recordChainage(centre)
+            }
+            // batch56-diag: remove after proof — diagnosis
+            // §2.5: one 8-car consist's end cars, whose
+            // separation must read ≈136.5 m, not ≈0.
+            if modelName == "too_117_8car", noseDistance == 27_760,
+               let firstCarPosition, let lastCarPosition {
+                let separation = simd_length(firstCarPosition - lastCarPosition)
+                depotDiagConsistLine = String(format: "DEPOT_DIAG consist=%@ cars=%d first=(%.1f,%.1f,%.1f) last=(%.1f,%.1f,%.1f) sep=%.2f",
+                                              modelName, carCount,
+                                              Double(firstCarPosition.x), Double(firstCarPosition.y), Double(firstCarPosition.z),
+                                              Double(lastCarPosition.x), Double(lastCarPosition.y), Double(lastCarPosition.z),
+                                              Double(separation))
+            }
+        }
+        let consists: [(model: String, modelCars: Int, cars: Int, nose: Double, depth: Float)] = [
+            ("too_e231_10car", 10, 10, 27_797, 19.5),
+            ("too_117_8car", 8, 8, 27_760, 24.5),
+            ("too_e231_10car", 10, 8, 27_820, 29.5),
+            ("too_e231_10car", 10, 10, 27_815, 34.5),
+            ("too_117_8car", 8, 8, 27_790, 39.5),
+            ("too_e231_10car", 10, 10, 27_800, 44.5),
+            ("too_e231_10car", 10, 8, 27_762, 54.5),
+            ("too_117_8car", 8, 8, 27_780, 59.5),
+            ("too_117_8car", 8, 8, 27_768, 64.5),
+            ("too_e231_10car", 10, 8, 27_758, 69.5),
+            ("too_e231_10car", 10, 8, 27_752, 74.5),
+            ("too_117_8car", 8, 8, 27_740, 80.0),
+        ]
+        for consist in consists {
+            stableConsist(modelName: consist.model, modelCarCount: consist.modelCars, carCount: consist.cars, noseDistance: consist.nose, lateral: sideSign * consist.depth, directionSign: -1)
+        }
+
+        // Merge the batched geometry and mount the yard.
+        if let mesh = bedBatch.build(name: "depot-beds", material: bedMaterial) { yardRoot.addChild(mesh) }
+        if let mesh = railBatch.build(name: "depot-rails", material: yardRailMaterial) { yardRoot.addChild(mesh) }
+        if let mesh = sleeperBatch.build(name: "depot-sleepers", material: sleeperMaterial) { yardRoot.addChild(mesh) }
+        if let mesh = steelBatch.build(name: "depot-steel", material: yardSteelMaterial) { yardRoot.addChild(mesh) }
+        if let mesh = wireBatch.build(name: "depot-wires", material: wireMaterial) { yardRoot.addChild(mesh) }
+        if let mesh = concreteBatch.build(name: "depot-concrete", material: concreteMaterial) { yardRoot.addChild(mesh) }
+        if let mesh = fenceBatch.build(name: "depot-fence", material: fenceMaterial) { yardRoot.addChild(mesh) }
+        if let mesh = apronBatch.build(name: "depot-apron", material: ballastMaterial) { yardRoot.addChild(mesh) }
+        if let mesh = staffRoadBatch.build(name: "depot-staff-road", material: roadMaterial) { yardRoot.addChild(mesh) }
+        world.addChild(yardRoot)
+        depotYardRoot = yardRoot
+        // batch58 (diagnosis §3): the old Swift print() never
+        // reached the pulled logs, so "built but not drawn" vs
+        // "not built" could not be separated from chain
+        // evidence. The build proof now rides the same queued
+        // channel as DEPOT_DIAG: direct child count, total
+        // descendant count, and whether the yard root is
+        // parented to the CURRENT world at build time.
+        var descendantCount = 0
+        var pending = Array(yardRoot.children)
+        while let entity = pending.popLast() {
+            descendantCount += 1
+            pending.append(contentsOf: entity.children)
+        }
+        queuedLogLines.append(String(format: "DEPOT_BUILD children=%d descendants=%d parentIsWorld=%d shed=(%.1f,%.1f,%.1f)",
+                                     yardRoot.children.count, descendantCount,
+                                     yardRoot.parent === world ? 1 : 0,
+                                     Double(shedCentre.x), Double(shedCentre.y), Double(shedCentre.z)))
+        // batch56-diag: remove after proof — diagnosis §2.5:
+        // the shed's base height against the rail frame at the
+        // shed centre. After the ptRail switch the two must
+        // agree within ~0.1 m (before the fix, shedY read the
+        // ground datum and the difference was the sink).
+        queuedLogLines.append(String(format: "DEPOT_DIAG shedY=%.2f railY27710=%.2f",
+                                     Double(shedCentre.y), Double(sample(at: 27_710).elevationM)))
+        if let depotDiagConsistLine {
+            queuedLogLines.append(depotDiagConsistLine)
+        }
+
+        // Outside the back fence: a public road on the fence
+        // line and a row of houses on grass plots across it —
+        // real depots sit in neighbourhoods, not in empty
+        // fields (parented to the world, not the yard root,
+        // as a diagnostic split).
+        var outsideD = 27_540.0
+        while outsideD < 27_862 {
+            let mid = outsideD + 8.5
+            let roadP = pt(mid, sideSign * 101.5)
+            _ = addBox(parent: world, name: "depot-road-\(Int(outsideD))", size: SIMD3<Float>(5, 0.08, 17.4), position: SIMD3<Float>(roadP.x, roadP.y + 0.04, roadP.z), material: roadMaterial, orientation: yawAt(mid))
+            let plotP = pt(mid, sideSign * 112.0)
+            _ = addBox(parent: world, name: "depot-plots-\(Int(outsideD))", size: SIMD3<Float>(16, 0.06, 17.4), position: SIMD3<Float>(plotP.x, plotP.y + 0.03, plotP.z), material: grassMaterial, orientation: yawAt(mid))
+            outsideD += 17
+        }
+        let houseMaterials = [houseFacadeMaterial5, houseFacadeMaterial6, houseFacadeMaterial7, houseFacadeMaterialGrimed, houseFacadeMaterial5]
+        for (houseIndex, houseD) in [27_590.0, 27_652.0, 27_714.0, 27_776.0, 27_838.0].enumerated() {
+            let houseP = pt(houseD, sideSign * 113.0)
+            _ = addBox(parent: world, name: "depot-house-\(houseIndex)", size: SIMD3<Float>(9.5, 5.6, 10.5), position: SIMD3<Float>(houseP.x, houseP.y + 2.8, houseP.z), material: houseMaterials[houseIndex], orientation: yawAt(houseD))
+            _ = addBox(parent: world, name: "depot-house-roof-\(houseIndex)", size: SIMD3<Float>(10.0, 0.3, 11.0), position: SIMD3<Float>(houseP.x, houseP.y + 5.75, houseP.z), material: roofMaterials[houseIndex % roofMaterials.count], orientation: yawAt(houseD))
+            let hedgeP = pt(houseD, sideSign * 105.8)
+            _ = addBox(parent: world, name: "depot-hedge-\(houseIndex)", size: SIMD3<Float>(0.7, 0.85, 15), position: SIMD3<Float>(hedgeP.x, hedgeP.y + 0.42, hedgeP.z), material: hedgeMaterial, orientation: yawAt(houseD))
+        }
+        for (treeIndex, treeD) in [27_620.0, 27_745.0, 27_855.0].enumerated() {
+            let treeP = pt(treeD, sideSign * 107.5)
+            addTree(parent: world, name: "depot-tree-\(treeIndex)", x: treeP.x, z: treeP.z, height: 6.5, material: foliageMaterials[treeIndex % foliageMaterials.count], groundY: treeP.y)
+        }
+
+        // batch55 (2026-11-15, user: 「焼け野原すぎだろ
+        // もっとオブジェクトの密度上げて」): the yard's own
+        // plot is dressed above, but the APPROACH segments on
+        // both sides (27,000-27,540 and 27,862-28,520) carried
+        // only the generic rural pass — flat field pads with a
+        // vertical object every few hundred metres — which is
+        // what read as scorched earth around the depot in the
+        // batch54 photos. This block dresses both approaches
+        // and deepens the housing band behind the yard:
+        // hedgerows and a farm road along the line, farmhouses
+        // with sheds, greenhouse pairs, tree lines and parked
+        // cars. Everything stands outside the yard fence
+        // (11.8 m) and clear of the batch53 housing plot,
+        // parented to the world like the houses above.
+        let greenhouseMat55 = Self.pbr(UIColor(red: 0.88, green: 0.92, blue: 0.90, alpha: 1), metallic: 0.05, roughness: 0.35)
+        var depotHedgeBatch = MeshBatchBuilder()
+        var depotRoadBatch = MeshBatchBuilder()
+        let depotBands: [(from: Double, to: Double)] = [(27_000, 27_540), (27_862, 28_520)]
+        for band in depotBands {
+            var hedgeD = band.from
+            while hedgeD < band.to {
+                let midD = hedgeD + 7.6
+                for hedgeSide in [sideSign, -sideSign] {
+                    let hp = pt(midD, hedgeSide * 17.5)
+                    depotHedgeBatch.addBox(center: SIMD3<Float>(hp.x, hp.y + 0.48, hp.z), size: SIMD3<Float>(1.15, 0.95, 15.4), yaw: -sample(at: midD).heading)
+                }
+                let roadP = pt(midD, -sideSign * 21)
+                depotRoadBatch.addBox(center: SIMD3<Float>(roadP.x, roadP.y + 0.04, roadP.z), size: SIMD3<Float>(5, 0.08, 15.4), yaw: -sample(at: midD).heading)
+                hedgeD += 15.2
+            }
+        }
+        if let hedges = depotHedgeBatch.build(name: "depot-approach-hedges", material: foliageMaterials[0]) { world.addChild(hedges) }
+        if let farmRoad = depotRoadBatch.build(name: "depot-approach-road", material: roadMaterial) { world.addChild(farmRoad) }
+        // Farmhouses on the far side, each with a shed.
+        for (houseIndex, houseD) in [27_090.0, 27_310.0, 28_060.0, 28_340.0].enumerated() {
+            let houseP = pt(houseD, -sideSign * 31)
+            _ = addBox(parent: world, name: "depot-approach-house-\(houseIndex)", size: SIMD3<Float>(9.5, 5.6, 10.5), position: SIMD3<Float>(houseP.x, houseP.y + 2.8, houseP.z), material: houseMaterials[houseIndex % houseMaterials.count], orientation: yawAt(houseD))
+            _ = addBox(parent: world, name: "depot-approach-house-roof-\(houseIndex)", size: SIMD3<Float>(10.0, 0.3, 11.0), position: SIMD3<Float>(houseP.x, houseP.y + 5.75, houseP.z), material: roofMaterials[houseIndex % roofMaterials.count], orientation: yawAt(houseD))
+            let shedP = pt(houseD + 14, -sideSign * 33)
+            _ = addBox(parent: world, name: "depot-approach-shed-\(houseIndex)", size: SIMD3<Float>(4.6, 2.6, 6.4), position: SIMD3<Float>(shedP.x, shedP.y + 1.3, shedP.z), material: roofMaterials[(houseIndex + 1) % roofMaterials.count], orientation: yawAt(houseD + 14))
+        }
+        // Four more houses in the gaps of the existing back
+        // row (62 m spacing, 10.5 m deep — the gaps take a
+        // second house each), and two larger houses behind
+        // the row for depth.
+        for (rowIndex, rowD) in [27_621.0, 27_683.0, 27_745.0, 27_807.0].enumerated() {
+            let houseP = pt(rowD, sideSign * 113.0)
+            _ = addBox(parent: world, name: "depot-row-house-\(rowIndex)", size: SIMD3<Float>(9.5, 5.6, 10.5), position: SIMD3<Float>(houseP.x, houseP.y + 2.8, houseP.z), material: houseMaterials[(rowIndex + 2) % houseMaterials.count], orientation: yawAt(rowD))
+            _ = addBox(parent: world, name: "depot-row-house-roof-\(rowIndex)", size: SIMD3<Float>(10.0, 0.3, 11.0), position: SIMD3<Float>(houseP.x, houseP.y + 5.75, houseP.z), material: roofMaterials[rowIndex % roofMaterials.count], orientation: yawAt(rowD))
+        }
+        for (deepIndex, deepD) in [27_655.0, 27_790.0].enumerated() {
+            let houseP = pt(deepD, sideSign * 126.0)
+            _ = addBox(parent: world, name: "depot-deep-house-\(deepIndex)", size: SIMD3<Float>(10.5, 6.2, 11.5), position: SIMD3<Float>(houseP.x, houseP.y + 3.1, houseP.z), material: houseMaterials[(deepIndex + 1) % houseMaterials.count], orientation: yawAt(deepD))
+            _ = addBox(parent: world, name: "depot-deep-house-roof-\(deepIndex)", size: SIMD3<Float>(11.0, 0.3, 12.0), position: SIMD3<Float>(houseP.x, houseP.y + 6.35, houseP.z), material: roofMaterials[(deepIndex + 1) % roofMaterials.count], orientation: yawAt(deepD))
+            let hedgeP = pt(deepD, sideSign * 118.5)
+            _ = addBox(parent: world, name: "depot-deep-hedge-\(deepIndex)", size: SIMD3<Float>(0.7, 0.85, 15), position: SIMD3<Float>(hedgeP.x, hedgeP.y + 0.42, hedgeP.z), material: hedgeMaterial, orientation: yawAt(deepD))
+        }
+        // Greenhouse pairs on the far side: translucent
+        // body, ridge beam and side skirts (the rural pass's
+        // greenhouse recipe, buildRuralDressing).
+        for (pairIndex, pairD) in [27_180.0, 28_180.0].enumerated() {
+            for g in 0..<2 {
+                let gD = pairD + Double(g) * 19
+                let greenP = pt(gD, -sideSign * 44)
+                _ = addBox(parent: world, name: "depot-greenhouse-\(pairIndex)-\(g)", size: SIMD3<Float>(9, 2.9, 17), position: SIMD3<Float>(greenP.x, greenP.y + 1.45, greenP.z), material: greenhouseMat55, orientation: yawAt(gD))
+                _ = addBox(parent: world, name: "depot-greenhouse-ridge-\(pairIndex)-\(g)", size: SIMD3<Float>(0.3, 0.18, 17.2), position: SIMD3<Float>(greenP.x, greenP.y + 2.98, greenP.z), material: roofMaterials[0], orientation: yawAt(gD))
+                for skirtSide in [Float(-1), Float(1)] {
+                    let skirtP = pt(gD, -sideSign * 44 + skirtSide * 4.4)
+                    _ = addBox(parent: world, name: "depot-greenhouse-skirt-\(pairIndex)-\(g)-\(Int(skirtSide))", size: SIMD3<Float>(0.18, 0.5, 17), position: SIMD3<Float>(skirtP.x, skirtP.y + 0.25, skirtP.z), material: roofMaterials[0], orientation: yawAt(gD))
+                }
+            }
+        }
+        // Field sheds on the yard side of the approaches.
+        for (shedIndex, shedSpot) in [(27_430.0, Float(30)), (28_450.0, Float(34))].enumerated() {
+            let shedP = pt(shedSpot.0, sideSign * shedSpot.1)
+            _ = addBox(parent: world, name: "depot-field-shed-\(shedIndex)", size: SIMD3<Float>(4.6, 2.6, 6.4), position: SIMD3<Float>(shedP.x, shedP.y + 1.3, shedP.z), material: roofMaterials[shedIndex % roofMaterials.count], orientation: yawAt(shedSpot.0))
+        }
+        // Tree lines along both approaches: inside the
+        // hedgerow on the yard side, behind the farm road on
+        // the far side (clear of the farmhouse plots).
+        var depotTreeD = 27_020.0
+        while depotTreeD < 28_500 {
+            if depotTreeD > 27_530 && depotTreeD < 27_870 {
+                depotTreeD += 48
+                continue
+            }
+            for treeSide in [sideSign, -sideSign] {
+                if stableIndex("depottreeok-\(Int(depotTreeD))-\(treeSide > 0 ? 1 : 0)", count: 4) == 0 { continue }
+                let treeLat: Float
+                if treeSide == sideSign {
+                    treeLat = treeSide * (14.5 + Float(stableIndex("depottree-\(Int(depotTreeD))-y", count: 3)))
+                } else {
+                    if [27_090.0, 27_310.0, 28_060.0, 28_340.0].contains(where: { abs($0 - depotTreeD) < 13 }) { continue }
+                    treeLat = treeSide * (25.5 + Float(stableIndex("depottree-\(Int(depotTreeD))-f", count: 5)))
+                }
+                let tp = pt(depotTreeD, treeLat)
+                addTree(parent: world, name: "depot-approach-tree-\(Int(depotTreeD))-\(treeSide > 0 ? 1 : 0)", x: tp.x, z: tp.z, height: 5.5 + Float(stableIndex("depottreeh-\(Int(depotTreeD))", count: 5)) * 0.5, material: foliageMaterials[Int(depotTreeD) % foliageMaterials.count], groundY: tp.y)
+            }
+            depotTreeD += 48
+        }
+        // Kei cars parked on the farm road.
+        for (carIndex, carD) in [27_120.0, 27_390.0, 28_100.0, 28_290.0].enumerated() {
+            let carP = pt(carD, -sideSign * 21)
+            addParkedCar(name: "depot-approach-car-\(carIndex)", center: carP, groundY: carP.y + 0.06, yaw: -sample(at: carD).heading + Float.pi / 2, seed: carIndex * 3 + 2)
+        }
+    }
+
+    /// batch30 (2026-11-13, front-view study): a small fishing
+    /// port on the long coastal run — quay segments following
+    /// the shore, a warehouse, moored boats and a tetrapod
+    /// cluster. Real Boso front views pass working harbours;
+    /// RM's coast had only sand and a road.
+    private func buildFishingPort(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let centre = 46_300.0
+        guard isCoastal(distanceM: centre, route: route, routeVariant: routeVariant, travelDirection: travelDirection) else { return }
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        var datum = Double.greatestFiniteMagnitude
+        var probe = centre - 400
+        while probe <= centre + 400 {
+            let e = Double(sample(at: probe).elevationM)
+            if e < datum { datum = e }
+            probe += 40
+        }
+        let waterY = Float(datum) - 0.06
+        let concreteMat = Self.pbr(UIColor(red: 0.58, green: 0.58, blue: 0.56, alpha: 1), roughness: 1)
+        let warehouseMat = Self.pbr(UIColor(red: 0.45, green: 0.52, blue: 0.55, alpha: 1), roughness: 0.9)
+        let hullMats = [
+            Self.pbr(UIColor(red: 0.90, green: 0.90, blue: 0.88, alpha: 1), roughness: 0.6),
+            Self.pbr(UIColor(red: 0.15, green: 0.35, blue: 0.65, alpha: 1), roughness: 0.6),
+            Self.pbr(UIColor(red: 0.75, green: 0.20, blue: 0.15, alpha: 1), roughness: 0.6),
+        ]
+        // Quay: eight segments following the shore samples.
+        for seg in 0..<8 {
+            let d = centre - 49 + Double(seg) * 14
+            let s = sample(at: d)
+            let p = groundOffsetPoint(s, lateral: seaSign * 38)
+            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "port-quay-\(seg)", size: SIMD3<Float>(28, 0.7, 14.2), position: SIMD3<Float>(p.x, waterY + 0.3, p.z), material: concreteMat, orientation: yaw)
+        }
+        // Warehouse and crates on the quay's landward side.
+        let ws = sample(at: centre - 20)
+        let wp = groundOffsetPoint(ws, lateral: seaSign * 30)
+        let wYaw = simd_quatf(angle: -ws.heading, axis: SIMD3<Float>(0, 1, 0))
+        _ = addBox(parent: world, name: "port-warehouse", size: SIMD3<Float>(7, 4.2, 13), position: SIMD3<Float>(wp.x, waterY + 0.65 + 2.1, wp.z), material: warehouseMat, orientation: wYaw)
+        for crate in 0..<5 {
+            let cs = sample(at: centre + 8 + Double(crate) * 5)
+            let cp = groundOffsetPoint(cs, lateral: seaSign * 33)
+            _ = addBox(parent: world, name: "port-crate-\(crate)", size: SIMD3<Float>(1.4, 1.1, 1.4), position: SIMD3<Float>(cp.x, waterY + 0.65 + 0.55, cp.z), material: hullMats[crate % hullMats.count], orientation: wYaw)
+        }
+        // Moored boats along the quay's outer edge.
+        for boat in 0..<6 {
+            let bd = centre - 42 + Double(boat) * 16
+            let bs = sample(at: bd)
+            let bp = groundOffsetPoint(bs, lateral: seaSign * 55)
+            let bYaw = simd_quatf(angle: -bs.heading + Float(boat % 3 - 1) * 0.08, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "port-boat-hull-\(boat)", size: SIMD3<Float>(1.9, 0.9, 6.2), position: SIMD3<Float>(bp.x, waterY + 0.35, bp.z), material: hullMats[boat % hullMats.count], orientation: bYaw)
+            _ = addBox(parent: world, name: "port-boat-cabin-\(boat)", size: SIMD3<Float>(1.3, 0.8, 1.6), position: SIMD3<Float>(bp.x, waterY + 1.2, bp.z), material: hullMats[0], orientation: bYaw)
+            let mast = ModelEntity(mesh: FallbackCylinderMesh.make(height: 3.2, radius: 0.04), materials: [poleMaterial])
+            mast.name = "port-boat-mast-\(boat)"
+            mast.position = SIMD3<Float>(bp.x, waterY + 2.2, bp.z)
+            world.addChild(mast)
+        }
+        // Tetrapod cluster at the harbour mouth: crossed
+        // concrete bars reading as armour units at distance.
+        for pod in 0..<12 {
+            let pd = centre + 52 + Double(pod % 6) * 3.2
+            let ps = sample(at: pd)
+            let pp = groundOffsetPoint(ps, lateral: seaSign * (58 + Float(pod / 6) * 3))
+            let yawA = simd_quatf(angle: Float(pod) * 0.7, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "tetrapod-a-\(pod)", size: SIMD3<Float>(2.0, 0.55, 0.55), position: SIMD3<Float>(pp.x, waterY + 0.35, pp.z), material: concreteMat, orientation: yawA)
+            let yawB = simd_quatf(angle: Float(pod) * 0.7 + Float.pi / 2, axis: SIMD3<Float>(0, 1, 0))
+            _ = addBox(parent: world, name: "tetrapod-b-\(pod)", size: SIMD3<Float>(2.0, 0.55, 0.55), position: SIMD3<Float>(pp.x, waterY + 0.8, pp.z), material: concreteMat, orientation: yawB)
+        }
+    }
+
+    /// batch30: one large landmark mountain inland, visible
+    /// for kilometres — the study showed real front views
+    /// almost always hold one named peak in frame, while RM's
+    /// horizon was tree-line flat.
+    private func buildLandmarkMountain(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let landSign = -seaSideSign(travelDirection: travelDirection)
+        let mat = Self.pbr(UIColor(red: 0.28, green: 0.40, blue: 0.26, alpha: 1), roughness: 1)
+        let peaks: [(chainage: Double, lateral: Float, sx: Float, sy: Float, sz: Float)] = [
+            (29_500, 880, 540, 150, 430),
+            (30_600, 1_080, 390, 105, 320),
+        ]
+        for (i, peak) in peaks.enumerated() {
+            let s = sample(at: peak.chainage)
+            let p = groundOffsetPoint(s, lateral: landSign * peak.lateral)
+            let hill = ModelEntity(mesh: MeshResource.generateSphere(radius: 1), materials: [mat])
+            hill.name = "landmark-mountain-\(i)"
+            hill.scale = SIMD3<Float>(peak.sx, peak.sy, peak.sz)
+            // batch92: the centre height used to come from
+            // the RAIL elevation (s.elevationM), discarding
+            // the ground point p computed on the line above
+            // — wherever the line runs on a structure or in
+            // a cutting the whole peak floated or sank by
+            // the rail-to-ground difference. Ground it on
+            // p.y (groundLevelM), the datum every other
+            // backdrop layer uses, with the same 45 % bury.
+            hill.position = SIMD3<Float>(p.x, p.y - peak.sy * 0.45, p.z)
+            world.addChild(hill)
+        }
+    }
+
+    /// batch17 (2026-11-13): roadside life between stations —
+    /// drink vending machines at level-crossing corners, and
+    /// beach umbrellas plus lifeguard towers on the sand
+    /// windows, so the inter-station run keeps having things
+    /// in it all the way.
+    private func buildRoadsideLife(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        // batch99: the branch shuttle joins — its crossings
+        // get the same corner vending machines (the loop below
+        // iterates THIS route's crossingCenters and re-checks
+        // fan / platform clearance per site), while the beach
+        // furniture stays off because every beach site is
+        // isCoastal-gated and the branch is never coastal.
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        // batch24 (2026-11-13): per-run coastal datums, computed once
+        // from the samples — the same minimum the beach/sea/road
+        // ribbons use in buildTrack. The batch22/23 ±1,000 m local
+        // minimum was the wrong datum: the track climbs 9-11 m across
+        // the 5 km and 7 km coastal runs, so umbrellas floated up to
+        // ~9.8 m above the sand and coast cars the same above the road
+        // (measured with the Python elevation mirror,
+        // verify_elevation_quality20.py: 77 of 103 umbrella sites
+        // floated >0.5 m). A site now uses its own run's datum, so
+        // furniture stands on the sand and cars on the road.
+        var coastalRunDatums: [(start: Double, end: Double, datum: Double)] = []
+        var coastalRunStart: Double? = nil
+        var coastalRunMin = Double.greatestFiniteMagnitude
+        for sample in samples {
+            if isCoastal(distanceM: sample.distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
+                if coastalRunStart == nil { coastalRunStart = sample.distanceM }
+                coastalRunMin = min(coastalRunMin, Double(sample.elevationM))
+            } else if let rs = coastalRunStart {
+                coastalRunDatums.append((start: rs, end: sample.distanceM, datum: coastalRunMin))
+                coastalRunStart = nil
+                coastalRunMin = Double.greatestFiniteMagnitude
+            }
+        }
+        if let rs = coastalRunStart {
+            coastalRunDatums.append((start: rs, end: route.distanceM, datum: coastalRunMin))
+        }
+        func coastalDatum(at d: Double) -> Double? {
+            coastalRunDatums.first { d >= $0.start && d <= $0.end }?.datum
+        }
+        // Vending machines at every third crossing corner,
+        // clear of the fan throats and the loop tracks (the
+        // fan-clearance check covers both).
+        for (index, center) in crossingCenters.enumerated() where index % 3 == 0 {
+            if isCoastal(distanceM: center, route: route, routeVariant: routeVariant, travelDirection: travelDirection) { continue }
+            let hash = stableIndex("vending-\(index)", count: 1_000)
+            let side: Float = hash % 2 == 0 ? 1 : -1
+            let lat = side * 11.5
+            guard buildingClearOfFans(chainage: center + 9, halfLength: 0.7, lateral: lat, halfDepth: 0.6) else { continue }
+            guard buildingClearOfPlatforms(chainage: center + 9, halfLength: 0.7, lateral: lat, halfDepth: 0.6) else { continue }
+            let s = sample(at: center + 9)
+            let gy = groundLevelM(at: s)
+            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+            let p = groundOffsetPoint(s, lateral: lat)
+            _ = addBox(parent: world, name: "roadside-vending-\(index)", size: SIMD3<Float>(1.1, 1.85, 0.65), position: SIMD3<Float>(p.x, gy + 0.925, p.z), material: vendingFacadeMaterial, orientation: yaw)
+            if hash % 3 == 0 {
+                let p2 = groundOffsetPoint(s, lateral: lat + side * 1.35)
+                _ = addBox(parent: world, name: "roadside-vending-b-\(index)", size: SIMD3<Float>(1.1, 1.85, 0.65), position: SIMD3<Float>(p2.x, gy + 0.925, p2.z), material: vendingFacadeMaterial, orientation: yaw)
+            }
+        }
+        // Beach furniture on the sand (ribbon centre ≈
+        // seaSign*31, 16 m wide): umbrellas every ~130 m and
+        // a lifeguard tower every sixth site.
+        let umbrellaMats = [
+            Self.pbr(UIColor(red: 0.85, green: 0.25, blue: 0.20, alpha: 1), roughness: 0.7),
+            Self.pbr(UIColor(red: 0.20, green: 0.45, blue: 0.85, alpha: 1), roughness: 0.7),
+            Self.pbr(UIColor(red: 0.95, green: 0.60, blue: 0.15, alpha: 1), roughness: 0.7),
+            Self.pbr(UIColor(red: 0.95, green: 0.93, blue: 0.88, alpha: 1), roughness: 0.7),
+        ]
+        var siteIndex = 0
+        var d = 600.0
+        while d < route.distanceM - 600 {
+            defer { siteIndex += 1; d += 130 }
+            guard isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) else { continue }
+            let hash = stableIndex("beach-\(siteIndex)", count: 1_000)
+            if hash % 4 == 3 { continue }
+            let s = sample(at: d)
+            // batch23/24 (2026-11-13): beach furniture stands on the
+            // sand, not on the track elevation. Coastal windows
+            // are excluded from the viaduct ground, so
+            // groundLevelM() here returns the track elevation,
+            // while the beach ribbon sits at the run datum (the
+            // lowest track elevation, up to ~11 m below the
+            // track) — umbrellas and lifeguard towers built on
+            // groundLevelM() floated metres above the sand.
+            // batch24: use the site's own coastal-run datum
+            // (coastalDatum above), minus the beach ribbon's
+            // 0.03 m offset — the batch23 ±1,000 m local minimum
+            // still floated up to ~9.8 m in the long runs.
+            let gy: Float = coastalDatum(at: d).map { Float($0) - 0.03 } ?? groundLevelM(at: s)
+            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+            let up = groundOffsetPoint(s, lateral: seaSign * (26 + Float(hash % 5)))
+            let pole = ModelEntity(mesh: FallbackCylinderMesh.make(height: 2.3, radius: 0.05), materials: [poleMaterial])
+            pole.name = "beach-umbrella-pole-\(siteIndex)"
+            pole.position = SIMD3<Float>(up.x, gy + 1.15, up.z)
+            world.addChild(pole)
+            let canopy = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.14, radius: 1.35), materials: [umbrellaMats[hash % umbrellaMats.count]])
+            canopy.name = "beach-umbrella-\(siteIndex)"
+            canopy.position = SIMD3<Float>(up.x, gy + 2.32, up.z)
+            canopy.orientation = simd_quatf(angle: 0.16, axis: SIMD3<Float>(1, 0, 0)) * yaw
+            world.addChild(canopy)
+            if siteIndex % 6 == 0 {
+                for (dd, ll) in [(-0.8, -0.8), (-0.8, 0.8), (0.8, -0.8), (0.8, 0.8)] {
+                    let lp = groundOffsetPoint(sample(at: d + dd), lateral: seaSign * 24 + Float(ll))
+                    _ = addBox(parent: world, name: "lifeguard-leg-\(siteIndex)", size: SIMD3<Float>(0.14, 2.6, 0.14), position: SIMD3<Float>(lp.x, gy + 1.3, lp.z), material: poleMaterial)
+                }
+                let tp = groundOffsetPoint(s, lateral: seaSign * 24)
+                _ = addBox(parent: world, name: "lifeguard-cabin-\(siteIndex)", size: SIMD3<Float>(2.0, 1.5, 2.0), position: SIMD3<Float>(tp.x, gy + 3.35, tp.z), material: Self.pbr(.white, roughness: 0.8), orientation: yaw)
+                _ = addBox(parent: world, name: "lifeguard-roof-\(siteIndex)", size: SIMD3<Float>(2.4, 0.12, 2.4), position: SIMD3<Float>(tp.x, gy + 4.2, tp.z), material: umbrellaMats[0], orientation: yaw)
+            }
+        }
+        // batch22/24 (2026-11-13): cars parked along the new coast
+        // road (built in buildTrack at the bluff foot, lateral
+        // seaSign*19.2, at the coastal run's datum height). The
+        // datum here is the site's own coastal-run datum
+        // (coastalDatum above) — the batch22 ±1,000 m local
+        // minimum floated cars up to ~9.7 m above the road in
+        // the long coastal runs.
+        var coastIndex = 0
+        var cd = 900.0
+        while cd < route.distanceM - 900 {
+            defer { coastIndex += 1; cd += 230 }
+            guard isCoastal(distanceM: cd, route: route, routeVariant: routeVariant, travelDirection: travelDirection) else { continue }
+            let chash = stableIndex("coastcar-\(coastIndex)", count: 1_000)
+            if chash % 3 == 2 { continue }
+            guard let datum = coastalDatum(at: cd) else { continue }
+            let s = sample(at: cd)
+            let p = groundOffsetPoint(s, lateral: seaSign * 21.0)
+            addParkedCar(name: "coast-car-\(coastIndex)", center: p, groundY: Float(datum) + 0.05, yaw: -s.heading + Float.pi / 2, seed: chash)
+            if chash % 4 == 1 {
+                let s2 = sample(at: cd + 7)
+                let p2 = groundOffsetPoint(s2, lateral: seaSign * 21.0)
+                addParkedCar(name: "coast-car-b-\(coastIndex)", center: p2, groundY: Float(datum) + 0.05, yaw: -s2.heading + Float.pi / 2, seed: chash + 3)
+            }
+        }
+    }
+
+    // MARK: - batch57 variety (2026-11-15)
+
+    /// batch57: the visible-variety pass. The batch56 CENSUS
+    /// table proved every segment already clears 1,000 counted
+    /// placements, but the count is parts-inclusive and the cab
+    /// view still reads as bare ground between set pieces. This
+    /// pass adds VISIBLE kinds, not count padding: a lineside
+    /// ditch, a wooden field fence, no-entry signs, point
+    /// machines, transmission towers, bamboo groves, under-viaduct
+    /// uses, roadside furniture and one signature site per
+    /// ~900 m (shrine / cemetery / pocket park / gas station /
+    /// golf range / orchard / wind turbine / beach house).
+    /// batch58: the surfaces now carry photo textures through
+    /// SceneTextureProvider (the project rule — procedural
+    /// form × photo texture); batch57 shipped them flat, which
+    /// the user rejected as game CG. Existing bundle textures
+    /// are reused (timber / concrete / ballast / grass /
+    /// foliage / steel / chainlink); the few surfaces with no
+    /// suitable bundle texture reference planned texture
+    /// names and fall back to their tint until the assets
+    /// land (see batch58-ready.md). Laterals were
+    /// chosen to clear by construction: houses occupy 5.2-19 m,
+    /// cabinets sit at ±3.6/-4.0, signals at ±4.0+spread, the
+    /// fence at ±5.3 — so the ditch rides at +4.6+spread and the
+    /// wooden fence at 19.5 m. Sparse sites additionally check
+    /// houseFootprints() (the suburb loop runs first) plus the
+    /// platform/fan clearances.
+    private func buildBatch57Variety(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, trafficScenario: TrafficScenario?) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        let houses = houseFootprints()
+        buildLinesideDitch(route: route, travelDirection: travelDirection)
+        buildWoodenRuralFence(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildNoEntrySigns(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildPointMachines()
+        buildTransmissionTowers(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildBambooGroves(route: route, routeVariant: routeVariant, travelDirection: travelDirection, houses: houses)
+        buildUnderViaductUses(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildRoadsideFurniture(route: route, routeVariant: routeVariant, travelDirection: travelDirection, houses: houses, trafficScenario: trafficScenario)
+        buildRuralSignatures(route: route, routeVariant: routeVariant, travelDirection: travelDirection, houses: houses)
+    }
+
+    /// batch57: house centres already in the world (buildSuburb
+    /// runs first). Sparse roadside/site placements check against
+    /// them so a shrine, bus shelter or streetlight never lands
+    /// inside a house footprint. Linear types (ditch, fence,
+    /// signs) clear by lateral instead and skip this check.
+    private func houseFootprints() -> [SIMD3<Float>] {
+        world.children.compactMap { child in
+            if child.name.hasPrefix("fictional-home-") || child.name.hasPrefix("fictional-shed-") || child.name.hasPrefix("neighbor-fill-") || child.name.hasPrefix("back-row-home-") || child.name.hasPrefix("station-apartment-") {
+                return child.position
+            }
+            return nil
+        }
+    }
+
+    private func houseNear(_ point: SIMD3<Float>, radius: Float, houses: [SIMD3<Float>]) -> Bool {
+        for house in houses {
+            let dx = house.x - point.x
+            let dz = house.z - point.z
+            if dx * dx + dz * dz < radius * radius { return true }
+        }
+        return false
+    }
+
+    /// batch57 N2: the lineside ditch (a concrete U-channel
+    /// read as one strip) on the shoulder opposite the cable
+    /// trough — the trough rides at -3.35, the ditch at
+    /// +4.6+spread, clear of the cabinets at +3.6 and the
+    /// signals at +4.0+spread. 8.5 m units like the trough;
+    /// skipped at stations, fans, crossings, the tunnel and on
+    /// viaducts (no shoulder there).
+    private func buildLinesideDitch(route: RailwayRouteProfile, travelDirection: RegionalTravelDirection) {
+        var batch = MeshBatchBuilder()
+        var unitsInBatch = 0
+        var batchIndex = 0
+        guard let first = samples.first, let last = samples.last else { return }
+        var d = first.distanceM
+        while d <= last.distanceM {
+            let s = sample(at: d)
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            let lift = s.elevationM - groundLevelM(at: s)
+            let blocked = lift >= 2 || inStationZone(d, extraMargin: 6) || nearThroatFan(d) || nearCrossing(d, margin: 14)
+                || (centre > 41_400 && centre < 44_400)
+            if !blocked {
+                let footY = s.elevationM - 0.52
+                let p = routeOffsetPoint(s, lateral: spreadTrackLateral(4.6, at: d))
+                batch.addBox(center: SIMD3<Float>(p.x, footY + 0.08, p.z), size: SIMD3<Float>(0.4, 0.16, 8.7), yaw: -s.heading)
+                unitsInBatch += 1
+                if unitsInBatch >= 1_200 {
+                    if let mesh = batch.build(name: "b57-ditch-\(batchIndex)", material: concreteMaterial, censusTexture: "scenery_concrete") { world.addChild(mesh) }
+                    batch = MeshBatchBuilder()
+                    unitsInBatch = 0
+                    batchIndex += 1
+                }
+            }
+            d += 8.5
+        }
+        if let mesh = batch.build(name: "b57-ditch-\(batchIndex)", material: concreteMaterial, censusTexture: "scenery_concrete") { world.addChild(mesh) }
+    }
+
+    /// batch57 N20: a weathered wooden post-and-rail field
+    /// fence (the Tobu Tojo rural signature) at 19.5 m — beyond
+    /// the house row (faces reach ~19 m) and the hedgerow at
+    /// 12.6, in front of the fields at 24 m+. Rural bands only,
+    /// intermittent (about 60% cover), 17 m units, 3 boxes each.
+    private func buildWoodenRuralFence(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        // batch58: weathered timber photo texture under the
+        // brown tint (was a flat colour in batch57).
+        let woodMat = Self.texturedPBR(UIColor(red: 0.42, green: 0.34, blue: 0.26, alpha: 1), roughness: 0.95, textureName: "scenery_timber")
+        for side: Float in [-1, 1] {
+            var batch = MeshBatchBuilder()
+            var unitsInBatch = 0
+            var batchIndex = 0
+            var unitIndex = 0
+            var d = 40.0
+            while d < route.distanceM - 40 {
+                defer { d += 17; unitIndex += 1 }
+                if urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) != 0 { continue }
+                if inStationZone(d, extraMargin: 6) || nearCrossing(d, margin: 12) || nearThroatFan(d) { continue }
+                let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+                if isTunnelChainage(centre) { continue }
+                if isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection), side == seaSideSign(travelDirection: travelDirection) { continue }
+                if stableIndex("b57wood-\(unitIndex)-\(Int(side))", count: 5) >= 3 { continue }
+                let s0 = sample(at: d)
+                let s1 = sample(at: d + 17)
+                let sMid = sample(at: d + 8.5)
+                let p0 = groundOffsetPoint(s0, lateral: side * 19.5)
+                let p1 = groundOffsetPoint(s1, lateral: side * 19.5)
+                let pMid = groundOffsetPoint(sMid, lateral: side * 19.5)
+                let postH = (sMid.elevationM + 0.8) - pMid.y
+                if postH < 0.8 || postH > 3.5 { continue }
+                batch.addBox(center: SIMD3<Float>(p0.x, p0.y + 0.4, p0.z), size: SIMD3<Float>(0.12, 0.8, 0.12), yaw: -s0.heading)
+                batch.addBox(center: SIMD3<Float>(p1.x, p1.y + 0.4, p1.z), size: SIMD3<Float>(0.12, 0.8, 0.12), yaw: -s1.heading)
+                batch.addBox(center: SIMD3<Float>(pMid.x, pMid.y + 0.72, pMid.z), size: SIMD3<Float>(0.06, 0.16, 17.0), yaw: -sMid.heading)
+                unitsInBatch += 1
+                if unitsInBatch >= 400 {
+                    if let mesh = batch.build(name: "b57-woodfence-\(Int(side))-\(batchIndex)", material: woodMat, censusTexture: "scenery_timber") { world.addChild(mesh) }
+                    batch = MeshBatchBuilder()
+                    unitsInBatch = 0
+                    batchIndex += 1
+                }
+            }
+            if let mesh = batch.build(name: "b57-woodfence-\(Int(side))-\(batchIndex)", material: woodMat, censusTexture: "scenery_timber") { world.addChild(mesh) }
+        }
+    }
+
+    /// batch57 N3: small red-and-white no-entry boards on the
+    /// lineside fence line, every ~75 m alternating sides — the
+    /// "white dots row" a driver reads between stations.
+    private func buildNoEntrySigns(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        // batch58: the board faces reference the planned
+        // no-entry sign-face texture (scenery_sign_noentry —
+        // not yet in the bundle; texturedPBR falls back to
+        // these tints until it lands, see batch58-ready.md).
+        let redMat = Self.texturedPBR(UIColor(red: 0.78, green: 0.12, blue: 0.10, alpha: 1), roughness: 0.6, textureName: "scenery_sign_noentry")
+        let whiteMat = Self.texturedPBR(UIColor(red: 0.96, green: 0.96, blue: 0.94, alpha: 1), roughness: 0.7, textureName: "scenery_sign_noentry")
+        var redBatch = MeshBatchBuilder()
+        var whiteBatch = MeshBatchBuilder()
+        var poleBatch = MeshBatchBuilder()
+        var signsInBatch = 0
+        var batchIndex = 0
+        var signIndex = 0
+        var d = 100.0
+        while d < route.distanceM - 100 {
+            defer { d += 75; signIndex += 1 }
+            let side: Float = signIndex % 2 == 0 ? 1 : -1
+            if inStationZone(d, extraMargin: 6) || nearCrossing(d, margin: 12) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            let s = sample(at: d)
+            let base = groundOffsetPoint(s, lateral: spreadTrackLateral(side * 5.6, at: d))
+            let postH = (s.elevationM + 0.7) - base.y
+            if postH < 0.8 || postH > 3.5 { continue }
+            let yaw = -s.heading
+            poleBatch.addBox(center: SIMD3<Float>(base.x, base.y + 0.55, base.z), size: SIMD3<Float>(0.06, 1.1, 0.06), yaw: yaw)
+            redBatch.addBox(center: SIMD3<Float>(base.x, base.y + 1.35, base.z), size: SIMD3<Float>(0.54, 0.74, 0.03), yaw: yaw)
+            whiteBatch.addBox(center: SIMD3<Float>(base.x, base.y + 1.35, base.z), size: SIMD3<Float>(0.46, 0.66, 0.035), yaw: yaw)
+            signsInBatch += 1
+            if signsInBatch >= 400 {
+                if let mesh = redBatch.build(name: "b57-nosign-red-\(batchIndex)", material: redMat) { world.addChild(mesh) }
+                if let mesh = whiteBatch.build(name: "b57-nosign-white-\(batchIndex)", material: whiteMat) { world.addChild(mesh) }
+                if let mesh = poleBatch.build(name: "b57-nosign-pole-\(batchIndex)", material: poleMaterial, censusTexture: "scenery_steel") { world.addChild(mesh) }
+                redBatch = MeshBatchBuilder()
+                whiteBatch = MeshBatchBuilder()
+                poleBatch = MeshBatchBuilder()
+                signsInBatch = 0
+                batchIndex += 1
+            }
+        }
+        if let mesh = redBatch.build(name: "b57-nosign-red-\(batchIndex)", material: redMat) { world.addChild(mesh) }
+        if let mesh = whiteBatch.build(name: "b57-nosign-white-\(batchIndex)", material: whiteMat) { world.addChild(mesh) }
+        if let mesh = poleBatch.build(name: "b57-nosign-pole-\(batchIndex)", material: poleMaterial, censusTexture: "scenery_steel") { world.addChild(mesh) }
+    }
+
+    /// batch57 N1: point machines + cable coils at the throat
+    /// fans — the switch gear a real yard throat shows beside
+    /// every turnout. One set per fan span per side, at the
+    /// divergence point (span start + 30 m), outside the
+    /// diverging siding. The ditch skips fan spans, so the
+    /// machine's 4.6 m lateral never meets it.
+    private func buildPointMachines() {
+        // batch58: painted-metal photo texture (scenery_steel)
+        // under the equipment tints — was flat colour.
+        let blackMat = Self.texturedPBR(UIColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1), metallic: 0.4, roughness: 0.6, textureName: "scenery_steel")
+        let yellowMat = Self.texturedPBR(UIColor(red: 0.95, green: 0.75, blue: 0.10, alpha: 1), roughness: 0.6, textureName: "scenery_steel")
+        let grayMat = Self.texturedPBR(UIColor(red: 0.45, green: 0.45, blue: 0.45, alpha: 1), metallic: 0.3, roughness: 0.7, textureName: "scenery_steel")
+        var blackBatch = MeshBatchBuilder()
+        var yellowBatch = MeshBatchBuilder()
+        var grayBatch = MeshBatchBuilder()
+        for span in throatFanSpans() {
+            for side: Float in [-1, 1] {
+                let d = span.start + 30
+                guard let first = samples.first, let last = samples.last, d >= first.distanceM, d <= last.distanceM else { continue }
+                let s = sample(at: d)
+                let p = routeOffsetPoint(s, lateral: spreadTrackLateral(side * 4.6, at: d))
+                let yaw = -s.heading
+                let baseY = s.elevationM
+                grayBatch.addBox(center: SIMD3<Float>(p.x, baseY + 0.03, p.z), size: SIMD3<Float>(0.8, 0.05, 1.2), yaw: yaw)
+                blackBatch.addBox(center: SIMD3<Float>(p.x, baseY + 0.24, p.z), size: SIMD3<Float>(0.5, 0.35, 1.2), yaw: yaw)
+                let y1 = routeOffsetPoint(self.sample(at: d - 0.9), lateral: spreadTrackLateral(side * 4.6, at: d - 0.9))
+                let y2 = routeOffsetPoint(self.sample(at: d + 0.9), lateral: spreadTrackLateral(side * 4.6, at: d + 0.9))
+                yellowBatch.addBox(center: SIMD3<Float>(y1.x, baseY + 0.13, y1.z), size: SIMD3<Float>(0.25, 0.25, 0.25), yaw: yaw)
+                yellowBatch.addBox(center: SIMD3<Float>(y2.x, baseY + 0.13, y2.z), size: SIMD3<Float>(0.25, 0.25, 0.25), yaw: yaw)
+                let coil = routeOffsetPoint(self.sample(at: d + 1.6), lateral: spreadTrackLateral(side * 4.6, at: d + 1.6))
+                blackBatch.addPrism(baseCenter: SIMD3<Float>(coil.x, baseY + 0.02, coil.z), radius: 0.4, height: 0.12, yaw: s.heading)
+            }
+        }
+        if let mesh = blackBatch.build(name: "b57-pointmachine-black", material: blackMat, censusTexture: "scenery_steel") { world.addChild(mesh) }
+        if let mesh = yellowBatch.build(name: "b57-pointmachine-yellow", material: yellowMat, censusTexture: "scenery_steel") { world.addChild(mesh) }
+        if let mesh = grayBatch.build(name: "b57-pointmachine-gray", material: grayMat, censusTexture: "scenery_steel") { world.addChild(mesh) }
+    }
+
+    /// batch57 N17: high-voltage lattice towers — the rural
+    /// vertical landmark. One corridor at 55-70 m out, towers
+    /// every ~450 m in rural bands only (half the rural
+    /// segments carry the corridor). Legs, frames and cross-arms
+    /// are batched segments between points taken from the route
+    /// helpers, so no hand-rolled trig; insulators are small
+    /// prisms at the arm tips.
+    private func buildTransmissionTowers(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        let side: Float = stableIndex("b57pylon-side", count: 2) == 0 ? 1 : -1
+        var batch = MeshBatchBuilder()
+        var whiteBatch = MeshBatchBuilder()
+        // batch95: conductor batch — the towers used to stand
+        // bare, with no wires at all. The wires are strung
+        // below between towers in adjacent placement slots.
+        // Census-excluded like the track structure: a wire run
+        // is continuous linear infrastructure, not countable
+        // placements (its 84 sub-segments per span would
+        // corrupt the density metric the towers feed).
+        var wireBatch = MeshBatchBuilder()
+        wireBatch.censusExcluded = true
+        var previousAttach: [SIMD3<Float>]? = nil
+        var previousTowerD: Double? = nil
+        // Cross-arm table (height, half-span): one source for
+        // the arm geometry and the conductor attach points.
+        let armTable: [(height: Float, half: Float)] = [(30, 5.0), (34, 5.5), (38, 4.0)]
+        var towersInBatch = 0
+        var batchIndex = 0
+        var towerIndex = 0
+        var d = 2_000.0
+        while d < route.distanceM - 2_000 {
+            defer { d += 450; towerIndex += 1 }
+            if urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) != 0 { continue }
+            if inStationZone(d, extraMargin: 100) || nearCrossing(d, margin: 40) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if centre > 27_400 && centre < 28_000 { continue }
+            if stableIndex("b57pylon-seg-\(Int(d / 2_200))", count: 2) != 0 { continue }
+            if isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection), side == seaSideSign(travelDirection: travelDirection) { continue }
+            let s = sample(at: d)
+            let lateral = side * (55 + Float(stableIndex("b57pylon-lat-\(towerIndex)", count: 15)))
+            let base = groundOffsetPoint(s, lateral: lateral)
+            let lift = s.elevationM - base.y
+            if lift < -1 || lift > 12 { continue }
+            func corner(_ lat: Float, _ along: Double, _ height: Float) -> SIMD3<Float> {
+                let p = groundOffsetPoint(self.sample(at: d + along), lateral: lateral + lat)
+                return SIMD3<Float>(p.x, base.y + height, p.z)
+            }
+            // Legs: base square ±3.0 m, waist ±1.4 m at 14 m,
+            // top ±0.8 m at 28 m.
+            for legLat in [-3.0, 3.0] {
+                for legAlong in [-3.0, 3.0] {
+                    batch.addSegment(from: corner(Float(legLat), legAlong, 0), to: corner(Float(legLat) * 1.4 / 3.0, legAlong * 1.4 / 3.0, 14), thickness: 0.35)
+                    batch.addSegment(from: corner(Float(legLat) * 1.4 / 3.0, legAlong * 1.4 / 3.0, 14), to: corner(Float(legLat) * 0.8 / 3.0, legAlong * 0.8 / 3.0, 28), thickness: 0.3)
+                }
+            }
+            // Waist and top frames.
+            for frameHeight: Float in [14, 28] {
+                let half: Float = frameHeight == 14 ? 1.4 : 0.8
+                batch.addSegment(from: corner(-half, -Double(half), frameHeight), to: corner(half, -Double(half), frameHeight), thickness: 0.22)
+                batch.addSegment(from: corner(half, -Double(half), frameHeight), to: corner(half, Double(half), frameHeight), thickness: 0.22)
+                batch.addSegment(from: corner(half, Double(half), frameHeight), to: corner(-half, Double(half), frameHeight), thickness: 0.22)
+                batch.addSegment(from: corner(-half, Double(half), frameHeight), to: corner(-half, -Double(half), frameHeight), thickness: 0.22)
+            }
+            // Cross-arms at 30/34/38 m, spanning 10/11/8 m across
+            // the corridor, plus the peak.
+            for (armHeight, armHalf) in armTable {
+                batch.addSegment(from: corner(-armHalf, 0, armHeight), to: corner(armHalf, 0, armHeight), thickness: 0.3)
+                for tip in [-armHalf, armHalf] {
+                    let tipPoint = corner(tip, 0, armHeight)
+                    whiteBatch.addPrism(baseCenter: SIMD3<Float>(tipPoint.x, tipPoint.y - 0.55, tipPoint.z), radius: 0.09, height: 0.5, yaw: s.heading)
+                }
+            }
+            batch.addSegment(from: corner(0, 0, 38), to: corner(0, 0, 42), thickness: 0.3)
+            // batch95: string the conductors back to the
+            // previous tower. Attach points come from the same
+            // corner() frame as the arms: each phase clamps at
+            // the bottom of its insulator string (0.55 below
+            // the arm tip — the white prism's lower end), and
+            // the overhead ground wire clamps at the peak.
+            // A wire is drawn only when the previous tower
+            // sits in the immediately preceding placement slot
+            // (450 m): every skip above (urban band, station
+            // zone, crossing, throat fan, tunnel, the
+            // segment-gap rule, coastal side, lift) breaks the
+            // run exactly as it breaks the tower line itself,
+            // so no conductor is ever strung across a gap.
+            // On curves the span is the chord between the two
+            // towers' attach points, as on the real line.
+            var attachPoints: [SIMD3<Float>] = []
+            for arm in armTable {
+                for tip in [-arm.half, arm.half] {
+                    let tipPoint = corner(tip, 0, arm.height)
+                    attachPoints.append(SIMD3<Float>(tipPoint.x, tipPoint.y - 0.55, tipPoint.z))
+                }
+            }
+            attachPoints.append(corner(0, 0, 42))
+            if let previousAttach, let previousTowerD, d - previousTowerD < 451 {
+                for run in attachPoints.indices {
+                    let a = previousAttach[run]
+                    let b = attachPoints[run]
+                    let isGroundWire = run == attachPoints.count - 1
+                    // Parabolic sag in the utility-pole form:
+                    // phases at 2.5 % of span, the ground wire
+                    // strung tighter at 2.0 %.
+                    let maxSag = simd_distance(a, b) * (isGroundWire ? Float(0.02) : Float(0.025))
+                    let steps = 12
+                    var lastPoint = a
+                    for k in 1...steps {
+                        let t = Float(k) / Float(steps)
+                        let sag = maxSag * 4 * t * (1 - t)
+                        let point = SIMD3<Float>(
+                            a.x + (b.x - a.x) * t,
+                            a.y + (b.y - a.y) * t - sag,
+                            a.z + (b.z - a.z) * t)
+                        wireBatch.addSegment(from: lastPoint, to: point, thickness: isGroundWire ? 0.04 : 0.05)
+                        lastPoint = point
+                    }
+                }
+            }
+            previousAttach = attachPoints
+            previousTowerD = d
+            towersInBatch += 1
+            if towersInBatch >= 10 {
+                if let mesh = batch.build(name: "b57-pylon-\(batchIndex)", material: poleMaterial, censusTexture: "scenery_steel") { world.addChild(mesh) }
+                if let mesh = whiteBatch.build(name: "b57-pylon-white-\(batchIndex)", material: Self.texturedPBR(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.5, textureName: "scenery_steel"), censusTexture: "scenery_steel") { world.addChild(mesh) }
+                if let mesh = wireBatch.build(name: "b57-pylon-wires-\(batchIndex)", material: wireMaterial) { world.addChild(mesh) }
+                batch = MeshBatchBuilder()
+                whiteBatch = MeshBatchBuilder()
+                wireBatch = MeshBatchBuilder()
+                wireBatch.censusExcluded = true
+                towersInBatch = 0
+                batchIndex += 1
+            }
+        }
+        if let mesh = batch.build(name: "b57-pylon-\(batchIndex)", material: poleMaterial, censusTexture: "scenery_steel") { world.addChild(mesh) }
+        if let mesh = whiteBatch.build(name: "b57-pylon-white-\(batchIndex)", material: Self.texturedPBR(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.5, textureName: "scenery_steel"), censusTexture: "scenery_steel") { world.addChild(mesh) }
+        if let mesh = wireBatch.build(name: "b57-pylon-wires-\(batchIndex)", material: wireMaterial) { world.addChild(mesh) }
+    }
+
+    /// batch57 N16: bamboo groves — 15-25 thin stalks (batched
+    /// hexagonal prisms) with a leaf canopy, every ~300 m in
+    /// rural bands at 60% adoption, between the hedgerow and
+    /// the fields. Skipped near houses (houseNear check).
+    private func buildBambooGroves(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, houses: [SIMD3<Float>]) {
+        // batch58: the stalks reference the planned bamboo
+        // texture (scenery_bamboo — not yet in the bundle;
+        // falls back to this green tint until it lands).
+        let stalkMat = Self.texturedPBR(UIColor(red: 0.55, green: 0.65, blue: 0.25, alpha: 1), roughness: 0.9, textureName: "scenery_bamboo")
+        let canopyMat = foliageMaterials[1]
+        var stalkBatch = MeshBatchBuilder()
+        var canopyBatch = MeshBatchBuilder()
+        var grovesInBatch = 0
+        var batchIndex = 0
+        var groveIndex = 0
+        var d = 1_000.0
+        while d < route.distanceM - 1_000 {
+            defer { d += 300; groveIndex += 1 }
+            if urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) != 0 { continue }
+            if inStationZone(d, extraMargin: 40) || nearCrossing(d, margin: 20) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if centre > 27_400 && centre < 28_000 { continue }
+            if stableIndex("b57bamboo-\(groveIndex)", count: 5) >= 3 { continue }
+            let side: Float = stableIndex("b57bamboo-side-\(groveIndex)", count: 2) == 0 ? 1 : -1
+            if isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection), side == seaSideSign(travelDirection: travelDirection) { continue }
+            let s = sample(at: d)
+            let lateral = side * (12 + Float(stableIndex("b57bamboo-lat-\(groveIndex)", count: 12)))
+            let base = groundOffsetPoint(s, lateral: lateral)
+            if houseNear(base, radius: 8, houses: houses) { continue }
+            let stalkCount = 15 + stableIndex("b57bamboo-n-\(groveIndex)", count: 10)
+            for k in 0..<stalkCount {
+                let along = Double((k * 7) % 9) - 4.0
+                let lat = lateral + Float((k * 11) % 9) - 4.0
+                let stalkSample = self.sample(at: d + along)
+                let stalkPoint = groundOffsetPoint(stalkSample, lateral: lat)
+                let height: Float = 6 + Float(stableIndex("b57bamboo-h-\(groveIndex)-\(k)", count: 4))
+                stalkBatch.addPrism(baseCenter: stalkPoint, radius: 0.06 + Float(stableIndex("b57bamboo-r-\(groveIndex)-\(k)", count: 3)) * 0.01, height: height, yaw: s.heading)
+            }
+            for canopy in 0..<3 {
+                let canopySample = self.sample(at: d + Double(canopy * 3 - 3))
+                let canopyPoint = groundOffsetPoint(canopySample, lateral: lateral + Float(canopy - 1) * 2.5)
+                canopyBatch.addBox(center: SIMD3<Float>(canopyPoint.x, base.y + 7.6 + Float(canopy) * 0.5, canopyPoint.z), size: SIMD3<Float>(2.6, 0.6, 2.6), yaw: -s.heading)
+            }
+            grovesInBatch += 1
+            if grovesInBatch >= 6 {
+                if let mesh = stalkBatch.build(name: "b57-bamboo-\(batchIndex)", material: stalkMat) { world.addChild(mesh) }
+                if let mesh = canopyBatch.build(name: "b57-bamboo-canopy-\(batchIndex)", material: canopyMat, censusTexture: "scenery_foliage") { world.addChild(mesh) }
+                stalkBatch = MeshBatchBuilder()
+                canopyBatch = MeshBatchBuilder()
+                grovesInBatch = 0
+                batchIndex += 1
+            }
+        }
+        if let mesh = stalkBatch.build(name: "b57-bamboo-\(batchIndex)", material: stalkMat) { world.addChild(mesh) }
+        if let mesh = canopyBatch.build(name: "b57-bamboo-canopy-\(batchIndex)", material: canopyMat, censusTexture: "scenery_foliage") { world.addChild(mesh) }
+    }
+
+    /// batch57 N22 + N5 (under-viaduct): the bays between
+    /// piers (piers at 15+30k, bay centres at 30+30k) get a use
+    /// where the deck is high enough — parked cars (lift
+    /// >= 2.6 m), a materials bay (lift >= 3.5 m) or a bike
+    /// park (shelter + racks). A quarter of bays stay empty,
+    /// the way real under-viaduct space does.
+    /// batch96: where the deck clears 4.5 m, about 18% of the
+    /// eligible bays (stable hash of the bay index) instead
+    /// become a guard-shita shop row — see buildViaductShopBay.
+    /// A bay is a shop or one of the batch57 uses, never both.
+    private func buildUnderViaductUses(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        var bayIndex = 0
+        var d = 30.0
+        while d < route.distanceM - 30 {
+            defer { d += 30; bayIndex += 1 }
+            if inStationZone(d, extraMargin: 20) || nearCrossing(d, margin: 20) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            let s = sample(at: d)
+            let lift = s.elevationM - groundLevelM(at: s)
+            if lift < 2.6 { continue }
+            let pick = stableIndex("b57viaduct-\(bayIndex)", count: 10)
+            if lift >= 4.5, stableIndex("b96viaductshop-\(bayIndex)", count: 100) < 18 {
+                buildViaductShopBay(bayIndex: bayIndex, centreDistance: d, centreSample: s, groundY: groundLevelM(at: s), lift: lift)
+            } else if pick < 4 {
+                let side: Float = pick % 2 == 0 ? 1 : -1
+                for carOffset in [-6.0, 6.0] {
+                    let carSample = self.sample(at: d + carOffset)
+                    let carPoint = groundOffsetPoint(carSample, lateral: side * 2.6)
+                    addParkedCar(name: "b57-viaduct-car-\(bayIndex)-\(Int(carOffset))", center: carPoint, groundY: groundLevelM(at: carSample), yaw: -carSample.heading + Float.pi / 2, seed: bayIndex * 7 + Int(carOffset))
+                }
+            } else if pick < 7, lift >= 3.5 {
+                let groundY = groundLevelM(at: s)
+                let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+                for container in 0..<2 {
+                    let containerSample = self.sample(at: d + Double(container) * 7 - 3.5)
+                    let containerPoint = groundOffsetPoint(containerSample, lateral: (container == 0 ? 2.5 : -2.5))
+                    _ = addBox(parent: world, name: "b57-viaduct-container-\(bayIndex)-\(container)", size: SIMD3<Float>(2.4, 2.4, 6.0), position: SIMD3<Float>(containerPoint.x, groundY + 1.2, containerPoint.z), material: containerMaterial(seed: bayIndex * 3 + container), orientation: yaw, censusTexture: "scenery_steel")
+                }
+                for drum in 0..<3 {
+                    let drumSample = self.sample(at: d + 9 + Double(drum) * 0.8)
+                    let drumPoint = groundOffsetPoint(drumSample, lateral: 2.5)
+                    _ = addBox(parent: world, name: "b57-viaduct-drum-\(bayIndex)-\(drum)", size: SIMD3<Float>(0.6, 0.9, 0.6), position: SIMD3<Float>(drumPoint.x, groundY + 0.45, drumPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+                }
+            } else if pick == 7 {
+                let groundY = groundLevelM(at: s)
+                let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+                for (pi, postAlong) in [-3.0, 3.0].enumerated() {
+                    for (pj, postLat) in [-1.5, 1.5].enumerated() {
+                        let postSample = self.sample(at: d + postAlong)
+                        let postPoint = groundOffsetPoint(postSample, lateral: Float(postLat))
+                        _ = addBox(parent: world, name: "b57-viaduct-bike-post-\(bayIndex)-\(pi)-\(pj)", size: SIMD3<Float>(0.12, 2.2, 0.12), position: SIMD3<Float>(postPoint.x, groundY + 1.1, postPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+                    }
+                }
+                let roofPoint = groundOffsetPoint(s, lateral: 0)
+                _ = addBox(parent: world, name: "b57-viaduct-bike-roof-\(bayIndex)", size: SIMD3<Float>(3.5, 0.15, 6.5), position: SIMD3<Float>(roofPoint.x, groundY + 2.25, roofPoint.z), material: roofMaterials[1], orientation: yaw, censusTexture: "scenery_steel")
+                for rack in 0..<3 {
+                    let rackSample = self.sample(at: d + Double(rack - 1) * 2.0)
+                    let rackPoint = groundOffsetPoint(rackSample, lateral: 0)
+                    _ = addBox(parent: world, name: "b57-viaduct-bike-rack-\(bayIndex)-\(rack)", size: SIMD3<Float>(2.8, 0.08, 0.08), position: SIMD3<Float>(rackPoint.x, groundY + 0.5, rackPoint.z), material: poleMaterial, orientation: yaw, censusTexture: "scenery_steel")
+                }
+            }
+        }
+    }
+
+    /// batch96: one guard-shita (under-viaduct) shop bay — two
+    /// tenant units on one side of the bay, fronting the street
+    /// on that side the way real ガード下 rows do (the batch92
+    /// audit found parking / materials / bike uses but no shops
+    /// under the elevated line). The storefronts are the bundled
+    /// photo facades (shop / cafe / shop 2 / konbini elevations —
+    /// the project rule for new object types: form x photo
+    /// texture via SceneTextureProvider); the composition around
+    /// them is physical, not a single box: an asphalt forecourt
+    /// pad, concrete end walls and a back wall closing the bay,
+    /// a navy fascia band (Too Railway navy over the steel photo
+    /// texture — the facades carry their own painted signboards,
+    /// this band is the physical sign band) sealing the gap
+    /// between the shopfront top and the deck soffit, a
+    /// canopy-textured awning tilted over each storefront, and
+    /// one piece of forecourt dressing per unit — an AC outdoor
+    /// unit with a grille face, a stack of timber crates, or a
+    /// vending machine in the vending photo facade.
+    /// Dimensions: the bay is 30 m pier to pier with the pier
+    /// columns' inner faces at +/-13.9 m; the row spans 15.4 m,
+    /// clear of them. The front stands with its face at lateral
+    /// 3.95 m, just inside the deck edge (4.2 m); the shop depth
+    /// runs back to the track centreline, leaving the far half
+    /// of the under-deck open as passage, as in the real thing.
+    /// Shopfront height 3.3 m on the pad; the fascia takes up
+    /// whatever clearance remains (lift >= 4.5 guarantees at
+    /// least 0.37 m of band). Every name avoids the chunk-merge
+    /// forbidden fragments, so the whole row bakes into the
+    /// static chunk meshes like the other batched scenery, and
+    /// every part joins the scenery census via addBox.
+    private func buildViaductShopBay(bayIndex: Int, centreDistance: Double, centreSample: RouteSample, groundY: Float, lift: Float) {
+        let yaw = simd_quatf(angle: -centreSample.heading, axis: SIMD3<Float>(0, 1, 0))
+        let side: Float = stableIndex("b96viaductshop-side-\(bayIndex)", count: 2) == 0 ? 1 : -1
+        let base = groundY + 0.07
+        let wallMaterial = Self.texturedPBR(UIColor(red: 0.58, green: 0.58, blue: 0.56, alpha: 1), roughness: 0.95, textureName: "scenery_concrete", normalName: "normal_concrete")
+        let fasciaMaterial = Self.texturedPBR(UIColor(red: 0.12, green: 0.23, blue: 0.43, alpha: 1), roughness: 0.55, textureName: "scenery_steel")
+        let awningMaterial = Self.texturedPBR(.white, roughness: 0.65, textureName: "scenery_canopy")
+        let crateMaterial = Self.texturedPBR(.white, roughness: 0.9, textureName: "scenery_timber")
+        let acMaterial = Self.texturedPBR(UIColor(red: 0.82, green: 0.83, blue: 0.82, alpha: 1), metallic: 0.25, roughness: 0.5, textureName: "scenery_steel")
+        let acGrilleMaterial = Self.texturedPBR(UIColor(red: 0.25, green: 0.26, blue: 0.27, alpha: 1), metallic: 0.3, roughness: 0.6, textureName: "scenery_steel")
+        let faceMaterials = [shopFacadeMaterial, cafeFacadeMaterial, shopFacadeMaterial2, konbiniFacadeMaterial]
+        let faceTextures = ["scenery_shop_facade", "scenery_cafe_facade", "scenery_shop_facade_2", "scenery_konbini_facade"]
+        func pointAt(_ along: Double, _ lateral: Float) -> SIMD3<Float> {
+            self.groundOffsetPoint(self.sample(at: centreDistance + along), lateral: lateral)
+        }
+        // Forecourt pad: asphalt, running 0.95 m past the
+        // storefront line so the dressing stands on paving.
+        let padPoint = pointAt(0, side * 2.2)
+        _ = addBox(parent: world, name: "b96-viaduct-shop-pad-\(bayIndex)", size: SIMD3<Float>(5.4, 0.14, 16.6), position: SIMD3<Float>(padPoint.x, groundY, padPoint.z), material: roadMaterial, orientation: yaw, censusTexture: "scenery_asphalt")
+        for unit in 0..<2 {
+            let unitAlong = unit == 0 ? -3.9 : 3.9
+            let faceIndex = stableIndex("b96viaductshop-face-\(bayIndex)-\(unit)", count: 4)
+            let frontPoint = pointAt(unitAlong, side * 3.8)
+            _ = addBox(parent: world, name: "b96-viaduct-shop-front-\(bayIndex)-\(unit)", size: SIMD3<Float>(0.3, 3.3, 7.6), position: SIMD3<Float>(frontPoint.x, base + 1.65, frontPoint.z), material: faceMaterials[faceIndex], orientation: yaw, censusTexture: faceTextures[faceIndex])
+            // Awning over the storefront, tilted so the outer
+            // edge drops about 0.13 m over its 1.0 m throw.
+            let awningPoint = pointAt(unitAlong, side * 4.02)
+            let awningTilt = simd_quatf(angle: -side * 0.26, axis: SIMD3<Float>(0, 0, 1))
+            _ = addBox(parent: world, name: "b96-viaduct-shop-awning-\(bayIndex)-\(unit)", size: SIMD3<Float>(1.0, 0.07, 7.2), position: SIMD3<Float>(awningPoint.x, groundY + 2.68, awningPoint.z), material: awningMaterial, orientation: yaw * awningTilt, censusTexture: "scenery_canopy")
+            let dress = stableIndex("b96viaductshop-dress-\(bayIndex)-\(unit)", count: 3)
+            if dress == 0 {
+                let acPoint = pointAt(unitAlong + 3.05, side * 4.35)
+                _ = addBox(parent: world, name: "b96-viaduct-shop-ac-\(bayIndex)-\(unit)", size: SIMD3<Float>(0.34, 0.62, 0.95), position: SIMD3<Float>(acPoint.x, base + 0.31, acPoint.z), material: acMaterial, orientation: yaw, censusTexture: "scenery_steel")
+                let grillePoint = pointAt(unitAlong + 3.05, side * 4.54)
+                _ = addBox(parent: world, name: "b96-viaduct-shop-acface-\(bayIndex)-\(unit)", size: SIMD3<Float>(0.06, 0.42, 0.72), position: SIMD3<Float>(grillePoint.x, base + 0.33, grillePoint.z), material: acGrilleMaterial, orientation: yaw, censusTexture: "scenery_steel")
+            } else if dress == 1 {
+                for (crate, crateAlong) in [3.05, 3.05, 2.52].enumerated() {
+                    let cratePoint = pointAt(unitAlong - crateAlong, side * 4.3)
+                    let crateY = crate == 1 ? base + 0.69 : base + 0.23
+                    _ = addBox(parent: world, name: "b96-viaduct-shop-crate-\(bayIndex)-\(unit)-\(crate)", size: SIMD3<Float>(0.46, 0.46, 0.46), position: SIMD3<Float>(cratePoint.x, crateY, cratePoint.z), material: crateMaterial, orientation: yaw, censusTexture: "scenery_timber")
+                }
+            } else {
+                let vendingPoint = pointAt(unitAlong + 3.02, side * 4.28)
+                _ = addBox(parent: world, name: "b96-viaduct-shop-vending-\(bayIndex)-\(unit)", size: SIMD3<Float>(0.64, 1.85, 1.06), position: SIMD3<Float>(vendingPoint.x, base + 0.925, vendingPoint.z), material: vendingFacadeMaterial, orientation: yaw, censusTexture: "scenery_vending_facade")
+            }
+        }
+        // End walls: both bay ends plus the shared tenant
+        // divider at the middle (it also backs the 0.2 m seam
+        // between the two storefront panels, reading as a
+        // pillar between tenants).
+        for (wall, wallAlong) in [-7.7, 0.0, 7.7].enumerated() {
+            let wallPoint = pointAt(wallAlong, side * 1.975)
+            _ = addBox(parent: world, name: "b96-viaduct-shop-wall-\(bayIndex)-\(wall)", size: SIMD3<Float>(3.65, 3.3, 0.25), position: SIMD3<Float>(wallPoint.x, base + 1.65, wallPoint.z), material: wallMaterial, orientation: yaw, censusTexture: "scenery_concrete")
+        }
+        let backPoint = pointAt(0, side * 0.15)
+        _ = addBox(parent: world, name: "b96-viaduct-shop-back-\(bayIndex)", size: SIMD3<Float>(0.3, 3.3, 15.65), position: SIMD3<Float>(backPoint.x, base + 1.65, backPoint.z), material: wallMaterial, orientation: yaw, censusTexture: "scenery_concrete")
+        // Fascia / sign band: from just below the shopfront top
+        // to just into the deck soffit (soffit at lift - 0.89),
+        // sealing the shadow gap under the deck.
+        let bandHeight = lift - 4.13
+        let fasciaPoint = pointAt(0, side * 3.82)
+        _ = addBox(parent: world, name: "b96-viaduct-shop-fascia-\(bayIndex)", size: SIMD3<Float>(0.42, bandHeight, 15.9), position: SIMD3<Float>(fasciaPoint.x, groundY + (lift + 2.45) / 2, fasciaPoint.z), material: fasciaMaterial, orientation: yaw, censusTexture: "scenery_steel")
+    }
+
+    /// batch57 roadside layer: garbage points along the
+    /// residential streets, bus shelters and streetlights along
+    /// the scenario roads. The roads' coverage is probed the
+    /// same way the guardrails do (projectedChainage every
+    /// 50 m); furniture keeps off houses via houseNear.
+    private func buildRoadsideFurniture(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, houses: [SIMD3<Float>], trafficScenario: TrafficScenario?) {
+        buildGarbagePoints(route: route, routeVariant: routeVariant, travelDirection: travelDirection, houses: houses)
+        guard let scenario = trafficScenario else { return }
+        let coverages = roadCoverages(route: route, routeVariant: routeVariant, travelDirection: travelDirection, scenario: scenario)
+        buildRoadBusStops(route: route, routeVariant: routeVariant, travelDirection: travelDirection, coverages: coverages, houses: houses)
+        buildRoadStreetlights(route: route, routeVariant: routeVariant, travelDirection: travelDirection, coverages: coverages, houses: houses)
+    }
+
+    private func roadCoverages(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, scenario: TrafficScenario) -> [(lateral: Float, min: Double, max: Double)] {
+        let paths = Dictionary(scenario.routePaths.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var out: [(lateral: Float, min: Double, max: Double)] = []
+        for road in scenario.roads {
+            guard let path = paths[road.routePathID] else { continue }
+            var coveredMin = Double.greatestFiniteMagnitude
+            var coveredMax = -Double.greatestFiniteMagnitude
+            var probe = 0.0
+            while probe <= path.lengthM {
+                if let chainage = projectedChainage(road.routePathID, positionM: probe, routeVariant: routeVariant, direction: travelDirection),
+                   chainage >= 0, chainage <= route.distanceM {
+                    coveredMin = min(coveredMin, chainage)
+                    coveredMax = max(coveredMax, chainage)
+                }
+                probe += 50
+            }
+            guard coveredMax > coveredMin else { continue }
+            out.append((lateral: Float(road.lateralOffsetM), min: coveredMin, max: coveredMax))
+        }
+        return out
+    }
+
+    /// batch57 N9: garbage collection points — a netted cage,
+    /// a resource box and a sorting sign — every ~250 m in the
+    /// residential bands, the "trace of life" between houses.
+    private func buildGarbagePoints(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, houses: [SIMD3<Float>]) {
+        // batch58: the cage net is the chain-link photo
+        // texture (transparent, as on the zoo fences) under a
+        // blue tint; the resource box is concrete-textured.
+        var netMat = Self.texturedPBR(UIColor(red: 0.15, green: 0.35, blue: 0.60, alpha: 1), roughness: 0.8, textureName: "scenery_fence_chainlink")
+        netMat.blending = .transparent(opacity: .init(floatLiteral: 1))
+        netMat.faceCulling = .none
+        let boxMat = Self.texturedPBR(UIColor(red: 0.55, green: 0.55, blue: 0.55, alpha: 1), roughness: 0.85, textureName: "scenery_concrete")
+        var siteIndex = 0
+        var d = 500.0
+        while d < route.distanceM - 500 {
+            defer { d += 250; siteIndex += 1 }
+            let band = urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            let nearestStation = stationModelPlacements.map { abs($0.chainageM - d) }.min() ?? .infinity
+            if band == 0, nearestStation >= 800 { continue }
+            if inStationZone(d, extraMargin: 20) || nearCrossing(d, margin: 20) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if centre > 27_400 && centre < 28_000 { continue }
+            if stableIndex("b57garbage-\(siteIndex)", count: 2) != 0 { continue }
+            let side: Float = stableIndex("b57garbage-side-\(siteIndex)", count: 2) == 0 ? 1 : -1
+            let s = sample(at: d)
+            let lateral = side * (13 + Float(stableIndex("b57garbage-lat-\(siteIndex)", count: 3)))
+            let base = groundOffsetPoint(s, lateral: lateral)
+            if houseNear(base, radius: 4, houses: houses) { continue }
+            let groundY = groundLevelM(at: s)
+            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+            for (pi, postAlong) in [-0.95, 0.95].enumerated() {
+                for (pj, postLat) in [-0.45, 0.45].enumerated() {
+                    let postSample = self.sample(at: d + postAlong)
+                    let postPoint = groundOffsetPoint(postSample, lateral: lateral + Float(postLat))
+                    _ = addBox(parent: world, name: "b57-garbage-post-\(siteIndex)-\(pi)-\(pj)", size: SIMD3<Float>(0.08, 1.0, 0.08), position: SIMD3<Float>(postPoint.x, groundY + 0.5, postPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+                }
+            }
+            _ = addBox(parent: world, name: "b57-garbage-net-\(siteIndex)", size: SIMD3<Float>(1.0, 0.04, 2.0), position: SIMD3<Float>(base.x, groundY + 1.02, base.z), material: netMat, orientation: yaw, censusTexture: "scenery_fence_chainlink")
+            let boxPoint = groundOffsetPoint(self.sample(at: d + 1.6), lateral: lateral)
+            _ = addBox(parent: world, name: "b57-garbage-box-\(siteIndex)", size: SIMD3<Float>(0.8, 0.7, 0.6), position: SIMD3<Float>(boxPoint.x, groundY + 0.35, boxPoint.z), material: boxMat, orientation: yaw, censusTexture: "scenery_concrete")
+            let signPoint = groundOffsetPoint(self.sample(at: d - 1.6), lateral: lateral)
+            _ = addBox(parent: world, name: "b57-garbage-signpost-\(siteIndex)", size: SIMD3<Float>(0.05, 1.2, 0.05), position: SIMD3<Float>(signPoint.x, groundY + 0.6, signPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+            _ = addBox(parent: world, name: "b57-garbage-sign-\(siteIndex)", size: SIMD3<Float>(0.4, 0.5, 0.04), position: SIMD3<Float>(signPoint.x, groundY + 1.35, signPoint.z), material: netMat, orientation: yaw, censusTexture: "scenery_fence_chainlink")
+        }
+    }
+
+    /// batch57 N7: roadside bus shelters on the track side of
+    /// the parallel roads, about every 500 m per road (capped
+    /// line-wide so a road network with many segments cannot
+    /// flood the world with shelters).
+    private func buildRoadBusStops(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, coverages: [(lateral: Float, min: Double, max: Double)], houses: [SIMD3<Float>]) {
+        var placed = 0
+        for coverage in coverages {
+            if abs(coverage.lateral) < 16 { continue }
+            let roadSide: Float = coverage.lateral >= 0 ? 1 : -1
+            var d = coverage.min + 100
+            while d < coverage.max - 100, placed < 40 {
+                defer { d += 500 }
+                if inStationZone(d, extraMargin: 20) || nearCrossing(d, margin: 20) || nearThroatFan(d) { continue }
+                let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+                if isTunnelChainage(centre) { continue }
+                if centre > 27_400 && centre < 28_000 { continue }
+                let s = sample(at: d)
+                let lateral = coverage.lateral - roadSide * 5.5
+                let base = groundOffsetPoint(s, lateral: lateral)
+                if houseNear(base, radius: 5, houses: houses) { continue }
+                let groundY = groundLevelM(at: s)
+                let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+                for (pi, postAlong) in [-1.2, 1.2].enumerated() {
+                    let postSample = self.sample(at: d + postAlong)
+                    let postPoint = groundOffsetPoint(postSample, lateral: lateral)
+                    _ = addBox(parent: world, name: "b57-busstop-post-\(placed)-\(pi)", size: SIMD3<Float>(0.1, 2.4, 0.1), position: SIMD3<Float>(postPoint.x, groundY + 1.2, postPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+                }
+                _ = addBox(parent: world, name: "b57-busstop-roof-\(placed)", size: SIMD3<Float>(1.4, 0.12, 2.8), position: SIMD3<Float>(base.x, groundY + 2.45, base.z), material: roofMaterials[2], orientation: yaw, censusTexture: "scenery_steel")
+                let backPoint = groundOffsetPoint(s, lateral: lateral - roadSide * 0.65)
+                _ = addBox(parent: world, name: "b57-busstop-back-\(placed)", size: SIMD3<Float>(0.06, 1.1, 2.6), position: SIMD3<Float>(backPoint.x, groundY + 1.5, backPoint.z), material: glassMaterial, orientation: yaw)
+                let benchPoint = groundOffsetPoint(s, lateral: lateral + roadSide * 0.1)
+                _ = addBox(parent: world, name: "b57-busstop-bench-\(placed)", size: SIMD3<Float>(0.5, 0.08, 2.0), position: SIMD3<Float>(benchPoint.x, groundY + 0.5, benchPoint.z), material: roofMaterials[0], orientation: yaw, censusTexture: "scenery_steel")
+                for (li, legAlong) in [-0.8, 0.8].enumerated() {
+                    let legSample = self.sample(at: d + legAlong)
+                    let legPoint = groundOffsetPoint(legSample, lateral: lateral + roadSide * 0.1)
+                    _ = addBox(parent: world, name: "b57-busstop-benchleg-\(placed)-\(li)", size: SIMD3<Float>(0.08, 0.45, 0.08), position: SIMD3<Float>(legPoint.x, groundY + 0.25, legPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+                }
+                let polePoint = groundOffsetPoint(self.sample(at: d + 1.8), lateral: lateral - roadSide * 1.0)
+                _ = addBox(parent: world, name: "b57-busstop-pole-\(placed)", size: SIMD3<Float>(0.08, 2.6, 0.08), position: SIMD3<Float>(polePoint.x, groundY + 1.3, polePoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+                // batch58: the timetable board references the
+                // planned sign-face texture (scenery_sign_noentry,
+                // not yet in the bundle — tint fallback for now).
+                _ = addBox(parent: world, name: "b57-busstop-board-\(placed)", size: SIMD3<Float>(0.5, 0.7, 0.05), position: SIMD3<Float>(polePoint.x, groundY + 2.4, polePoint.z), material: Self.texturedPBR(UIColor(red: 0.96, green: 0.96, blue: 0.94, alpha: 1), roughness: 0.7, textureName: "scenery_sign_noentry"), orientation: yaw)
+                placed += 1
+            }
+        }
+    }
+
+    /// batch57 N8: streetlights on the track side of the
+    /// parallel roads, every ~60 m, staggered against the bus
+    /// shelters by construction (60 m grid vs 500 m grid never
+    /// coincide). Capped line-wide.
+    private func buildRoadStreetlights(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, coverages: [(lateral: Float, min: Double, max: Double)], houses: [SIMD3<Float>]) {
+        // batch58: steel photo texture under the lamp-head tint.
+        let headMat = Self.texturedPBR(UIColor(red: 0.92, green: 0.92, blue: 0.88, alpha: 1), roughness: 0.4, textureName: "scenery_steel")
+        var poleBatch = MeshBatchBuilder()
+        var steelBatch = MeshBatchBuilder()
+        var headBatch = MeshBatchBuilder()
+        var lightsInBatch = 0
+        var batchIndex = 0
+        var placed = 0
+        for coverage in coverages {
+            if abs(coverage.lateral) < 16 { continue }
+            let roadSide: Float = coverage.lateral >= 0 ? 1 : -1
+            var d = coverage.min + 30
+            while d < coverage.max - 30, placed < 300 {
+                defer { d += 60 }
+                if inStationZone(d, extraMargin: 20) || nearCrossing(d, margin: 20) || nearThroatFan(d) { continue }
+                let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+                if isTunnelChainage(centre) { continue }
+                if centre > 27_400 && centre < 28_000 { continue }
+                let s = sample(at: d)
+                let lateral = coverage.lateral - roadSide * 5.5
+                let base = groundOffsetPoint(s, lateral: lateral)
+                if houseNear(base, radius: 5, houses: houses) { continue }
+                let groundY = groundLevelM(at: s)
+                poleBatch.addPrism(baseCenter: SIMD3<Float>(base.x, groundY, base.z), radius: 0.12, height: 8.0, yaw: s.heading)
+                let armPoint = groundOffsetPoint(s, lateral: lateral + roadSide * 0.6)
+                steelBatch.addBox(center: SIMD3<Float>(armPoint.x, groundY + 7.9, armPoint.z), size: SIMD3<Float>(1.2, 0.08, 0.08), yaw: -s.heading)
+                let headPoint = groundOffsetPoint(s, lateral: lateral + roadSide * 1.1)
+                headBatch.addBox(center: SIMD3<Float>(headPoint.x, groundY + 7.85, headPoint.z), size: SIMD3<Float>(0.5, 0.12, 0.25), yaw: -s.heading)
+                placed += 1
+                lightsInBatch += 1
+                if lightsInBatch >= 100 {
+                    if let mesh = poleBatch.build(name: "b57-streetlight-pole-\(batchIndex)", material: poleMaterial, censusTexture: "scenery_steel") { world.addChild(mesh) }
+                    if let mesh = steelBatch.build(name: "b57-streetlight-steel-\(batchIndex)", material: poleMaterial, censusTexture: "scenery_steel") { world.addChild(mesh) }
+                    if let mesh = headBatch.build(name: "b57-streetlight-head-\(batchIndex)", material: headMat, censusTexture: "scenery_steel") { world.addChild(mesh) }
+                    poleBatch = MeshBatchBuilder()
+                    steelBatch = MeshBatchBuilder()
+                    headBatch = MeshBatchBuilder()
+                    lightsInBatch = 0
+                    batchIndex += 1
+                }
+            }
+        }
+        if let mesh = poleBatch.build(name: "b57-streetlight-pole-\(batchIndex)", material: poleMaterial, censusTexture: "scenery_steel") { world.addChild(mesh) }
+        if let mesh = steelBatch.build(name: "b57-streetlight-steel-\(batchIndex)", material: poleMaterial, censusTexture: "scenery_steel") { world.addChild(mesh) }
+        if let mesh = headBatch.build(name: "b57-streetlight-head-\(batchIndex)", material: headMat, censusTexture: "scenery_steel") { world.addChild(mesh) }
+    }
+
+    /// batch57 signatures: one candidate site per ~900 m, of
+    /// which roughly 40% become a site — the plan's "sparse
+    /// and dense rhythm", not uniform fill. The type is picked
+    /// by hash and filtered by zone (rural / suburban / urban
+    /// / coastal); a pick that does not fit its zone falls
+    /// back or stays empty. Wind turbines and beach houses run
+    /// on their own coastal loops below.
+    private func buildRuralSignatures(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, houses: [SIMD3<Float>]) {
+        var orchardTrees = 0
+        var siteIndex = 0
+        var d = 700.0
+        while d < route.distanceM - 700 {
+            defer { d += 900; siteIndex += 1 }
+            let nearestStation = stationModelPlacements.map { abs($0.chainageM - d) }.min() ?? .infinity
+            if nearestStation < 300 { continue }
+            if nearCrossing(d, margin: 25) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if centre > 27_400 && centre < 28_000 { continue }
+            let band = urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            let coastal = isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            let pick = stableIndex("b57site-\(siteIndex)", count: 10)
+            let seaSign = seaSideSign(travelDirection: travelDirection)
+            let side: Float
+            if coastal {
+                side = -seaSign
+            } else {
+                side = stableIndex("b57site-side-\(siteIndex)", count: 2) == 0 ? 1 : -1
+            }
+            if pick <= 1 {
+                if band <= 1 { buildShrineSite(at: d, side: side, seed: siteIndex, houses: houses) } else { buildPocketParkSite(at: d, side: side, seed: siteIndex, houses: houses) }
+            } else if pick == 2 {
+                if band <= 1 { buildCemeterySite(at: d, side: side, seed: siteIndex, houses: houses) }
+            } else if pick == 3 {
+                if band >= 1 || nearestStation < 800 { buildPocketParkSite(at: d, side: side, seed: siteIndex, houses: houses) } else { buildShrineSite(at: d, side: side, seed: siteIndex, houses: houses) }
+            } else if pick == 4 {
+                if band <= 1, !coastal { buildGasStationSite(at: d, side: side, seed: siteIndex, houses: houses) }
+            } else if pick == 5 {
+                if band == 0, !coastal { orchardTrees += buildOrchardSite(at: d, side: side, seed: siteIndex, houses: houses, budget: 120 - orchardTrees) }
+            } else if pick == 6 {
+                if band <= 1, !coastal, siteIndex % 5 == 0 { buildGolfRangeSite(at: d, side: side, seed: siteIndex, houses: houses) }
+            }
+            // picks 7-9 stay empty: the rhythm needs gaps.
+        }
+        buildWindTurbineSites(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildBeachHouseSites(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+    }
+
+    /// batch57 N12: a shrine — vermilion torii at the
+    /// track-side entrance, two stone lanterns along the gravel
+    /// approach, a small wooden hall and its sacred tree.
+    private func buildShrineSite(at distance: Double, side: Float, seed: Int, houses: [SIMD3<Float>]) {
+        let s = sample(at: distance)
+        let groundY = groundLevelM(at: s)
+        let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+        let lat = side * (18 + Float(stableIndex("b57shrine-lat-\(seed)", count: 14)))
+        let centrePoint = groundOffsetPoint(s, lateral: lat)
+        if houseNear(centrePoint, radius: 9, houses: houses) { return }
+        if !buildingClearOfPlatforms(chainage: distance, halfLength: 7, lateral: lat, halfDepth: 6) { return }
+        if !buildingClearOfFans(chainage: distance, halfLength: 7, lateral: lat, halfDepth: 6) { return }
+        // batch58: photo textures under the shrine tints —
+        // timber grain under the vermilion lacquer and the
+        // hall wood, concrete grain for the stone lanterns.
+        // (A dedicated vermilion-lacquer texture does not
+        // exist in the bundle; tinted timber is the closest
+        // real surface — see batch58-ready.md.)
+        let vermilion = Self.texturedPBR(UIColor(red: 0.75, green: 0.15, blue: 0.10, alpha: 1), roughness: 0.7, textureName: "scenery_timber")
+        let stone = Self.texturedPBR(UIColor(red: 0.60, green: 0.60, blue: 0.58, alpha: 1), roughness: 0.9, textureName: "scenery_concrete")
+        let wood = Self.texturedPBR(UIColor(red: 0.45, green: 0.32, blue: 0.20, alpha: 1), roughness: 0.85, textureName: "scenery_timber")
+        let gravelStone = Self.texturedPBR(UIColor(red: 0.60, green: 0.60, blue: 0.58, alpha: 1), roughness: 0.95, textureName: "scenery_ballast")
+        for (pi, postAlong) in [-1.5, 1.5].enumerated() {
+            let postSample = self.sample(at: distance + postAlong)
+            let postPoint = groundOffsetPoint(postSample, lateral: lat - 6)
+            _ = addBox(parent: world, name: "b57-shrine-torii-post-\(seed)-\(pi)", size: SIMD3<Float>(0.28, 3.4, 0.28), position: SIMD3<Float>(postPoint.x, groundY + 1.7, postPoint.z), material: vermilion, censusTexture: "scenery_timber")
+        }
+        let lintelPoint = groundOffsetPoint(self.sample(at: distance), lateral: lat - 6)
+        _ = addBox(parent: world, name: "b57-shrine-torii-top-\(seed)", size: SIMD3<Float>(0.3, 0.32, 4.2), position: SIMD3<Float>(lintelPoint.x, groundY + 3.5, lintelPoint.z), material: vermilion, orientation: yaw, censusTexture: "scenery_timber")
+        _ = addBox(parent: world, name: "b57-shrine-torii-second-\(seed)", size: SIMD3<Float>(0.24, 0.24, 3.4), position: SIMD3<Float>(lintelPoint.x, groundY + 3.0, lintelPoint.z), material: vermilion, orientation: yaw, censusTexture: "scenery_timber")
+        _ = addBox(parent: world, name: "b57-shrine-torii-plaque-\(seed)", size: SIMD3<Float>(0.12, 0.5, 0.3), position: SIMD3<Float>(lintelPoint.x, groundY + 3.2, lintelPoint.z), material: vermilion, orientation: yaw, censusTexture: "scenery_timber")
+        for (li, lanternAlong) in [-1.8, 1.8].enumerated() {
+            let lanternSample = self.sample(at: distance + lanternAlong)
+            let lanternPoint = groundOffsetPoint(lanternSample, lateral: lat - 4)
+            _ = addBox(parent: world, name: "b57-shrine-lantern-base-\(seed)-\(li)", size: SIMD3<Float>(0.45, 0.25, 0.45), position: SIMD3<Float>(lanternPoint.x, groundY + 0.13, lanternPoint.z), material: stone, censusTexture: "scenery_concrete")
+            _ = addBox(parent: world, name: "b57-shrine-lantern-shaft-\(seed)-\(li)", size: SIMD3<Float>(0.25, 0.9, 0.25), position: SIMD3<Float>(lanternPoint.x, groundY + 0.7, lanternPoint.z), material: stone, censusTexture: "scenery_concrete")
+            _ = addBox(parent: world, name: "b57-shrine-lantern-light-\(seed)-\(li)", size: SIMD3<Float>(0.4, 0.45, 0.4), position: SIMD3<Float>(lanternPoint.x, groundY + 1.35, lanternPoint.z), material: stone, censusTexture: "scenery_concrete")
+        }
+        let gravelPoint = groundOffsetPoint(self.sample(at: distance), lateral: lat - 2)
+        _ = addBox(parent: world, name: "b57-shrine-gravel-\(seed)", size: SIMD3<Float>(8.0, 0.07, 2.0), position: SIMD3<Float>(gravelPoint.x, groundY + 0.04, gravelPoint.z), material: gravelStone, orientation: yaw, censusTexture: "scenery_ballast")
+        let hallPoint = groundOffsetPoint(self.sample(at: distance), lateral: lat + 2)
+        _ = addBox(parent: world, name: "b57-shrine-hall-\(seed)", size: SIMD3<Float>(3.2, 2.6, 3.0), position: SIMD3<Float>(hallPoint.x, groundY + 1.3, hallPoint.z), material: wood, orientation: yaw, censusTexture: "scenery_timber")
+        _ = addBox(parent: world, name: "b57-shrine-roof-\(seed)", size: SIMD3<Float>(3.8, 0.22, 3.6), position: SIMD3<Float>(hallPoint.x, groundY + 2.7, hallPoint.z), material: roofMaterials[0], orientation: yaw, censusTexture: "scenery_steel")
+        _ = addBox(parent: world, name: "b57-shrine-ridge-\(seed)", size: SIMD3<Float>(0.3, 0.3, 3.6), position: SIMD3<Float>(hallPoint.x, groundY + 2.95, hallPoint.z), material: roofMaterials[0], orientation: yaw, censusTexture: "scenery_steel")
+        let treeSample = self.sample(at: distance + 5)
+        let treePoint = groundOffsetPoint(treeSample, lateral: lat + 4)
+        addTree(parent: world, name: "b57-shrine-tree-\(seed)", x: treePoint.x, z: treePoint.z, height: 5.0, material: foliageMaterials[0], groundY: treePoint.y, censusTexture: "scenery_foliage")
+    }
+
+    /// batch57 N13: a cemetery — a gravel plot with two dozen
+    /// grey headstones in three weather grades, a hedge on the
+    /// track side and two pines.
+    private func buildCemeterySite(at distance: Double, side: Float, seed: Int, houses: [SIMD3<Float>]) {
+        let s = sample(at: distance)
+        let groundY = groundLevelM(at: s)
+        let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+        let lat = side * (20 + Float(stableIndex("b57cemetery-lat-\(seed)", count: 24)))
+        let centrePoint = groundOffsetPoint(s, lateral: lat)
+        if houseNear(centrePoint, radius: 10, houses: houses) { return }
+        if !buildingClearOfPlatforms(chainage: distance, halfLength: 8, lateral: lat, halfDepth: 7) { return }
+        if !buildingClearOfFans(chainage: distance, halfLength: 8, lateral: lat, halfDepth: 7) { return }
+        // batch58: concrete photo texture for the headstones
+        // (tintVariant keeps the texture through the weather
+        // grades) and ballast texture for the gravel plot.
+        let grayBase = Self.texturedPBR(UIColor(red: 0.62, green: 0.62, blue: 0.60, alpha: 1), roughness: 0.9, textureName: "scenery_concrete")
+        let graveMats = [grayBase, tintVariant(grayBase, multiply: (0.85, 0.85, 0.85)), tintVariant(grayBase, multiply: (0.70, 0.70, 0.72))]
+        let plotMat = Self.texturedPBR(UIColor(red: 0.62, green: 0.62, blue: 0.60, alpha: 1), roughness: 0.95, textureName: "scenery_ballast")
+        _ = addBox(parent: world, name: "b57-cemetery-gravel-\(seed)", size: SIMD3<Float>(12.0, 0.07, 14.0), position: SIMD3<Float>(centrePoint.x, groundY + 0.04, centrePoint.z), material: plotMat, orientation: yaw, censusTexture: "scenery_ballast")
+        for row in 0..<3 {
+            for col in 0..<5 {
+                if stableIndex("b57grave-\(seed)-\(row)-\(col)", count: 5) == 4 { continue }
+                let stoneSample = self.sample(at: distance - 5 + Double(row) * 5)
+                let stonePoint = groundOffsetPoint(stoneSample, lateral: lat - 4 + Float(col) * 2.2)
+                _ = addBox(parent: world, name: "b57-cemetery-stone-\(seed)-\(row)-\(col)", size: SIMD3<Float>(0.5, 0.9, 0.35), position: SIMD3<Float>(stonePoint.x, groundY + 0.45, stonePoint.z), material: graveMats[stableIndex("b57gravetint-\(seed)-\(row)-\(col)", count: graveMats.count)], orientation: yaw, censusTexture: "scenery_concrete")
+            }
+        }
+        let hedgePoint = groundOffsetPoint(s, lateral: lat - 6.5)
+        _ = addBox(parent: world, name: "b57-cemetery-hedge-\(seed)", size: SIMD3<Float>(0.6, 0.9, 14.0), position: SIMD3<Float>(hedgePoint.x, groundY + 0.45, hedgePoint.z), material: foliageMaterials[0], orientation: yaw, censusTexture: "scenery_foliage")
+        for (ti, treeAlong) in [-6.0, 6.0].enumerated() {
+            let treeSample = self.sample(at: distance + treeAlong)
+            let treePoint = groundOffsetPoint(treeSample, lateral: lat + 5)
+            addTree(parent: world, name: "b57-cemetery-pine-\(seed)-\(ti)", x: treePoint.x, z: treePoint.z, height: 4.5, material: foliageMaterials[2], groundY: treePoint.y, censusTexture: "scenery_foliage")
+        }
+    }
+
+    /// batch57 N11: a pocket park — slide, swing, sandbox,
+    /// jungle gym, bench and sign, on a dirt ground panel, in
+    /// the urban band or near a station.
+    private func buildPocketParkSite(at distance: Double, side: Float, seed: Int, houses: [SIMD3<Float>]) {
+        let s = sample(at: distance)
+        let groundY = groundLevelM(at: s)
+        let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+        let lat = side * (15 + Float(stableIndex("b57park-lat-\(seed)", count: 12)))
+        let centrePoint = groundOffsetPoint(s, lateral: lat)
+        if houseNear(centrePoint, radius: 11, houses: houses) { return }
+        if !buildingClearOfPlatforms(chainage: distance, halfLength: 11, lateral: lat, halfDepth: 9) { return }
+        if !buildingClearOfFans(chainage: distance, halfLength: 11, lateral: lat, halfDepth: 9) { return }
+        // batch58: playground steel carries the steel photo
+        // texture under its paint tints; the ground panel is
+        // grass-textured; the sandbox references the planned
+        // sand texture (scenery_sand — not yet in the bundle,
+        // tint fallback until it lands).
+        let slideRed = Self.texturedPBR(UIColor(red: 0.70, green: 0.25, blue: 0.20, alpha: 1), roughness: 0.6, textureName: "scenery_steel")
+        let swingBlue = Self.texturedPBR(UIColor(red: 0.20, green: 0.40, blue: 0.65, alpha: 1), roughness: 0.6, textureName: "scenery_steel")
+        let sandMat = Self.texturedPBR(UIColor(red: 0.78, green: 0.70, blue: 0.55, alpha: 1), roughness: 1.0, textureName: "scenery_sand")
+        let dirtMat = Self.texturedPBR(UIColor(red: 0.55, green: 0.48, blue: 0.38, alpha: 1), roughness: 1.0, textureName: "scenery_grass")
+        _ = addBox(parent: world, name: "b57-park-ground-\(seed)", size: SIMD3<Float>(16.0, 0.07, 20.0), position: SIMD3<Float>(centrePoint.x, groundY + 0.04, centrePoint.z), material: dirtMat, orientation: yaw, censusTexture: "scenery_grass")
+        // Slide: two steps and a sloped chute.
+        let slidePoint = groundOffsetPoint(self.sample(at: distance - 6), lateral: lat)
+        _ = addBox(parent: world, name: "b57-park-slide-step1-\(seed)", size: SIMD3<Float>(0.8, 0.6, 0.8), position: SIMD3<Float>(slidePoint.x, groundY + 0.3, slidePoint.z), material: slideRed, orientation: yaw, censusTexture: "scenery_steel")
+        _ = addBox(parent: world, name: "b57-park-slide-step2-\(seed)", size: SIMD3<Float>(0.8, 1.2, 0.8), position: SIMD3<Float>(slidePoint.x, groundY + 0.6, slidePoint.z), material: slideRed, orientation: yaw, censusTexture: "scenery_steel")
+        let chuteOrientation = yaw * simd_quatf(angle: 0.45, axis: SIMD3<Float>(1, 0, 0))
+        let chutePoint = groundOffsetPoint(self.sample(at: distance - 4.8), lateral: lat)
+        _ = addBox(parent: world, name: "b57-park-slide-chute-\(seed)", size: SIMD3<Float>(0.5, 0.12, 2.6), position: SIMD3<Float>(chutePoint.x, groundY + 0.95, chutePoint.z), material: slideRed, orientation: chuteOrientation, censusTexture: "scenery_steel")
+        // Swing: two posts, top bar, two seats on hangers.
+        for (pi, postAlong) in [-1.2, 1.2].enumerated() {
+            let postSample = self.sample(at: distance + 2 + postAlong)
+            let postPoint = groundOffsetPoint(postSample, lateral: lat - 4)
+            _ = addBox(parent: world, name: "b57-park-swing-post-\(seed)-\(pi)", size: SIMD3<Float>(0.1, 2.4, 0.1), position: SIMD3<Float>(postPoint.x, groundY + 1.2, postPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+        }
+        let swingTopPoint = groundOffsetPoint(self.sample(at: distance + 2), lateral: lat - 4)
+        _ = addBox(parent: world, name: "b57-park-swing-bar-\(seed)", size: SIMD3<Float>(0.1, 0.1, 2.6), position: SIMD3<Float>(swingTopPoint.x, groundY + 2.4, swingTopPoint.z), material: poleMaterial, orientation: yaw, censusTexture: "scenery_steel")
+        for seat in 0..<2 {
+            let seatSample = self.sample(at: distance + 2 + Double(seat) * 0.9 - 0.45)
+            let seatPoint = groundOffsetPoint(seatSample, lateral: lat - 4)
+            _ = addBox(parent: world, name: "b57-park-swing-seat-\(seed)-\(seat)", size: SIMD3<Float>(0.45, 0.05, 0.4), position: SIMD3<Float>(seatPoint.x, groundY + 0.9, seatPoint.z), material: swingBlue, orientation: yaw, censusTexture: "scenery_steel")
+            _ = addBox(parent: world, name: "b57-park-swing-hanger-\(seed)-\(seat)", size: SIMD3<Float>(0.03, 0.9, 0.03), position: SIMD3<Float>(seatPoint.x, groundY + 1.45, seatPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+        }
+        // Sandbox: sand panel on a low border slab.
+        let sandPoint = groundOffsetPoint(self.sample(at: distance + 6), lateral: lat + 3)
+        _ = addBox(parent: world, name: "b57-park-sandbox-border-\(seed)", size: SIMD3<Float>(3.3, 0.2, 3.3), position: SIMD3<Float>(sandPoint.x, groundY + 0.1, sandPoint.z), material: concreteMaterial, orientation: yaw, censusTexture: "scenery_concrete")
+        _ = addBox(parent: world, name: "b57-park-sandbox-sand-\(seed)", size: SIMD3<Float>(3.0, 0.08, 3.0), position: SIMD3<Float>(sandPoint.x, groundY + 0.24, sandPoint.z), material: sandMat, orientation: yaw)
+        // Jungle gym: four corner posts, two top bars, one mid bar.
+        for (pi, gymAlong) in [-1.0, 1.0].enumerated() {
+            for (pj, gymLat) in [-1.0, 1.0].enumerated() {
+                let gymSample = self.sample(at: distance - 2 + gymAlong)
+                let gymPoint = groundOffsetPoint(gymSample, lateral: lat + 5 + Float(gymLat))
+                _ = addBox(parent: world, name: "b57-park-gym-post-\(seed)-\(pi)-\(pj)", size: SIMD3<Float>(0.08, 1.8, 0.08), position: SIMD3<Float>(gymPoint.x, groundY + 0.9, gymPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+            }
+        }
+        let gymTopPoint = groundOffsetPoint(self.sample(at: distance - 2), lateral: lat + 5)
+        _ = addBox(parent: world, name: "b57-park-gym-top1-\(seed)", size: SIMD3<Float>(0.08, 0.08, 2.0), position: SIMD3<Float>(gymTopPoint.x, groundY + 1.8, gymTopPoint.z), material: poleMaterial, orientation: yaw, censusTexture: "scenery_steel")
+        _ = addBox(parent: world, name: "b57-park-gym-top2-\(seed)", size: SIMD3<Float>(2.0, 0.08, 0.08), position: SIMD3<Float>(gymTopPoint.x, groundY + 1.8, gymTopPoint.z), material: poleMaterial, orientation: yaw, censusTexture: "scenery_steel")
+        // Bench and sign board.
+        let benchPoint = groundOffsetPoint(self.sample(at: distance + 7), lateral: lat - 3)
+        _ = addBox(parent: world, name: "b57-park-bench-\(seed)", size: SIMD3<Float>(1.8, 0.08, 0.5), position: SIMD3<Float>(benchPoint.x, groundY + 0.5, benchPoint.z), material: roofMaterials[0], orientation: yaw, censusTexture: "scenery_steel")
+        for (li, legAlong) in [-0.7, 0.7].enumerated() {
+            let legSample = self.sample(at: distance + 7 + legAlong)
+            let legPoint = groundOffsetPoint(legSample, lateral: lat - 3)
+            _ = addBox(parent: world, name: "b57-park-benchleg-\(seed)-\(li)", size: SIMD3<Float>(0.08, 0.45, 0.08), position: SIMD3<Float>(legPoint.x, groundY + 0.25, legPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+        }
+        let signPoint = groundOffsetPoint(self.sample(at: distance - 9), lateral: lat - 6)
+        _ = addBox(parent: world, name: "b57-park-signpost-\(seed)", size: SIMD3<Float>(0.05, 1.2, 0.05), position: SIMD3<Float>(signPoint.x, groundY + 0.6, signPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+        _ = addBox(parent: world, name: "b57-park-sign-\(seed)", size: SIMD3<Float>(0.4, 0.5, 0.04), position: SIMD3<Float>(signPoint.x, groundY + 1.35, signPoint.z), material: swingBlue, orientation: yaw, censusTexture: "scenery_steel")
+        for (ti, treeAlong) in [-8.0, 8.0].enumerated() {
+            let treeSample = self.sample(at: distance + treeAlong)
+            let treePoint = groundOffsetPoint(treeSample, lateral: lat + 6)
+            addTree(parent: world, name: "b57-park-tree-\(seed)-\(ti)", x: treePoint.x, z: treePoint.z, height: 3.5, material: foliageMaterials[ti % foliageMaterials.count], groundY: treePoint.y, censusTexture: "scenery_foliage")
+        }
+    }
+
+    /// batch57 N6: a gas station — canopy on four posts with a
+    /// red fascia, three pump islands, a tall price sign, a shop
+    /// in the shop facade and a car-wash hut, on an asphalt pad.
+    private func buildGasStationSite(at distance: Double, side: Float, seed: Int, houses: [SIMD3<Float>]) {
+        let s = sample(at: distance)
+        let groundY = groundLevelM(at: s)
+        let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+        let lat = side * (22 + Float(stableIndex("b57gs-lat-\(seed)", count: 10)))
+        let centrePoint = groundOffsetPoint(s, lateral: lat)
+        if houseNear(centrePoint, radius: 16, houses: houses) { return }
+        if !buildingClearOfPlatforms(chainage: distance, halfLength: 16, lateral: lat, halfDepth: 13) { return }
+        if !buildingClearOfFans(chainage: distance, halfLength: 16, lateral: lat, halfDepth: 13) { return }
+        // batch58: steel photo texture under the canopy /
+        // fascia / pump tints — was flat colour.
+        let canopyWhite = Self.texturedPBR(UIColor(red: 0.94, green: 0.94, blue: 0.92, alpha: 1), roughness: 0.6, textureName: "scenery_steel")
+        let canopyRed = Self.texturedPBR(UIColor(red: 0.80, green: 0.15, blue: 0.12, alpha: 1), roughness: 0.6, textureName: "scenery_steel")
+        let pumpMat = Self.texturedPBR(UIColor(red: 0.90, green: 0.90, blue: 0.88, alpha: 1), metallic: 0.2, roughness: 0.5, textureName: "scenery_steel")
+        _ = addBox(parent: world, name: "b57-gs-pad-\(seed)", size: SIMD3<Float>(25.0, 0.07, 30.0), position: SIMD3<Float>(centrePoint.x, groundY + 0.04, centrePoint.z), material: roadMaterial, orientation: yaw, censusTexture: "scenery_asphalt")
+        for (pi, postAlong) in [-5.0, 5.0].enumerated() {
+            for (pj, postLat) in [-3.5, 3.5].enumerated() {
+                let postSample = self.sample(at: distance - 5 + postAlong)
+                let postPoint = groundOffsetPoint(postSample, lateral: lat + Float(postLat))
+                _ = addBox(parent: world, name: "b57-gs-canopy-post-\(seed)-\(pi)-\(pj)", size: SIMD3<Float>(0.3, 5.5, 0.3), position: SIMD3<Float>(postPoint.x, groundY + 2.75, postPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+            }
+        }
+        let canopyPoint = groundOffsetPoint(self.sample(at: distance - 5), lateral: lat)
+        _ = addBox(parent: world, name: "b57-gs-canopy-\(seed)", size: SIMD3<Float>(8.0, 0.4, 12.0), position: SIMD3<Float>(canopyPoint.x, groundY + 5.7, canopyPoint.z), material: canopyWhite, orientation: yaw, censusTexture: "scenery_steel")
+        _ = addBox(parent: world, name: "b57-gs-canopy-band-\(seed)", size: SIMD3<Float>(0.3, 0.3, 12.2), position: SIMD3<Float>(canopyPoint.x, groundY + 5.5, canopyPoint.z), material: canopyRed, orientation: yaw, censusTexture: "scenery_steel")
+        for pump in 0..<3 {
+            let pumpSample = self.sample(at: distance - 8 + Double(pump) * 3)
+            let pumpPoint = groundOffsetPoint(pumpSample, lateral: lat)
+            _ = addBox(parent: world, name: "b57-gs-island-\(seed)-\(pump)", size: SIMD3<Float>(0.9, 0.15, 1.4), position: SIMD3<Float>(pumpPoint.x, groundY + 0.08, pumpPoint.z), material: concreteMaterial, orientation: yaw, censusTexture: "scenery_concrete")
+            _ = addBox(parent: world, name: "b57-gs-pump-\(seed)-\(pump)", size: SIMD3<Float>(0.45, 1.25, 0.55), position: SIMD3<Float>(pumpPoint.x, groundY + 0.78, pumpPoint.z), material: pumpMat, orientation: yaw, censusTexture: "scenery_steel")
+            _ = addBox(parent: world, name: "b57-gs-hose-\(seed)-\(pump)", size: SIMD3<Float>(0.05, 0.8, 0.05), position: SIMD3<Float>(pumpPoint.x, groundY + 0.6, pumpPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+        }
+        let signPoint = groundOffsetPoint(self.sample(at: distance + 10), lateral: lat - 10)
+        _ = addBox(parent: world, name: "b57-gs-signpole-\(seed)", size: SIMD3<Float>(0.25, 8.0, 0.25), position: SIMD3<Float>(signPoint.x, groundY + 4.0, signPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+        _ = addBox(parent: world, name: "b57-gs-signboard-\(seed)", size: SIMD3<Float>(0.2, 2.6, 1.4), position: SIMD3<Float>(signPoint.x, groundY + 6.8, signPoint.z), material: canopyRed, orientation: yaw, censusTexture: "scenery_steel")
+        _ = addBox(parent: world, name: "b57-gs-signface-\(seed)", size: SIMD3<Float>(0.05, 1.0, 1.2), position: SIMD3<Float>(signPoint.x, groundY + 6.8, signPoint.z), material: canopyWhite, orientation: yaw, censusTexture: "scenery_steel")
+        let shopPoint = groundOffsetPoint(self.sample(at: distance + 8), lateral: lat + 6)
+        _ = addBox(parent: world, name: "b57-gs-shop-\(seed)", size: SIMD3<Float>(5.0, 3.6, 6.0), position: SIMD3<Float>(shopPoint.x, groundY + 1.8, shopPoint.z), material: shopFacadeMaterial, orientation: yaw, censusTexture: "scenery_shop_facade")
+        _ = addBox(parent: world, name: "b57-gs-shoproof-\(seed)", size: SIMD3<Float>(5.5, 0.25, 6.5), position: SIMD3<Float>(shopPoint.x, groundY + 3.7, shopPoint.z), material: roofMaterials[0], orientation: yaw, censusTexture: "scenery_steel")
+        let washPoint = groundOffsetPoint(self.sample(at: distance + 12), lateral: lat - 4)
+        _ = addBox(parent: world, name: "b57-gs-wash-\(seed)", size: SIMD3<Float>(3.0, 3.0, 4.0), position: SIMD3<Float>(washPoint.x, groundY + 1.5, washPoint.z), material: concreteMaterial, orientation: yaw, censusTexture: "scenery_concrete")
+        _ = addBox(parent: world, name: "b57-gs-washroof-\(seed)", size: SIMD3<Float>(3.5, 0.22, 4.5), position: SIMD3<Float>(washPoint.x, groundY + 3.1, washPoint.z), material: roofMaterials[2], orientation: yaw, censusTexture: "scenery_steel")
+        for (ci, carAlong) in [-9.0, -1.0].enumerated() {
+            let carSample = self.sample(at: distance + carAlong)
+            let carPoint = groundOffsetPoint(carSample, lateral: lat + 3)
+            addParkedCar(name: "b57-gs-car-\(seed)-\(ci)", center: carPoint, groundY: groundY + 0.07, yaw: -carSample.heading + Float.pi / 2, seed: seed * 5 + ci)
+        }
+    }
+
+    /// batch57 N21: a golf driving range — a row of tall net
+    /// poles, a long low driving-range building and parked cars.
+    private func buildGolfRangeSite(at distance: Double, side: Float, seed: Int, houses: [SIMD3<Float>]) {
+        let s = sample(at: distance)
+        let groundY = groundLevelM(at: s)
+        let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+        let lat = side * (30 + Float(stableIndex("b57golf-lat-\(seed)", count: 14)))
+        let centrePoint = groundOffsetPoint(s, lateral: lat)
+        if houseNear(centrePoint, radius: 18, houses: houses) { return }
+        if !buildingClearOfPlatforms(chainage: distance, halfLength: 55, lateral: lat, halfDepth: 20) { return }
+        if !buildingClearOfFans(chainage: distance, halfLength: 55, lateral: lat, halfDepth: 20) { return }
+        for pole in 0..<10 {
+            let poleSample = self.sample(at: distance - 54 + Double(pole) * 12)
+            let polePoint = groundOffsetPoint(poleSample, lateral: lat)
+            _ = addBox(parent: world, name: "b57-golf-netpole-\(seed)-\(pole)", size: SIMD3<Float>(0.3, 18.0, 0.3), position: SIMD3<Float>(polePoint.x, groundY + 9.0, polePoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+        }
+        let buildingPoint = groundOffsetPoint(self.sample(at: distance), lateral: lat + 12)
+        _ = addBox(parent: world, name: "b57-golf-building-\(seed)", size: SIMD3<Float>(7.0, 4.5, 30.0), position: SIMD3<Float>(buildingPoint.x, groundY + 2.25, buildingPoint.z), material: officeMaterials[0], orientation: yaw)
+        _ = addBox(parent: world, name: "b57-golf-roof-\(seed)", size: SIMD3<Float>(7.5, 0.3, 30.5), position: SIMD3<Float>(buildingPoint.x, groundY + 4.6, buildingPoint.z), material: roofMaterials[1], orientation: yaw, censusTexture: "scenery_steel")
+        for (ci, carAlong) in [-10.0, 10.0].enumerated() {
+            let carSample = self.sample(at: distance + carAlong)
+            let carPoint = groundOffsetPoint(carSample, lateral: lat + 6)
+            addParkedCar(name: "b57-golf-car-\(seed)-\(ci)", center: carPoint, groundY: groundY + 0.07, yaw: -carSample.heading + Float.pi / 2, seed: seed * 3 + ci)
+        }
+    }
+
+    /// batch57 N15: an orchard — a 4x4 grid of low fruit trees
+    /// on a soil panel. Trees ride addTree (its crown meshes
+    /// are cached per class), and the line-wide budget caps the
+    /// total so the foliage budget is never blown.
+    private func buildOrchardSite(at distance: Double, side: Float, seed: Int, houses: [SIMD3<Float>], budget: Int) -> Int {
+        guard budget > 0 else { return 0 }
+        let s = sample(at: distance)
+        let groundY = groundLevelM(at: s)
+        let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+        let lat = side * (24 + Float(stableIndex("b57orchard-lat-\(seed)", count: 12)))
+        let centrePoint = groundOffsetPoint(s, lateral: lat)
+        if houseNear(centrePoint, radius: 12, houses: houses) { return 0 }
+        if !buildingClearOfPlatforms(chainage: distance, halfLength: 11, lateral: lat, halfDepth: 11) { return 0 }
+        if !buildingClearOfFans(chainage: distance, halfLength: 11, lateral: lat, halfDepth: 11) { return 0 }
+        // batch58: grass photo texture under the soil tint.
+        let soilMat = Self.texturedPBR(UIColor(red: 0.42, green: 0.33, blue: 0.24, alpha: 1), roughness: 1.0, textureName: "scenery_grass")
+        _ = addBox(parent: world, name: "b57-orchard-soil-\(seed)", size: SIMD3<Float>(20.0, 0.07, 20.0), position: SIMD3<Float>(centrePoint.x, groundY + 0.04, centrePoint.z), material: soilMat, orientation: yaw, censusTexture: "scenery_grass")
+        var planted = 0
+        for row in 0..<4 {
+            for col in 0..<4 {
+                if planted >= budget { break }
+                let treeSample = self.sample(at: distance - 7.5 + Double(row) * 5)
+                let treePoint = groundOffsetPoint(treeSample, lateral: lat - 7.5 + Float(col) * 5)
+                addTree(parent: world, name: "b57-orchard-tree-\(seed)-\(row)-\(col)", x: treePoint.x, z: treePoint.z, height: 2.5 + Float((row + col) % 3) * 0.5, material: foliageMaterials[(row + col) % foliageMaterials.count], groundY: treePoint.y, censusTexture: "scenery_foliage")
+                planted += 1
+            }
+            if planted >= budget { break }
+        }
+        return planted
+    }
+
+    /// batch57 N23: wind turbines on the coastal hills — a
+    /// tapered two-stage tower, a nacelle and three blades.
+    /// One or two per coastal segment, on the inland side.
+    /// batch92: the tower and nacelle stay in the static
+    /// batch, but the rotor (hub cap + blades) is now a
+    /// separate entity per turbine, registered in windRotors
+    /// and turned slowly by updateWindRotors — batch57 had
+    /// baked the blades into the batch ("rotation is out of
+    /// scope"), so the turbines stood frozen.
+    private func buildWindTurbineSites(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        // batch58: steel photo texture under the turbine white.
+        let whiteMat = Self.texturedPBR(UIColor(red: 0.94, green: 0.94, blue: 0.92, alpha: 1), roughness: 0.55, textureName: "scenery_steel")
+        var batch = MeshBatchBuilder()
+        var batchIndex = 0
+        var turbineIndex = 0
+        var d = 53_500.0
+        while d < min(route.distanceM - 500, 60_000) {
+            defer { d += 800; turbineIndex += 1 }
+            guard isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) else { continue }
+            if inStationZone(d, extraMargin: 100) || nearCrossing(d, margin: 40) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if stableIndex("b57wind-\(turbineIndex)", count: 3) == 2 { continue }
+            let seaSign = seaSideSign(travelDirection: travelDirection)
+            let s = sample(at: d)
+            let lateral = -seaSign * (45 + Float(stableIndex("b57wind-lat-\(turbineIndex)", count: 25)))
+            let base = groundOffsetPoint(s, lateral: lateral)
+            let lift = s.elevationM - base.y
+            if lift < -1 || lift > 12 { continue }
+            let hub = SIMD3<Float>(base.x, base.y + 32, base.z)
+            batch.addPrism(baseCenter: base, radius: 1.5, height: 18, yaw: s.heading)
+            batch.addPrism(baseCenter: SIMD3<Float>(base.x, base.y + 18, base.z), radius: 1.0, height: 14, yaw: s.heading)
+            let hubAxis = simd_normalize(routeOffsetPoint(s, lateral: 1) - routeOffsetPoint(s, lateral: 0))
+            let alongTrack = SIMD3<Float>(-hubAxis.z, 0, hubAxis.x)
+            let nacelleCentre = hub + hubAxis * 1.2
+            batch.addBox(center: nacelleCentre, size: SIMD3<Float>(2.4, 1.6, 3.4), yaw: -s.heading)
+            // batch92: rotor as a dynamic entity (see the
+            // doc comment above). Children are placed in the
+            // hub's own frame — the rotor root sits at the
+            // hub with identity orientation, so the blade
+            // centres are the old world centres minus hub —
+            // and updateWindRotors spins the root about
+            // hubAxis. The baked per-turbine phase stays as
+            // the children's build-time angles.
+            let phase = Float(stableIndex("b57wind-phase-\(turbineIndex)", count: 6)) * Float.pi / 3
+            let rotor = Entity()
+            rotor.name = "b57-wind-rotor-\(turbineIndex)"
+            rotor.position = hub
+            let cap = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.85), materials: [whiteMat])
+            cap.name = "b57-wind-rotorcap-\(turbineIndex)"
+            cap.position = hubAxis * 1.6
+            rotor.addChild(cap)
+            for blade in 0..<3 {
+                let theta = phase + Float(blade) * 2 * Float.pi / 3
+                let bladeDir = SIMD3<Float>(alongTrack.x * sin(theta), cos(theta), alongTrack.z * sin(theta))
+                let bladeAx = simd_normalize(simd_cross(bladeDir, hubAxis))
+                let bladeEntity = ModelEntity(mesh: MeshResource.generateBox(size: SIMD3<Float>(0.5, 12, 0.12)), materials: [whiteMat])
+                bladeEntity.name = "b57-wind-blade-\(turbineIndex)-\(blade)"
+                bladeEntity.position = hubAxis * 1.6 + bladeDir * 6
+                bladeEntity.orientation = simd_quatf(simd_float3x3(columns: (bladeAx, bladeDir, hubAxis)))
+                rotor.addChild(bladeEntity)
+            }
+            world.addChild(rotor)
+            windRotors.append(WindRotor(entity: rotor, axis: hubAxis, speed: 0.45 + Float(turbineIndex % 4) * 0.1))
+            if turbineIndex % 8 == 7 {
+                if let mesh = batch.build(name: "b57-wind-\(batchIndex)", material: whiteMat, censusTexture: "scenery_steel") { world.addChild(mesh) }
+                batch = MeshBatchBuilder()
+                batchIndex += 1
+            }
+        }
+        if let mesh = batch.build(name: "b57-wind-\(batchIndex)", material: whiteMat, censusTexture: "scenery_steel") { world.addChild(mesh) }
+    }
+
+    /// batch57 N24 (beach house only — the lifeguard tower
+    /// already exists in buildRoadsideLife): a beach hut with a
+    /// tarp roof, flag poles and a shower post, on the sand at
+    /// the coastal run's own datum (the roadside-life lesson:
+    /// groundLevelM() floats metres above the sand here).
+    private func buildBeachHouseSites(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        var coastalRunDatums: [(start: Double, end: Double, datum: Double)] = []
+        var coastalRunStart: Double? = nil
+        var coastalRunMin = Double.greatestFiniteMagnitude
+        for sample in samples {
+            if isCoastal(distanceM: sample.distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
+                if coastalRunStart == nil { coastalRunStart = sample.distanceM }
+                coastalRunMin = min(coastalRunMin, Double(sample.elevationM))
+            } else if let rs = coastalRunStart {
+                coastalRunDatums.append((start: rs, end: sample.distanceM, datum: coastalRunMin))
+                coastalRunStart = nil
+                coastalRunMin = Double.greatestFiniteMagnitude
+            }
+        }
+        if let rs = coastalRunStart {
+            coastalRunDatums.append((start: rs, end: route.distanceM, datum: coastalRunMin))
+        }
+        func coastalDatum(at d: Double) -> Double? {
+            coastalRunDatums.first { d >= $0.start && d <= $0.end }?.datum
+        }
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        // batch58: the tarp roof and flags reference the
+        // planned fabric texture (scenery_beach_tarp — not yet
+        // in the bundle; tint fallback until it lands); the
+        // hut walls take the timber photo texture.
+        let tarpMat = Self.texturedPBR(UIColor(red: 0.30, green: 0.60, blue: 0.85, alpha: 1), roughness: 0.7, textureName: "scenery_beach_tarp")
+        let flagMats = [
+            Self.texturedPBR(UIColor(red: 0.90, green: 0.45, blue: 0.10, alpha: 1), roughness: 0.7, textureName: "scenery_beach_tarp"),
+            Self.texturedPBR(UIColor(red: 0.15, green: 0.45, blue: 0.85, alpha: 1), roughness: 0.7, textureName: "scenery_beach_tarp")
+        ]
+        let hutMat = Self.texturedPBR(.white, roughness: 0.8, textureName: "scenery_timber")
+        var houseIndex = 0
+        var d = 38_800.0
+        while d < min(route.distanceM - 800, 60_000) {
+            defer { d += 1_200; houseIndex += 1 }
+            guard isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) else { continue }
+            guard let datum = coastalDatum(at: d) else { continue }
+            if inStationZone(d, extraMargin: 100) || nearThroatFan(d) { continue }
+            if stableIndex("b57beach-\(houseIndex)", count: 2) != 0 { continue }
+            let s = sample(at: d)
+            let lateral = seaSign * (26 + Float(stableIndex("b57beach-lat-\(houseIndex)", count: 4)))
+            let gy = Float(datum) - 0.03
+            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+            let base = groundOffsetPoint(s, lateral: lateral)
+            _ = addBox(parent: world, name: "b57-beachhut-\(houseIndex)", size: SIMD3<Float>(4.0, 2.8, 3.0), position: SIMD3<Float>(base.x, gy + 1.4, base.z), material: hutMat, orientation: yaw, censusTexture: "scenery_timber")
+            _ = addBox(parent: world, name: "b57-beachhut-roof-\(houseIndex)", size: SIMD3<Float>(5.0, 0.12, 4.0), position: SIMD3<Float>(base.x, gy + 2.9, base.z), material: tarpMat, orientation: yaw)
+            for (fi, flagAlong) in [-1.6, 1.6].enumerated() {
+                let flagSample = self.sample(at: d + flagAlong)
+                let flagPoint = groundOffsetPoint(flagSample, lateral: lateral + 2.2)
+                _ = addBox(parent: world, name: "b57-beachflag-pole-\(houseIndex)-\(fi)", size: SIMD3<Float>(0.06, 3.0, 0.06), position: SIMD3<Float>(flagPoint.x, gy + 1.5, flagPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+                _ = addBox(parent: world, name: "b57-beachflag-\(houseIndex)-\(fi)", size: SIMD3<Float>(0.5, 0.35, 0.03), position: SIMD3<Float>(flagPoint.x, gy + 2.8, flagPoint.z), material: flagMats[fi % flagMats.count], orientation: yaw)
+            }
+            let showerPoint = groundOffsetPoint(self.sample(at: d + 2.5), lateral: lateral + 2.2)
+            _ = addBox(parent: world, name: "b57-beachshower-\(houseIndex)", size: SIMD3<Float>(0.15, 2.2, 0.15), position: SIMD3<Float>(showerPoint.x, gy + 1.1, showerPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
         }
     }
 
@@ -2468,7 +7285,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// field edges. Sites are seeded every ~210 m wherever the
     /// urban band is 0, away from stations and off the beach.
     private func buildRuralDressing(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
-        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        // batch99: the branch shuttle joins — it was the one
+        // rural line with NO field patchwork at all, so its
+        // whole 8 km read as bare far-ground sheet between the
+        // suburb builder's trackside houses and the 300 m
+        // forest board. Every gate inside is branch-safe:
+        // urbanBand / isCoastal are mainline-section functions
+        // (always 0 / false on the branch), and the
+        // station-distance rules read stationModelPlacements,
+        // which carries B01-B04 and the S28 junction whenever
+        // the branch is the active route.
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
         let fieldMats = [
             Self.pbr(UIColor(red: 0.36, green: 0.52, blue: 0.30, alpha: 1), roughness: 1.0),   // paddy green
             Self.pbr(UIColor(red: 0.46, green: 0.60, blue: 0.28, alpha: 1), roughness: 1.0),   // young crop
@@ -2478,12 +7305,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         ]
         let hedgeMat = foliageMaterials[0]
         let greenhouseMat = Self.pbr(UIColor(red: 0.88, green: 0.92, blue: 0.90, alpha: 1), metallic: 0.05, roughness: 0.35)
+        // batch16: solar-panel fields join the rural patchwork.
+        let solarMat = Self.pbr(UIColor(red: 0.10, green: 0.16, blue: 0.30, alpha: 1), metallic: 0.55, roughness: 0.35)
         var siteIndex = 0
         var d = 900.0
         while d < route.distanceM - 900 {
             let hash = stableIndex("rural-\(siteIndex)", count: 1_000)
             defer { siteIndex += 1 }
-            let step = 195 + Double(hash % 90)
+            // batch16: sites every ~140-200 m instead of
+            // ~195-285 m — the gaps between sites were the
+            // emptiest part of the inter-station run.
+            let step = 140 + Double(hash % 60)
             // 2026-11-11 evening: the station exclusion shrinks
             // from 430 m to 300 m (buildStationFronts now owns the
             // inner band); in the 300-430 m ring only the flat
@@ -2508,7 +7340,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         _ = addBox(parent: world, name: "rural-field-\(siteIndex)-\(Int(side))-\(q)",
                                    size: SIMD3<Float>(25, 0.07, 58 + Float((hash / (q + 2)) % 26)),
                                    position: SIMD3<Float>(p.x, groundY + 0.035, p.z),
-                                   material: fieldMats[(hash / (q + 1)) % fieldMats.count], orientation: yaw)
+                                   material: fieldMats[(hash + siteIndex * 3 + q * 2 + (side > 0 ? 0 : 1)) % fieldMats.count], orientation: yaw)
                     }
                     // Hedgerow along the field's track-side edge.
                     let hp = groundOffsetPoint(s, lateral: side * 12.6)
@@ -2516,13 +7348,45 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                size: SIMD3<Float>(1.15, 0.95, 74),
                                position: SIMD3<Float>(hp.x, groundY + 0.48, hp.z),
                                material: hedgeMat, orientation: yaw)
-                    // Greenhouse on some sites.
-                    if hash % 4 == 1, nearestStationD >= 430 {
-                        let gp2 = groundOffsetPoint(sample(at: d + 22), lateral: baseLat + side * 6)
-                        _ = addBox(parent: world, name: "rural-greenhouse-\(siteIndex)-\(Int(side))",
-                                   size: SIMD3<Float>(9, 2.9, 17),
-                                   position: SIMD3<Float>(gp2.x, groundY + 1.45, gp2.z),
-                                   material: greenhouseMat, orientation: yaw)
+                    // batch28 (2026-11-13): an irrigation channel
+                    // between the hedgerow and the fields — the
+                    // patchwork floated on bare ground before,
+                    // with no water anywhere in the farmland.
+                    // Skipped near crossings, where the channel
+                    // would cut across the road.
+                    if !crossingCenters.contains(where: { abs($0 - d) < 45 }) {
+                        let cp = groundOffsetPoint(s, lateral: side * 14.1)
+                        _ = addBox(parent: world, name: "rural-channel-\(siteIndex)-\(Int(side))",
+                                   size: SIMD3<Float>(1.1, 0.05, 74),
+                                   position: SIMD3<Float>(cp.x, groundY + 0.025, cp.z),
+                                   material: Self.pbr(UIColor(red: 0.25, green: 0.38, blue: 0.45, alpha: 1), metallic: 0.1, roughness: 0.15), orientation: yaw)
+                    }
+                    // Greenhouses on some sites — batch16: in
+                    // pairs along the field, the way they actually
+                    // line up in the Chiba countryside.
+                    if hash % 3 == 1, nearestStationD >= 430 {
+                        for g in 0..<2 {
+                            let gp2 = groundOffsetPoint(sample(at: d + 22 + Double(g) * 19), lateral: baseLat + side * 6)
+                            _ = addBox(parent: world, name: "rural-greenhouse-\(siteIndex)-\(Int(side))-\(g)",
+                                       size: SIMD3<Float>(9, 2.9, 17),
+                                       position: SIMD3<Float>(gp2.x, groundY + 1.45, gp2.z),
+                                       material: greenhouseMat, orientation: yaw)
+                        }
+                    }
+                    // Solar panel field on some sites (batch16):
+                    // three rows of panels on low frames.
+                    if hash % 6 == 4, nearestStationD >= 430 {
+                        for row in 0..<3 {
+                            let pp = groundOffsetPoint(sample(at: d + Double(row) * 7 - 7), lateral: baseLat + side * 10)
+                            _ = addBox(parent: world, name: "rural-solar-\(siteIndex)-\(Int(side))-\(row)",
+                                       size: SIMD3<Float>(16, 0.18, 5.6),
+                                       position: SIMD3<Float>(pp.x, groundY + 1.05, pp.z),
+                                       material: solarMat, orientation: yaw)
+                            _ = addBox(parent: world, name: "rural-solar-leg-\(siteIndex)-\(Int(side))-\(row)",
+                                       size: SIMD3<Float>(15, 0.9, 0.3),
+                                       position: SIMD3<Float>(pp.x, groundY + 0.5, pp.z),
+                                       material: poleMaterial, orientation: yaw)
+                        }
                     }
                     // Farmhouse + shed on some sites.
                     if hash % 5 == 2, nearestStationD >= 430 {
@@ -2532,6 +7396,47 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                    size: SIMD3<Float>(4.6, 2.6, 6.4),
                                    position: SIMD3<Float>(sp.x, groundY + 1.3, sp.z),
                                    material: roofMaterials[abs(hash) % roofMaterials.count], orientation: yaw)
+                        // batch16: the farm's kei truck (photo
+                        // cutout) parked by the shed.
+                        let tp = groundOffsetPoint(sample(at: d + 10), lateral: side * 20)
+                        addParkedCar(name: "rural-kei-\(siteIndex)-\(Int(side))", center: tp, groundY: groundY, yaw: -s.heading + Float.pi / 2, seed: siteIndex * 7 + 6)
+                        // batch57 N19: the farm's tractor and a
+                        // materials stack beside the shed — the
+                        // farmyard reads worked, not just housed.
+                        if stableIndex("b57tractor-\(siteIndex)-\(Int(side))", count: 10) < 7 {
+                            let trSample = self.sample(at: d + 14)
+                            let trPoint = groundOffsetPoint(trSample, lateral: side * 30)
+                            let trYaw = simd_quatf(angle: -trSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                            // batch58: steel photo texture under
+                            // the tractor paint / dark tints.
+                            let tractorRed = Self.texturedPBR(UIColor(red: 0.72, green: 0.16, blue: 0.12, alpha: 1), roughness: 0.6, textureName: "scenery_steel")
+                            let tractorDark = Self.texturedPBR(UIColor(red: 0.14, green: 0.14, blue: 0.15, alpha: 1), roughness: 0.7, textureName: "scenery_steel")
+                            _ = addBox(parent: world, name: "rural-tractor-body-\(siteIndex)-\(Int(side))", size: SIMD3<Float>(1.7, 0.9, 3.4), position: SIMD3<Float>(trPoint.x, groundY + 0.75, trPoint.z), material: tractorRed, orientation: trYaw, censusTexture: "scenery_steel")
+                            _ = addBox(parent: world, name: "rural-tractor-cab-\(siteIndex)-\(Int(side))", size: SIMD3<Float>(1.5, 1.0, 1.3), position: SIMD3<Float>(trPoint.x, groundY + 1.65, trPoint.z), material: tractorDark, orientation: trYaw, censusTexture: "scenery_steel")
+                            for wheel in 0..<4 {
+                                let wx: Float = wheel % 2 == 0 ? -0.85 : 0.85
+                                let wz: Double = wheel < 2 ? -1.1 : 1.1
+                                let wheelSample = self.sample(at: d + 14 + wz)
+                                let wheelPoint = groundOffsetPoint(wheelSample, lateral: side * 30 + wx)
+                                _ = addBox(parent: world, name: "rural-tractor-wheel-\(siteIndex)-\(Int(side))-\(wheel)", size: SIMD3<Float>(0.28, 0.7, 0.7), position: SIMD3<Float>(wheelPoint.x, groundY + 0.35, wheelPoint.z), material: tractorDark, censusTexture: "scenery_steel")
+                            }
+                            let matSample = self.sample(at: d + 20)
+                            let matPoint = groundOffsetPoint(matSample, lateral: side * 27)
+                            // batch58: the pallet is wood — timber
+                            // texture (was a steel-textured roof
+                            // material); the drums are painted
+                            // steel under their tints.
+                            _ = addBox(parent: world, name: "rural-farm-pallet-\(siteIndex)-\(Int(side))", size: SIMD3<Float>(1.2, 0.15, 1.2), position: SIMD3<Float>(matPoint.x, groundY + 0.08, matPoint.z), material: Self.texturedPBR(UIColor(red: 0.55, green: 0.44, blue: 0.32, alpha: 1), roughness: 0.95, textureName: "scenery_timber"), orientation: trYaw, censusTexture: "scenery_timber")
+                            let drumMats = [
+                                Self.texturedPBR(UIColor(red: 0.20, green: 0.35, blue: 0.55, alpha: 1), roughness: 0.6, textureName: "scenery_steel"),
+                                Self.texturedPBR(UIColor(red: 0.45, green: 0.45, blue: 0.42, alpha: 1), metallic: 0.4, roughness: 0.55, textureName: "scenery_steel")
+                            ]
+                            for drum in 0..<3 {
+                                let drumSample = self.sample(at: d + 20 + Double(drum) * 0.7)
+                                let drumPoint = groundOffsetPoint(drumSample, lateral: side * 27)
+                                _ = addBox(parent: world, name: "rural-farm-drum-\(siteIndex)-\(Int(side))-\(drum)", size: SIMD3<Float>(0.6, 0.9, 0.6), position: SIMD3<Float>(drumPoint.x, groundY + 0.45, drumPoint.z), material: drumMats[drum % drumMats.count], censusTexture: "scenery_steel")
+                            }
+                        }
                     }
                 }
             }
@@ -2550,7 +7455,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// distance has a silhouette between the fields and the 680 m
     /// backdrop walls.
     private func buildTreeLinesAndHills(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
-        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        // batch99: the branch shuttle joins (same reasoning
+        // as buildRuralDressing above — the urban / coastal
+        // gates never fire on the branch, and the 300 m
+        // station skip reads the branch's own placements), so
+        // the branch gains the 14-29 m tree rows and the
+        // 165-245 m hill mounds its middle distance lacked.
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
         let hillMats = [foliageMaterials[1], foliageMaterials[2]]
         var planted = 0
         var siteIndex = 0
@@ -2558,7 +7469,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         while d < route.distanceM - 500 {
             let hash = stableIndex("treeline-\(siteIndex)", count: 1_000)
             siteIndex += 1
-            let step = 85 + Double(hash % 50)
+            // batch16: denser rows and a larger tree budget —
+            // the old cap let the far half of the line run dry.
+            let step = 75 + Double(hash % 45)
             defer { d += step }
             if urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) != 0 { continue }
             if stationModelPlacements.contains(where: { abs($0.chainageM - d) < 300 }) { continue }
@@ -2567,9 +7480,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 if coastal && side == seaSideSign(travelDirection: travelDirection) { continue }
                 if (hash + (side > 0 ? 0 : 311)) % 4 == 3 { continue }
                 // Tree row / clump in the 13-30 m band.
-                if planted < 760 {
+                if planted < 1150 {
                     let trees = 1 + (hash / 5) % 3
-                    for t in 0..<trees where planted < 760 {
+                    for t in 0..<trees where planted < 1150 {
                         let ts = sample(at: d + Double(t) * 6.5 + Double((hash / (t + 3)) % 5))
                         let tp = groundOffsetPoint(ts, lateral: side * (14 + Float((hash / (t + 2)) % 15)))
                         addTree(parent: world, name: "treeline-\(siteIndex)-\(Int(side))-\(t)", x: tp.x, z: tp.z,
@@ -2589,6 +7502,403 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     hill.orientation = simd_quatf(angle: -hs.heading, axis: SIMD3<Float>(0, 1, 0))
                     world.addChild(hill)
                 }
+            }
+        }
+    }
+
+    /// batch35 (2026-11-14, user: "オブジェクト種類増やして
+    /// なにもない更地がないように敷き詰めてね"): the line-fill
+    /// pass. Five families that were missing between the existing
+    /// set pieces, all sample-following and hash-deterministic:
+    /// guardrails on the coast road and on the traffic scenario's
+    /// parallel roads, signal/power cabinets along the formation,
+    /// shrub clusters in the rural/suburban gaps, and conifers in
+    /// the rural band. Everything is batched; the whole pass adds
+    /// only a few dozen top-level entities.
+    private func buildLineFill(route: RailwayRouteProfile, scenario: TrafficScenario?, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        buildParallelRoadGuardrails(route: route, scenario: scenario, routeVariant: routeVariant, travelDirection: travelDirection)
+        // batch99: the branch shuttle joins the three families
+        // below. Their exclusions are branch-safe: station /
+        // crossing / fan checks read this route's own data,
+        // and the mainline-centre chainage windows they also
+        // test (tunnels at 17.8k+, the depot at 27.4-28k, the
+        // trough gap at 41.4-44.4k) are values the branch's
+        // 0-8 km local axis never reaches, so they stay inert.
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
+        buildCoastRoadGuardrails(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildLinesideCabinets(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildShrubClusters(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildConifers(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+    }
+
+    /// Guardrails along the traffic scenario's parallel roads
+    /// (buildRoadTraffic lays the ribbons; this pass fences them).
+    /// Posts every ~17 m with two beam segments, following the
+    /// fence builder's construction. An edge is skipped when it
+    /// would stand inside the 12 m lineside clear zone.
+    private func buildParallelRoadGuardrails(route: RailwayRouteProfile, scenario: TrafficScenario?, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard let scenario else { return }
+        let landmarks = fictionalCorridorLandmarks(for: route)
+        let paths = Dictionary(scenario.routePaths.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let railMat = Self.pbr(UIColor(red: 0.72, green: 0.74, blue: 0.74, alpha: 1), metallic: 0.6, roughness: 0.45)
+        for road in scenario.roads {
+            guard let path = paths[road.routePathID] else { continue }
+            var coveredMin = Double.greatestFiniteMagnitude
+            var coveredMax = -Double.greatestFiniteMagnitude
+            var probe = 0.0
+            while probe <= path.lengthM {
+                if let chainage = projectedChainage(road.routePathID, positionM: probe, routeVariant: routeVariant, direction: travelDirection),
+                   chainage >= 0, chainage <= route.distanceM {
+                    coveredMin = min(coveredMin, chainage)
+                    coveredMax = max(coveredMax, chainage)
+                }
+                probe += 50
+            }
+            guard coveredMax > coveredMin else { continue }
+            let lateral = Float(road.lateralOffsetM)
+            // batch73: only the road's OUTER edge takes a
+            // guardrail now. The old loop tried both edges of
+            // the scenario lateral (+/-7 +/- 3.95 = +/-3.05 and
+            // +/-10.95) and then skipped anything inside the
+            // 12 m lineside clear zone — which was both edges,
+            // so no guardrail was ever built at all. The drawn
+            // road (batch73) spans 5.5-11.1 m: its inner edge
+            // stands 0.2 m from the lineside fence and needs no
+            // rail; the outer edge at 11.45 m guards the ditch.
+            for edge: Float in [lateral >= 0 ? Float(1) : Float(-1)] {
+                let railLat = lateral + edge * 4.45
+                var batch = MeshBatchBuilder()
+                var batchIndex = 0
+                var postsInBatch = 0
+                var prevTop: SIMD3<Float>? = nil
+                var prevMid: SIMD3<Float>? = nil
+                for index in samples.indices {
+                    let sample = samples[index]
+                    let chainage = sample.distanceM
+                    let active = chainage >= coveredMin && chainage <= coveredMax
+                        && !inStationZone(chainage, extraMargin: 4)
+                        && !nearThroatFan(chainage)
+                        && !nearCrossing(chainage, margin: 10)
+                        && !corridorReserved(at: chainage, landmarks: landmarks)
+                    if !active {
+                        prevTop = nil
+                        prevMid = nil
+                        continue
+                    }
+                    if index % 2 != 0 { continue }
+                    let base = routeOffsetPoint(sample, lateral: railLat)
+                    let gy = groundLevelM(at: sample) + 0.04
+                    batch.addBox(center: SIMD3<Float>(base.x, gy + 0.36, base.z), size: SIMD3<Float>(0.14, 0.72, 0.14), yaw: -sample.heading)
+                    let top = SIMD3<Float>(base.x, gy + 0.68, base.z)
+                    let mid = SIMD3<Float>(base.x, gy + 0.42, base.z)
+                    if let pt = prevTop, let pm = prevMid {
+                        batch.addSegment(from: pm, to: mid, thickness: 0.05)
+                        batch.addSegment(from: pt, to: top, thickness: 0.06)
+                    }
+                    prevTop = top
+                    prevMid = mid
+                    postsInBatch += 1
+                    if postsInBatch >= 380 {
+                        if let mesh = batch.build(name: "fill-guardrail-road-\(road.id)-\(Int(edge))-\(batchIndex)", material: railMat) { world.addChild(mesh) }
+                        batch = MeshBatchBuilder()
+                        batchIndex += 1
+                        postsInBatch = 0
+                        prevTop = nil
+                        prevMid = nil
+                    }
+                }
+                if let mesh = batch.build(name: "fill-guardrail-road-\(road.id)-\(Int(edge))-\(batchIndex)", material: railMat) { world.addChild(mesh) }
+            }
+        }
+    }
+
+    /// Guardrails on both edges of the coast road (buildTrack
+    /// lays it flat at each coastal run's datum, centre lateral
+    /// seaSign * 19.2, edges 16.2 / 22.2). The rails stand at the
+    /// same datum: inland at 15.8, seaward at 22.6 on the
+    /// promenade edge.
+    private func buildCoastRoadGuardrails(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard samples.count > 1 else { return }
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        let railMat = Self.pbr(UIColor(red: 0.72, green: 0.74, blue: 0.74, alpha: 1), metallic: 0.6, roughness: 0.45)
+        // Coastal runs over the samples, with each run's datum
+        // (minimum elevation) — the same segmentation buildTrack
+        // uses for the road ribbons themselves.
+        var coastRuns: [(start: Int, end: Int, datum: Float)] = []
+        var runStart: Int? = nil
+        for i in samples.indices {
+            let coastal = isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            if coastal && runStart == nil { runStart = i }
+            if !coastal, let rs = runStart {
+                var datum: Float = .greatestFiniteMagnitude
+                for s in samples[rs..<i] { datum = min(datum, s.elevationM) }
+                coastRuns.append((start: rs, end: i, datum: datum))
+                runStart = nil
+            }
+        }
+        if let rs = runStart {
+            var datum: Float = .greatestFiniteMagnitude
+            for s in samples[rs..<samples.count] { datum = min(datum, s.elevationM) }
+            coastRuns.append((start: rs, end: samples.count, datum: datum))
+        }
+        for run in coastRuns {
+            for edgeLat in [seaSign * 15.8, seaSign * 22.6] {
+                var batch = MeshBatchBuilder()
+                var batchIndex = 0
+                var postsInBatch = 0
+                var prevTop: SIMD3<Float>? = nil
+                var prevMid: SIMD3<Float>? = nil
+                var i = run.start
+                while i < run.end {
+                    defer { i += 2 }
+                    let sample = samples[i]
+                    let d = sample.distanceM
+                    if inStationZone(d, extraMargin: 4) || nearCrossing(d, margin: 10) {
+                        prevTop = nil
+                        prevMid = nil
+                        continue
+                    }
+                    let baseY = run.datum + 0.02
+                    let bx = sample.x + edgeLat * cos(sample.heading)
+                    let bz = sample.z + edgeLat * sin(sample.heading)
+                    batch.addBox(center: SIMD3<Float>(bx, baseY + 0.36, bz), size: SIMD3<Float>(0.14, 0.72, 0.14), yaw: -sample.heading)
+                    let top = SIMD3<Float>(bx, baseY + 0.68, bz)
+                    let mid = SIMD3<Float>(bx, baseY + 0.42, bz)
+                    if let pt = prevTop, let pm = prevMid {
+                        batch.addSegment(from: pm, to: mid, thickness: 0.05)
+                        batch.addSegment(from: pt, to: top, thickness: 0.06)
+                    }
+                    prevTop = top
+                    prevMid = mid
+                    postsInBatch += 1
+                    if postsInBatch >= 380 {
+                        if let mesh = batch.build(name: "fill-guardrail-coast-\(Int(edgeLat))-\(batchIndex)", material: railMat) { world.addChild(mesh) }
+                        batch = MeshBatchBuilder()
+                        batchIndex += 1
+                        postsInBatch = 0
+                        prevTop = nil
+                        prevMid = nil
+                    }
+                }
+                if let mesh = batch.build(name: "fill-guardrail-coast-\(Int(edgeLat))-\(batchIndex)", material: railMat) { world.addChild(mesh) }
+            }
+        }
+    }
+
+    /// Lineside signal/power cabinets, about every 350 m,
+    /// alternating sides: a weathered green-grey metal cabinet
+    /// with a proud door, vent slots, a handle and a concrete
+    /// plinth (and a smaller companion box on one site in three),
+    /// standing on the formation shoulder at the cable trough's
+    /// foot height. Lateral 3.6 m on the + side, 4.0 m on the -
+    /// side so the box clears the cable trough at -3.35; the +
+    /// side skips the kilometre posts at +3.35. Station zones
+    /// (platform end + 30 m), fans, crossings, tunnels, the depot
+    /// and the 41.4-44.4 km trough gap are all avoided.
+    private func buildLinesideCabinets(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        let bodyMat = Self.pbr(UIColor(red: 0.52, green: 0.57, blue: 0.53, alpha: 1), metallic: 0.35, roughness: 0.55)
+        let darkMat = Self.pbr(UIColor(red: 0.16, green: 0.17, blue: 0.18, alpha: 1), metallic: 0.4, roughness: 0.6)
+        let plinthMat = Self.pbr(UIColor(red: 0.62, green: 0.61, blue: 0.57, alpha: 1), roughness: 0.95)
+        var bodyBatch = MeshBatchBuilder()
+        var darkBatch = MeshBatchBuilder()
+        var plinthBatch = MeshBatchBuilder()
+        var idx = 0
+        while true {
+            let jitter = Double(stableIndex("cabinet-\(idx)", count: 61) - 30)
+            let siteD = 650 + Double(idx) * 350 + jitter
+            idx += 1
+            guard siteD < route.distanceM - 650 else { break }
+            let side: Float = (idx - 1) % 2 == 0 ? 1 : -1
+            // batch42: the cabinet keeps its offset from the
+            // track through the island spread — the station-zone
+            // exclusion above covers the platform span ±10 m
+            // only, not the 200 m ramps, where an unshifted
+            // cabinet would stand inside the widened gauge.
+            let lateral: Float = (side > 0 ? Float(3.6) : Float(-4.0)) + side * islandTrackSpread(at: siteD)
+            if inStationZone(siteD, extraMargin: 10) { continue }
+            if nearThroatFan(siteD) || nearCrossing(siteD, margin: 14) { continue }
+            let centre = chainageFromCenter(distanceM: siteD, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if centre > 41_400 && centre < 44_400 { continue }
+            if centre > 27_400 && centre < 28_000 { continue }
+            if side > 0 {
+                let rem = siteD.truncatingRemainder(dividingBy: 500)
+                if rem < 8 || rem > 492 { continue }
+            }
+            let hash = stableIndex("cabinet-site-\(idx)", count: 1_000)
+            let s = sample(at: siteD)
+            let lift = s.elevationM - groundLevelM(at: s)
+            let footY = s.elevationM - (lift >= 2 ? Float(0.45) : Float(0.52))
+            let p = routeOffsetPoint(s, lateral: lateral)
+            let yaw = -s.heading
+            plinthBatch.addBox(center: SIMD3<Float>(p.x, footY + 0.06, p.z), size: SIMD3<Float>(0.6, 0.12, 1.1), yaw: yaw)
+            bodyBatch.addBox(center: SIMD3<Float>(p.x, footY + 0.12 + 0.625, p.z), size: SIMD3<Float>(0.45, 1.25, 0.95), yaw: yaw)
+            bodyBatch.addBox(center: SIMD3<Float>(p.x, footY + 0.12 + 1.275, p.z), size: SIMD3<Float>(0.52, 0.05, 1.02), yaw: yaw)
+            let doorP = routeOffsetPoint(s, lateral: lateral - side * 0.235)
+            bodyBatch.addBox(center: SIMD3<Float>(doorP.x, footY + 0.12 + 0.56, doorP.z), size: SIMD3<Float>(0.03, 1.04, 0.74), yaw: yaw)
+            for k in 0..<3 {
+                let ventP = routeOffsetPoint(s, lateral: lateral - side * 0.245)
+                darkBatch.addBox(center: SIMD3<Float>(ventP.x, footY + 0.12 + 1.02 - Float(k) * 0.1, ventP.z), size: SIMD3<Float>(0.025, 0.05, 0.46), yaw: yaw)
+            }
+            let handleP = routeOffsetPoint(sample(at: siteD + 0.28), lateral: lateral - side * 0.25)
+            darkBatch.addBox(center: SIMD3<Float>(handleP.x, footY + 0.12 + 0.55, handleP.z), size: SIMD3<Float>(0.04, 0.18, 0.05), yaw: yaw)
+            if hash % 3 == 0 {
+                let s2 = sample(at: siteD + 1.35)
+                let p2 = routeOffsetPoint(s2, lateral: lateral)
+                plinthBatch.addBox(center: SIMD3<Float>(p2.x, footY + 0.05, p2.z), size: SIMD3<Float>(0.55, 0.10, 0.78), yaw: -s2.heading)
+                bodyBatch.addBox(center: SIMD3<Float>(p2.x, footY + 0.10 + 0.425, p2.z), size: SIMD3<Float>(0.4, 0.85, 0.62), yaw: -s2.heading)
+                let door2P = routeOffsetPoint(s2, lateral: lateral - side * 0.21)
+                bodyBatch.addBox(center: SIMD3<Float>(door2P.x, footY + 0.10 + 0.42, door2P.z), size: SIMD3<Float>(0.03, 0.66, 0.46), yaw: -s2.heading)
+            }
+        }
+        if let mesh = bodyBatch.build(name: "fill-cabinets-body", material: bodyMat) { world.addChild(mesh) }
+        if let mesh = darkBatch.build(name: "fill-cabinets-dark", material: darkMat) { world.addChild(mesh) }
+        if let mesh = plinthBatch.build(name: "fill-cabinets-plinth", material: plinthMat) { world.addChild(mesh) }
+    }
+
+    /// Shrub clusters in the rural/suburban gaps between the
+    /// existing set pieces: low foliage ellipsoids, hash-jittered
+    /// and merged into one mesh per foliage tint (max ~600
+    /// blobs). Band 1 (suburban) stays near the track in the
+    /// garden band; band 0 (rural) reaches further out. The sea
+    /// side stays open on the coast, and stations, crossings,
+    /// fans, tunnels and the depot are avoided.
+    private func buildShrubClusters(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        var blobsByMaterial: [[(center: SIMD3<Float>, radii: SIMD3<Float>)]] = [[], [], []]
+        var total = 0
+        var siteIndex = 0
+        var d = 550.0
+        while d < route.distanceM - 550, total < 600 {
+            let hash = stableIndex("shrub-\(siteIndex)", count: 1_000)
+            siteIndex += 1
+            let step = 55 + Double(hash % 25)
+            defer { d += step }
+            let band = urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            if band == 2 { continue }
+            let nearestStationD = stationModelPlacements.map { abs($0.chainageM - d) }.min() ?? .infinity
+            if nearestStationD < 260 { continue }
+            if nearCrossing(d, margin: 20) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if centre > 27_400 && centre < 28_000 { continue }
+            if hash % 5 == 0 { continue }
+            let coastal = isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            for side: Float in [-1, 1] {
+                if coastal && side == seaSign { continue }
+                if (hash + (side > 0 ? 0 : 311)) % 4 == 3 { continue }
+                let blobsHere = 1 + (hash / 3) % 3
+                for b in 0..<blobsHere where total < 600 {
+                    let h = stableIndex("shrub-\(siteIndex)-\(Int(side))-\(b)", count: 1_000)
+                    let along = d + Double((h % 37) - 18)
+                    let lat: Float
+                    if band == 1 {
+                        lat = side * (12.4 + Float(h % 66) / 10)
+                    } else {
+                        lat = side * (12.6 + Float(h % 175) / 10)
+                    }
+                    let p = groundOffsetPoint(sample(at: along), lateral: lat)
+                    let radii = SIMD3<Float>(0.9 + Float(h % 7) * 0.12, 0.5 + Float(h % 5) * 0.08, 0.9 + Float(h % 6) * 0.12)
+                    blobsByMaterial[h % 3].append((center: SIMD3<Float>(p.x, p.y + radii.y * 0.45, p.z), radii: radii))
+                    total += 1
+                }
+            }
+        }
+        for m in 0..<3 where !blobsByMaterial[m].isEmpty {
+            if let shrubs = foliageBlobEntity(name: "fill-shrubs-\(m)", blobs: blobsByMaterial[m], material: foliageMaterials[m], longitudes: 6, latitudes: 5) {
+                world.addChild(shrubs)
+            }
+        }
+    }
+
+    /// Conifers in the rural band (max ~150): a new shape — three
+    /// stacked cones per tree, merged into a single mesh, with
+    /// batched trunks. The cone mesh is built the same way as
+    /// foliageBlobMesh (indexed lathe with analytic normals, so
+    /// no new SDK symbols are needed).
+    private func buildConifers(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        let coniferMat = Self.texturedPBR(UIColor(red: 0.30, green: 0.48, blue: 0.30, alpha: 1), roughness: 0.98, textureName: "scenery_foliage")
+        let trunkMat = Self.pbr(UIColor(red: 0.32, green: 0.24, blue: 0.18, alpha: 1), roughness: 1)
+        var conePositions: [SIMD3<Float>] = []
+        var coneNormals: [SIMD3<Float>] = []
+        var coneUVs: [SIMD2<Float>] = []
+        var coneIndices: [UInt32] = []
+        var trunkBatch = MeshBatchBuilder()
+        var planted = 0
+        func appendCone(base: SIMD3<Float>, radius: Float, height: Float, segments: Int = 8) {
+            let base0 = UInt32(conePositions.count)
+            for row in 0...1 {
+                let t = Float(row)
+                let rr = radius * (1 - t)
+                let yy = base.y + height * t
+                for i in 0...segments {
+                    let theta = Float(i) / Float(segments) * 2 * Float.pi
+                    let dirx = cos(theta)
+                    let dirz = sin(theta)
+                    conePositions.append(SIMD3<Float>(base.x + dirx * rr, yy, base.z + dirz * rr))
+                    var n = SIMD3<Float>(dirx * height, radius, dirz * height)
+                    if simd_length(n) < 1e-6 { n = SIMD3<Float>(0, 1, 0) }
+                    coneNormals.append(simd_normalize(n))
+                    coneUVs.append(SIMD2<Float>(Float(i) / Float(segments) * 3, t))
+                }
+            }
+            let ring = segments + 1
+            for i in 0..<segments {
+                let a = base0 + UInt32(i)
+                let b = a + 1
+                let c = a + UInt32(ring)
+                let dd = c + 1
+                coneIndices.append(contentsOf: [a, c, b, b, c, dd])
+            }
+        }
+        var siteIndex = 0
+        var d = 800.0
+        while d < route.distanceM - 800, planted < 150 {
+            let hash = stableIndex("conifer-\(siteIndex)", count: 1_000)
+            siteIndex += 1
+            let step = 120 + Double(hash % 50)
+            defer { d += step }
+            if urbanBand(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection) != 0 { continue }
+            let nearestStationD = stationModelPlacements.map { abs($0.chainageM - d) }.min() ?? .infinity
+            if nearestStationD < 350 { continue }
+            if nearCrossing(d, margin: 25) || nearThroatFan(d) { continue }
+            let centre = chainageFromCenter(distanceM: d, route: route, travelDirection: travelDirection)
+            if isTunnelChainage(centre) { continue }
+            if centre > 27_400 && centre < 28_000 { continue }
+            let coastal = isCoastal(distanceM: d, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+            for side: Float in [-1, 1] {
+                if coastal && side == seaSign { continue }
+                if (hash + (side > 0 ? 0 : 311)) % 4 == 3 { continue }
+                let treesHere = hash % 3 == 0 ? 2 : 1
+                for t in 0..<treesHere where planted < 150 {
+                    let h = stableIndex("conifer-\(siteIndex)-\(Int(side))-\(t)", count: 1_000)
+                    let along = d + Double((h % 51) - 25)
+                    let lat = side * (26 + Float(h % 300) / 10)
+                    let s = sample(at: along)
+                    let p = groundOffsetPoint(s, lateral: lat)
+                    let treeH: Float = 6 + Float(h % 35) / 10
+                    trunkBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.7, p.z), size: SIMD3<Float>(0.22, 1.4, 0.22), yaw: -s.heading)
+                    appendCone(base: SIMD3<Float>(p.x, p.y + treeH * 0.10, p.z), radius: treeH * 0.21, height: treeH * 0.52)
+                    appendCone(base: SIMD3<Float>(p.x, p.y + treeH * 0.38, p.z), radius: treeH * 0.155, height: treeH * 0.44)
+                    appendCone(base: SIMD3<Float>(p.x, p.y + treeH * 0.62, p.z), radius: treeH * 0.095, height: treeH * 0.36)
+                    planted += 1
+                }
+            }
+        }
+        if let mesh = trunkBatch.build(name: "fill-conifer-trunks", material: trunkMat) { world.addChild(mesh) }
+        if !conePositions.isEmpty {
+            var descriptor = MeshDescriptor(name: "fill-conifers")
+            descriptor.positions = MeshBuffers.Positions(conePositions)
+            descriptor.normals = MeshBuffers.Normals(coneNormals)
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(coneUVs)
+            descriptor.primitives = .triangles(coneIndices)
+            if let mesh = try? MeshResource.generate(from: [descriptor]) {
+                var material = coniferMat
+                material.faceCulling = .none
+                let entity = ModelEntity(mesh: mesh, materials: [material])
+                entity.name = "fill-conifers"
+                world.addChild(entity)
             }
         }
     }
@@ -2644,7 +7954,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             Self.pbr(UIColor(red: 0.80, green: 0.70, blue: 0.90, alpha: 1), metallic: 0, roughness: 1),
         ]
         for placement in stationModelPlacements {
-            let c = placement.chainageM
+            // batch75: landmarks anchor on the canonical
+            // station centre (canonicalPlatformBounds), not
+            // the stop target; the along offsets below are
+            // unchanged, now measured from the true centre.
+            let c = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM).map { ($0.start + $0.end) / 2 } ?? placement.chainageM
             let cs = sample(at: c)
             let yaw = simd_quatf(angle: -cs.heading, axis: SIMD3<Float>(0, 1, 0))
             let backAbs: Float = 2.1 + 1.52 + (placement.archetype == "major_5track_4platform" ? Float(6.0) : Float(4.5))
@@ -2870,6 +8184,125 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
+    /// batch11: one route bus, built to real dimensions like
+    /// the parked cars — body, glass band and windshield,
+    /// skirt, roof pod, destination board, lights, mirrors and
+    /// four real wheels — as a container entity so the rotary
+    /// can pose it at any tangent angle. Local frame: X across
+    /// (2.5 m), Z along (10.8 m, front at +Z), ground at y 0.
+    private func addBus(name: String, position: SIMD3<Float>, orientation: simd_quatf, bodyMaterial: PhysicallyBasedMaterial) {
+        let bus = Entity()
+        bus.name = name
+        bus.position = position
+        bus.orientation = orientation
+        world.addChild(bus)
+        let darkTrim = Self.pbr(UIColor(red: 0.16, green: 0.17, blue: 0.18, alpha: 1), metallic: 0.3, roughness: 0.6)
+        _ = addBox(parent: bus, name: "\(name)-body", size: SIMD3<Float>(2.5, 2.6, 10.8), position: SIMD3<Float>(0, 1.65, 0), material: bodyMaterial)
+        _ = addBox(parent: bus, name: "\(name)-glass", size: SIMD3<Float>(2.54, 0.8, 10.0), position: SIMD3<Float>(0, 2.08, 0), material: glassMaterial)
+        _ = addBox(parent: bus, name: "\(name)-skirt", size: SIMD3<Float>(2.54, 0.5, 10.4), position: SIMD3<Float>(0, 0.55, 0), material: darkTrim)
+        _ = addBox(parent: bus, name: "\(name)-roofpod", size: SIMD3<Float>(1.5, 0.16, 4.2), position: SIMD3<Float>(0, 3.03, -0.4), material: concreteMaterial)
+        _ = addBox(parent: bus, name: "\(name)-windshield", size: SIMD3<Float>(2.3, 0.95, 0.06), position: SIMD3<Float>(0, 2.0, 5.42), material: glassMaterial)
+        _ = addBox(parent: bus, name: "\(name)-destboard", size: SIMD3<Float>(1.7, 0.4, 0.06), position: SIMD3<Float>(0, 2.68, 5.42), material: Self.pbr(UIColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1), roughness: 0.5))
+        for i in 0..<2 {
+            let sx: Float = i == 0 ? -0.8 : 0.8
+            _ = addBox(parent: bus, name: "\(name)-headlight-\(i)", size: SIMD3<Float>(0.42, 0.16, 0.05), position: SIMD3<Float>(sx, 0.92, 5.42), material: Self.pbr(UIColor(red: 0.95, green: 0.93, blue: 0.80, alpha: 1), roughness: 0.3))
+            _ = addBox(parent: bus, name: "\(name)-taillight-\(i)", size: SIMD3<Float>(0.42, 0.16, 0.05), position: SIMD3<Float>(sx, 0.95, -5.42), material: Self.pbr(UIColor(red: 0.55, green: 0.10, blue: 0.08, alpha: 1), roughness: 0.4))
+            _ = addBox(parent: bus, name: "\(name)-mirror-\(i)", size: SIMD3<Float>(0.07, 0.3, 0.2), position: SIMD3<Float>(sx * 1.66, 2.25, 5.15), material: darkTrim)
+        }
+        let tyreMat = Self.pbr(UIColor(red: 0.07, green: 0.07, blue: 0.08, alpha: 1), roughness: 0.92)
+        for wx: Float in [-1.08, 1.08] {
+            for wz: Float in [-3.35, 3.35] {
+                let wheel = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.32, radius: 0.48), materials: [tyreMat])
+                wheel.name = "\(name)-wheel-\(Int(wx))-\(Int(wz))"
+                wheel.position = SIMD3<Float>(wx, 0.48, wz)
+                wheel.orientation = simd_quatf(angle: Float.pi / 2, axis: SIMD3<Float>(0, 0, 1))
+                bus.addChild(wheel)
+            }
+        }
+    }
+
+    /// batch11: the station-front rotary template (ChatGPT
+    /// consult item 2, deferred by batch10 and ruled required
+    /// for the completed version by the user 2026-11-12
+    /// evening): a paved turning circle in the forecourt band
+    /// between the platform back and the frontage row — kerb
+    /// apron, carriageway disc, raised island with a sign and
+    /// a tree, one or two buses dwelling on the ring, and a
+    /// sheltered bus stop at the outer kerb. Modelled on the
+    /// 鴨河 terminus rotary in buildTouristTerminus,
+    /// generalised into the per-station front system. The
+    /// disc's inner edge stays behind the platform back, in
+    /// the paving band the forecourt car parks already use,
+    /// and the front plot loop leaves the rotary's
+    /// along-track window empty on this side.
+    private func addStationRotary(stationId: String, chainage: Double, side: Float, backAbs: Float) {
+        let hash = stableIndex("rotary-\(stationId)", count: 1000)
+        let centerSample = sample(at: chainage)
+        let centerLat = side * (backAbs + 9.0)
+        let cp = groundOffsetPoint(centerSample, lateral: centerLat)
+        let yawQ = simd_quatf(angle: -centerSample.heading, axis: SIMD3<Float>(0, 1, 0))
+        func disc(_ name: String, _ radius: Float, _ height: Float, _ topY: Float, _ material: PhysicallyBasedMaterial) {
+            let d = ModelEntity(mesh: FallbackCylinderMesh.make(height: height, radius: radius), materials: [material])
+            d.name = name
+            d.position = SIMD3<Float>(cp.x, cp.y + topY - height / 2, cp.z)
+            world.addChild(d)
+        }
+        disc("station-rotary-apron-\(stationId)", 7.8, 0.05, 0.05, concreteMaterial)
+        disc("station-rotary-road-\(stationId)", 7.4, 0.08, 0.11, roadMaterial)
+        disc("station-rotary-island-\(stationId)", 3.1, 0.18, 0.29, concreteMaterial)
+        disc("station-rotary-islandtop-\(stationId)", 2.75, 0.04, 0.33, RailwaySceneWorld.texturedPBR(.white, roughness: 1, textureName: "scenery_grass"))
+        // Island sign: a post and a TOO-navy board.
+        let post = ModelEntity(mesh: FallbackCylinderMesh.make(height: 2.3, radius: 0.05), materials: [poleMaterial])
+        post.name = "station-rotary-signpost-\(stationId)"
+        post.position = SIMD3<Float>(cp.x, cp.y + 0.33 + 1.15, cp.z)
+        world.addChild(post)
+        _ = addBox(parent: world, name: "station-rotary-sign-\(stationId)", size: SIMD3<Float>(0.08, 0.7, 1.6), position: SIMD3<Float>(cp.x, cp.y + 0.33 + 2.15, cp.z), material: Self.pbr(UIColor(red: 0.118, green: 0.227, blue: 0.431, alpha: 1), metallic: 0.1, roughness: 0.5), orientation: yawQ)
+        let treeP = groundOffsetPoint(sample(at: chainage + 1.6), lateral: centerLat + side * 1.1)
+        addTree(parent: world, name: "station-rotary-tree-\(stationId)", x: treeP.x, z: treeP.z, height: 3.4, material: foliageMaterials[hash % foliageMaterials.count], groundY: cp.y + 0.33)
+        // Buses dwelling on the ring, tangent to it, on the
+        // frontage half of the circle.
+        let busPalette: [(Float, Float, Float)] = [
+            (0.88, 0.90, 0.92), (0.15, 0.50, 0.55), (0.118, 0.227, 0.431), (0.92, 0.87, 0.74)
+        ]
+        let busCount = 1 + hash % 2
+        let phi0 = 0.7 + Float(hash % 50) / 50 * 1.4
+        for i in 0..<busCount {
+            var phi = phi0 + Float(i) * 1.15
+            if phi > 2.75 { phi -= 2.3 }
+            let a = 5.2 * sin(phi)
+            let b = 5.2 * cos(phi)
+            let bs = sample(at: chainage + Double(b))
+            let bp = groundOffsetPoint(bs, lateral: centerLat + a)
+            let busYaw = simd_quatf(angle: -bs.heading, axis: SIMD3<Float>(0, 1, 0)) * simd_quatf(angle: phi + Float.pi / 2, axis: SIMD3<Float>(0, 1, 0))
+            let c = busPalette[(hash + i) % busPalette.count]
+            let busMat = Self.pbr(UIColor(red: CGFloat(c.0), green: CGFloat(c.1), blue: CGFloat(c.2), alpha: 1), metallic: 0.2, roughness: 0.4)
+            addBus(name: "station-rotary-bus-\(stationId)-\(i)", position: SIMD3<Float>(bp.x, bp.y + 0.11, bp.z), orientation: busYaw, bodyMaterial: busMat)
+        }
+        // Sheltered bus stop at the outer kerb of the ring.
+        let stopLat = centerLat + side * 8.3
+        let shelterSample = sample(at: chainage + 2.6)
+        let sp = groundOffsetPoint(shelterSample, lateral: stopLat)
+        let stopYaw = simd_quatf(angle: -shelterSample.heading, axis: SIMD3<Float>(0, 1, 0))
+        for postAlong in [-1.05, 1.05] {
+            let pp = groundOffsetPoint(sample(at: chainage + 2.6 + postAlong), lateral: stopLat)
+            let p = ModelEntity(mesh: FallbackCylinderMesh.make(height: 2.3, radius: 0.04), materials: [poleMaterial])
+            p.name = "station-rotary-shelterpost-\(stationId)-\(Int(postAlong))"
+            p.position = SIMD3<Float>(pp.x, pp.y + 1.15, pp.z)
+            world.addChild(p)
+        }
+        _ = addBox(parent: world, name: "station-rotary-shelterroof-\(stationId)", size: SIMD3<Float>(1.1, 0.07, 2.7), position: SIMD3<Float>(sp.x, sp.y + 2.34, sp.z), material: roofMaterials[0], orientation: stopYaw)
+        _ = addBox(parent: world, name: "station-rotary-bench-\(stationId)", size: SIMD3<Float>(0.45, 0.09, 1.8), position: SIMD3<Float>(sp.x, sp.y + 0.46, sp.z), material: roofMaterials[1], orientation: stopYaw)
+        let poleSample = sample(at: chainage + 5.4)
+        let poleP = groundOffsetPoint(poleSample, lateral: stopLat)
+        let pole = ModelEntity(mesh: FallbackCylinderMesh.make(height: 2.6, radius: 0.035), materials: [poleMaterial])
+        pole.name = "station-rotary-stop-pole-\(stationId)"
+        pole.position = SIMD3<Float>(poleP.x, poleP.y + 1.3, poleP.z)
+        world.addChild(pole)
+        let poleYaw = simd_quatf(angle: -poleSample.heading, axis: SIMD3<Float>(0, 1, 0))
+        _ = addBox(parent: world, name: "station-rotary-stop-sign-\(stationId)", size: SIMD3<Float>(0.06, 0.72, 0.55), position: SIMD3<Float>(poleP.x, poleP.y + 2.25, poleP.z), material: concreteMaterial, orientation: poleYaw)
+        _ = addBox(parent: world, name: "station-rotary-stop-band-\(stationId)", size: SIMD3<Float>(0.07, 0.18, 0.56), position: SIMD3<Float>(poleP.x, poleP.y + 2.52, poleP.z), material: Self.pbr(UIColor(red: 0.118, green: 0.227, blue: 0.431, alpha: 1), metallic: 0.1, roughness: 0.5), orientation: poleYaw)
+    }
+
     /// Station fronts (2026-11-11 evening, user directive after
     /// the Akimizu photo verdict): until now a station's whole
     /// frontage was the two office slabs in buildStationSurroundings
@@ -2907,7 +8340,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let houseMats = [houseFacadeMaterial, houseFacadeMaterial2, houseFacadeMaterial3, houseFacadeMaterial4, houseFacadeMaterial5, houseFacadeMaterial6, houseFacadeMaterial7, houseFacadeMaterialGrimed]
         let aptMats = [photoApartmentMaterial, photoApartmentMaterial2, danchiFacadeMaterial, photoApartmentMaterial3]
         var shopBatches = shopMats.map { _ in MeshBatchBuilder() }
-        var houseBatches = houseMats.map { _ in MeshBatchBuilder() }
+        // batch11: per-plot weathering for the front houses —
+        // each facade material gains two tint-multiplied grades
+        // beside the clean original (the tintVariant mechanism),
+        // and the house batches split by grade, so a street of
+        // photo-facade houses stops sharing one identical tone.
+        let houseTintPools = houseMats.map { base -> [PhysicallyBasedMaterial] in
+            [base, tintVariant(base, multiply: (0.90, 0.88, 0.85)), tintVariant(base, multiply: (0.79, 0.80, 0.84))]
+        }
+        var houseBatches = houseTintPools.flatMap { pool in pool.map { _ in MeshBatchBuilder() } }
+        var eaveBatch = MeshBatchBuilder()
+        var balconyBatch = MeshBatchBuilder()
         var aptBatches = aptMats.map { _ in MeshBatchBuilder() }
         var blockBatches = buildingMaterials.map { _ in MeshBatchBuilder() }
         var officeBatch = MeshBatchBuilder()
@@ -2917,12 +8360,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             guard let spec = table[placement.stationId] else { continue }
             let density = spec.0
             let kind = spec.1
-            let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
+            // batch75: the frontage rows centre on the
+            // canonical station centre and take the canonical
+            // span as their length (the surroundings' ±0.58
+            // building rule keys off the same span), not the
+            // stop target and the drawn-length standard.
+            let frontBounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM)
+            let stationCenter = frontBounds.map { ($0.start + $0.end) / 2 } ?? placement.chainageM
+            let length = frontBounds.map { $0.end - $0.start } ?? platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
             let half = length / 2
             let wide = placement.archetype.contains("terminal") || placement.archetype.contains("major") || placement.archetype == "junction_3platform"
             let platWidth: Float = wide ? 6.0 : 4.5
             let backAbs: Float = 2.1 + 1.52 + platWidth
-            let urban = urbanBand(distanceM: placement.chainageM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
+            let urban = urbanBand(distanceM: stationCenter, route: route, routeVariant: routeVariant, travelDirection: travelDirection) > 0
             let frontLat = backAbs + (urban ? 13.2 : 15.2)
             let extent = half + (density >= 3 ? 95 : 65)
             var pitch = 11.5
@@ -2937,15 +8387,35 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             else if kind == "port" { skipPct = 28 }
             else if kind == "rural" { skipPct = 55 }
 
+            // batch11: a real forecourt rotary (turning circle,
+            // island, buses, sheltered stop — see
+            // addStationRotary) at the major fronts: the
+            // "rotary" kinds in the table plus the big terminal
+            // and shopping fronts. One side only, never the sea
+            // or park side; the plot loop leaves its window
+            // empty on that side.
+            var hasRotary = kind == "rotary" || kind == "terminal" || (kind == "shopping" && density >= 4)
+            var rotarySide: Float = stableIndex("rotaryside-\(placement.stationId)", count: 2) == 0 ? 1 : -1
+            let rotaryWindow: Double = kind == "terminal" ? 19 : 15
+            if hasRotary {
+                if isCoastal(distanceM: stationCenter, route: route, routeVariant: routeVariant, travelDirection: travelDirection), rotarySide == seaSideSign(travelDirection: travelDirection) {
+                    rotarySide = -rotarySide
+                }
+                if parkSide[placement.stationId] == rotarySide { rotarySide = -rotarySide }
+                if parkSide[placement.stationId] == rotarySide { hasRotary = false }
+                if nearCrossing(stationCenter, margin: 16) { hasRotary = false }
+                if stationCenter > 27_540, stationCenter < 27_860 { hasRotary = false }
+            }
+
             for side: Float in [-1, 1] {
                 let isParkSide = parkSide[placement.stationId] == side
-                let seaSide = isCoastal(distanceM: placement.chainageM, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                let seaSide = isCoastal(distanceM: stationCenter, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
                     && side == seaSideSign(travelDirection: travelDirection)
                 var plotIndex = 0
                 var along = -extent
                 while along <= extent {
                     defer { along += pitch; plotIndex += 1 }
-                    let chainage = placement.chainageM + along
+                    let chainage = stationCenter + along
                     if chainage < 25 || chainage > route.distanceM - 25 { continue }
                     if seaSide { continue }
                     if side == -seaSideSign(travelDirection: travelDirection), chainage > 27_540, chainage < 27_860 { continue }
@@ -2953,6 +8423,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     if abs(abs(along) - length * 0.58) < 12 { continue }
                     if placement.stationId == "S27", (along >= -152 && along <= -122) || (along >= 18 && along <= 48) { continue }
                     if kind == "rural", abs(along) > 55 { continue }
+                    if hasRotary, side == rotarySide, abs(along) < rotaryWindow { continue }
                     let hash = stableIndex("front-\(placement.stationId)-\(Int(side))-\(plotIndex)", count: 1000)
                     let s = sample(at: chainage)
                     let yaw = -s.heading
@@ -2973,6 +8444,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     else if kind == "port" { cat = hash % 3 == 0 ? "warehouse" : "shop" }
                     else if kind == "rural" { cat = hash % 4 == 0 ? "shop" : "house" }
                     let p = groundOffsetPoint(s, lateral: side * frontLat)
+                    // batch25 (2026-11-13): the block/warehouse boxes are
+                    // the big flat faces on the station approach. A plain
+                    // brick (pool 2) or plain concrete (pool 3) entry reads
+                    // as a tall windowless wall (Mac loop-2 photos at
+                    // Kisaragawa / Katsunuma), so these two draws use only
+                    // the pool's windowed facades (0, 1, 4, 5, 6).
+                    let windowedBlockIndices: [Int] = [0, 1, 4, 5, 6]
+                    let windowedBlockIndex = windowedBlockIndices[hash % windowedBlockIndices.count]
                     if cat == "block" {
                         let h: Float = 12 + Float(hash % 95) / 10
                         let w: Float = 13 + Float(hash % 45) / 10
@@ -2980,13 +8459,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         if hash % 3 == 0 {
                             officeBatch.addBox(center: c, size: SIMD3<Float>(8.5, h, w), yaw: yaw)
                         } else {
-                            blockBatches[hash % blockBatches.count].addBox(center: c, size: SIMD3<Float>(8.5, h, w), yaw: yaw)
+                            blockBatches[windowedBlockIndex].addBox(center: c, size: SIMD3<Float>(8.5, h, w), yaw: yaw)
                         }
                         roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + h + 0.13, p.z), size: SIMD3<Float>(8.9, 0.26, w + 0.4), yaw: yaw)
                     } else if cat == "warehouse" {
                         let h: Float = 5 + Float(hash % 25) / 10
                         let c = SIMD3<Float>(p.x, p.y + h / 2, p.z)
-                        blockBatches[hash % blockBatches.count].addBox(center: c, size: SIMD3<Float>(8, h, 12), yaw: yaw)
+                        blockBatches[windowedBlockIndex].addBox(center: c, size: SIMD3<Float>(8, h, 12), yaw: yaw)
                         roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + h + 0.13, p.z), size: SIMD3<Float>(8.4, 0.26, 12.4), yaw: yaw)
                     } else if cat == "apt" {
                         let isDanchi = kind == "danchi" && hash % 2 == 0
@@ -3018,8 +8497,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         if kind == "rural" { h = 4 + Float(hash % 15) / 10 }
                         if kind == "resort" { h = 5 + Float(hash % 20) / 10 }
                         let w: Float = 8 + Float(hash % 25) / 10
-                        houseBatches[hash % houseMats.count].addBox(center: SIMD3<Float>(p.x, p.y + h / 2, p.z), size: SIMD3<Float>(6.5, h, w), yaw: yaw)
+                        // batch11: route the plot into its
+                        // weathering grade (see houseTintPools)
+                        // and give the photo facade physical
+                        // relief on its track face: an eaves
+                        // strip under the roof line on every
+                        // house, a balcony slab and railing on
+                        // every second one (ChatGPT consult
+                        // items 2-3).
+                        let matIdx = hash % houseMats.count
+                        let tintIdx = stableIndex("fronttint-\(placement.stationId)-\(Int(side))-\(plotIndex)", count: 3)
+                        houseBatches[matIdx * 3 + tintIdx].addBox(center: SIMD3<Float>(p.x, p.y + h / 2, p.z), size: SIMD3<Float>(6.5, h, w), yaw: yaw)
                         roofBatch.addBox(center: SIMD3<Float>(p.x, p.y + h + 0.13, p.z), size: SIMD3<Float>(6.9, 0.26, w + 0.4), yaw: yaw)
+                        let eaveP = groundOffsetPoint(s, lateral: side * (frontLat - 3.25 - 0.2))
+                        eaveBatch.addBox(center: SIMD3<Float>(eaveP.x, p.y + h - 0.3, eaveP.z), size: SIMD3<Float>(0.62, 0.12, w * 0.88), yaw: yaw)
+                        if hash % 2 == 0 {
+                            let balcP = groundOffsetPoint(s, lateral: side * (frontLat - 3.25 - 0.42))
+                            balconyBatch.addBox(center: SIMD3<Float>(balcP.x, p.y + h * 0.55, balcP.z), size: SIMD3<Float>(0.85, 0.1, w * 0.55), yaw: yaw)
+                            let railP = groundOffsetPoint(s, lateral: side * (frontLat - 3.25 - 0.82))
+                            balconyBatch.addBox(center: SIMD3<Float>(railP.x, p.y + h * 0.55 + 0.28, railP.z), size: SIMD3<Float>(0.05, 0.45, w * 0.55), yaw: yaw)
+                        }
                     }
                 }
                 // Second row of houses behind the frontage, away
@@ -3034,7 +8531,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 var along2 = -extent
                 while along2 <= extent {
                     defer { along2 += 12.5; plot2 += 1 }
-                    let chainage2 = placement.chainageM + along2
+                    let chainage2 = stationCenter + along2
                     if chainage2 < 25 || chainage2 > route.distanceM - 25 { continue }
                     if side == -seaSideSign(travelDirection: travelDirection), chainage2 > 27_540, chainage2 < 27_860 { continue }
                     if nearCrossing(chainage2, margin: 10) { continue }
@@ -3044,9 +8541,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let p2 = groundOffsetPoint(s2, lateral: side * (frontLat + 11.5))
                     let h2: Float = 4 + Float(hash2 % 25) / 10
                     let w2: Float = 8.5 + Float(hash2 % 20) / 10
-                    houseBatches[hash2 % houseMats.count].addBox(center: SIMD3<Float>(p2.x, p2.y + h2 / 2, p2.z), size: SIMD3<Float>(6.5, h2, w2), yaw: -s2.heading)
+                    houseBatches[(hash2 % houseMats.count) * 3 + stableIndex("front2tint-\(placement.stationId)-\(Int(side))-\(plot2)", count: 3)].addBox(center: SIMD3<Float>(p2.x, p2.y + h2 / 2, p2.z), size: SIMD3<Float>(6.5, h2, w2), yaw: -s2.heading)
                     roofBatch.addBox(center: SIMD3<Float>(p2.x, p2.y + h2 + 0.13, p2.z), size: SIMD3<Float>(6.9, 0.26, w2 + 0.4), yaw: -s2.heading)
+                    let eave2P = groundOffsetPoint(s2, lateral: side * (frontLat + 11.5 - 3.45))
+                    eaveBatch.addBox(center: SIMD3<Float>(eave2P.x, p2.y + h2 - 0.3, eave2P.z), size: SIMD3<Float>(0.62, 0.12, w2 * 0.88), yaw: -s2.heading)
                 }
+            }
+            if hasRotary {
+                addStationRotary(stationId: placement.stationId, chainage: stationCenter, side: rotarySide, backAbs: backAbs)
             }
         }
 
@@ -3054,8 +8556,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             if let mesh = b.build(name: "stationfront-shops-\(i)", material: shopMats[i]) { world.addChild(mesh) }
         }
         for (i, b) in houseBatches.enumerated() {
-            if let mesh = b.build(name: "stationfront-houses-\(i)", material: houseMats[i]) { world.addChild(mesh) }
+            if let mesh = b.build(name: "stationfront-houses-\(i)", material: houseTintPools[i / 3][i % 3]) { world.addChild(mesh) }
         }
+        if let mesh = eaveBatch.build(name: "stationfront-eaves", material: roofMaterials[2]) { world.addChild(mesh) }
+        if let mesh = balconyBatch.build(name: "stationfront-balconies", material: concreteMaterial) { world.addChild(mesh) }
         for (i, b) in aptBatches.enumerated() {
             if let mesh = b.build(name: "stationfront-apts-\(i)", material: aptMats[i]) { world.addChild(mesh) }
         }
@@ -3079,10 +8583,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for (index, placement) in stationModelPlacements.enumerated() {
             guard let style = styles[placement.stationId] else { continue }
             var side: Float = index % 2 == 0 ? 1 : -1
-            if isCoastal(distanceM: placement.chainageM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
+            // batch75: character set pieces centre on the
+            // canonical station centre, not the stop target.
+            let c = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM).map { ($0.start + $0.end) / 2 } ?? placement.chainageM
+            if isCoastal(distanceM: c, route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
                 side = -seaSideSign(travelDirection: travelDirection)
             }
-            let c = placement.chainageM
             let mid = sample(at: c)
             let yaw = simd_quatf(angle: -mid.heading, axis: SIMD3<Float>(0, 1, 0))
             let gy = groundLevelM(at: mid)
@@ -3102,17 +8608,35 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             case "hillside":
                 let w = pt(0, side * 21)
                 _ = addBox(parent: world, name: "station-retaining-\(placement.stationId)", size: SIMD3<Float>(1.2, 2.4, 130), position: SIMD3<Float>(w.x, gy + 1.2, w.z), material: concreteMaterial, orientation: yaw)
+                // batch40 (2026-11-14): the hill ellipsoids used to
+                // sit at lateral 31/37 with a 30 m lateral semi-axis,
+                // so they reached in to lateral 1 m. At S14 the
+                // surface stood +0.70 m over the datum at the track
+                // centre (the trackbed top is +0.18, the rail head
+                // +0.31) and +3.4 m at the platform outer edge
+                // (platform top +1.41): green domes poked through
+                // the ballast mid-station and swallowed the bases
+                // of the buildings behind the platform. The centres
+                // move out to 46/54 and the lateral semi-axis
+                // shrinks to 24, so the toe lands at lateral 22 —
+                // just behind the retaining wall at 21 — and no
+                // part of the slope exists inside the track
+                // corridor or behind the platform.
                 for h in 0..<3 {
-                    let hp = pt(Double(h - 1) * 46, side * (31 + Float(h % 2) * 6))
+                    let hp = pt(Double(h - 1) * 46, side * (46 + Float(h % 2) * 8))
                     let hill = ModelEntity(mesh: MeshResource.generateSphere(radius: 1), materials: [foliageMaterials[(index + h) % foliageMaterials.count]])
                     hill.name = "station-hill-\(placement.stationId)-\(h)"
-                    hill.scale = SIMD3<Float>(30, 5.5 + Float(h) * 0.8, 17)
+                    hill.scale = SIMD3<Float>(24, 5.5 + Float(h) * 0.8, 19)
                     hill.position = SIMD3<Float>(hp.x, hp.y - 1.2, hp.z)
                     hill.orientation = yaw
                     world.addChild(hill)
                 }
                 for t in 0..<4 {
-                    let tp = pt(Double(t) * 30 - 45, side * (26 + Float((index + t) % 3) * 3))
+                    // On the slope's toe band, where the surface is
+                    // ~0.3-1.9 m over the datum. The old 26-32 m band
+                    // stood where the dome surface was 4+ m high,
+                    // which buried these trees to their crowns.
+                    let tp = pt(Double(t) * 30 - 45, side * (23.5 + Float((index + t) % 3) * 1.5))
                     addTree(parent: world, name: "station-hilltree-\(placement.stationId)-\(t)", x: tp.x, z: tp.z, height: 4.6 + Float((index + t) % 5) * 0.5, material: foliageMaterials[(index + t) % foliageMaterials.count], groundY: tp.y)
                 }
             default: // industrial
@@ -3127,7 +8651,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 world.addChild(tank)
                 for k in 0..<2 {
                     let cp = pt(-2 + Double(k) * 8, side * 26)
-                    _ = addBox(parent: world, name: "station-container-\(placement.stationId)-\(k)", size: SIMD3<Float>(2.4, 2.6, 6.1), position: SIMD3<Float>(cp.x, gy + 1.3, cp.z), material: commercialAccent(seed: index * 7 + k), orientation: yaw)
+                    _ = addBox(parent: world, name: "station-container-\(placement.stationId)-\(k)", size: SIMD3<Float>(2.4, 2.6, 6.1), position: SIMD3<Float>(cp.x, gy + 1.3, cp.z), material: containerMaterial(seed: index * 7 + k), orientation: yaw)
+                    // batch26: corrugation ribs on the track-facing
+                    // long face (lateral 26 - 1.24, proud of the
+                    // face by 0.04), five per container, so the
+                    // side reads as a container, not a flat panel.
+                    let ribLat = side * 26 - side * 1.24
+                    for r in 0..<5 {
+                        let ribAlong = -2 + Double(k) * 8 - 2.4 + Double(r) * 1.2
+                        let rp = pt(ribAlong, ribLat)
+                        _ = addBox(parent: world, name: "station-container-rib-\(placement.stationId)-\(k)-\(r)", size: SIMD3<Float>(0.08, 2.6, 0.22), position: SIMD3<Float>(rp.x, gy + 1.3, rp.z), material: containerRibMaterial(seed: index * 7 + k), orientation: yaw)
+                    }
                 }
             }
         }
@@ -3200,7 +8734,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// regulation boards on the coastal windows （風・始端/終端標）
     /// and catenary end boards （架線終端標識）. Part 2 — stations
     /// and signals: see buildSignCatalogStations.
-    private func buildSignCatalog(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+    private func buildSignCatalog(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, scoringCarCount: Int) {
         guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
         let up = travelDirection == .up
         let signLat: Float = up ? -4.0 : 4.0
@@ -3362,18 +8896,35 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // -- Wind regulation boards on the coastal windows.
         if routeVariant == .mainline || routeVariant == .throughBranch {
             func travelD(_ c: Double) -> Double { up ? c : route.distanceM - c }
-            for window in [(38_500.0, 40_500.0), (43_600.0, 48_600.0), (53_000.0, 59_900.0)] {
+            // batch104: a board must not stand inside a tunnel
+            // bore or its portal-clearance zone. With the middle
+            // window opening at tunnel 2's built exit (43,500),
+            // its tunnel-side board would sit 5 m inside the
+            // shell; push any board that lands in a derived
+            // tunnel span to the span's nearest edge (for that
+            // board: 43,515, just outside the portal, in both
+            // directions). Other windows' boards never land in a
+            // span and pass through unchanged.
+            func clearOfTunnel(_ travelM: Double) -> Double {
+                let geo = up ? travelM : route.distanceM - travelM
+                for span in tunnelChainageSpans where geo > span.startM && geo < span.endM {
+                    let pushed = (geo - span.startM) < (span.endM - geo) ? span.startM : span.endM
+                    return up ? pushed : route.distanceM - pushed
+                }
+                return travelM
+            }
+            for window in [(38_500.0, 40_500.0), (coastalTunnelExitM, 48_600.0), (53_000.0, 59_900.0)] {
                 let entry = min(travelD(window.0), travelD(window.1))
                 let exit = max(travelD(window.0), travelD(window.1))
-                postBoard(entry - 5, signLat, "scenery_sign_wind", tag: "wind-start-\(Int(window.0))")
-                postBoard(exit + 5, signLat, "scenery_sign_wind", tag: "wind-end-\(Int(window.0))")
+                postBoard(clearOfTunnel(entry - 5), signLat, "scenery_sign_wind", tag: "wind-start-\(Int(window.0))")
+                postBoard(clearOfTunnel(exit + 5), signLat, "scenery_sign_wind", tag: "wind-end-\(Int(window.0))")
             }
             // Catenary end boards near both line ends.
             postBoard(150, signLat, "scenery_sign_catenary_end", top: 3.1, tag: "catenary-end-a")
             postBoard(route.distanceM - 150, signLat, "scenery_sign_catenary_end", top: 3.1, tag: "catenary-end-b")
         }
 
-        buildSignCatalogStations(route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+        buildSignCatalogStations(route: route, routeVariant: routeVariant, travelDirection: travelDirection, scoringCarCount: scoringCarCount)
     }
 
     /// Sign catalog part 2 — stations and signals: station limit
@@ -3389,7 +8940,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// indicators （進路表示機） at the junctions, shunting signals
     /// （入換信号機） at the depot and junction throats, and the
     /// depot boards （無閉塞禁止・車両停止標識・移動禁止）.
-    private func buildSignCatalogStations(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+    private func buildSignCatalogStations(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, scoringCarCount: Int) {
         let up = travelDirection == .up
         let signLat: Float = up ? -4.0 : 4.0
         let signalLat: Float = up ? -3.7 : 3.7
@@ -3435,8 +8986,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
 
         // -- Station boards from the placements (travel frame).
+        // batch74 follow-up: the boards anchor on the canonical
+        // station centre from the station data, not on
+        // placement.chainageM — that is the stop target, which
+        // batch74 moved to the platform-end margin line, so the
+        // boards (and the brake-board gradient window) drifted
+        // with it. Fallback to the placement when the manifest
+        // has no bounds for the station.
         for placement in stationModelPlacements {
-            let c = placement.chainageM
+            let bounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM)
+            let c = bounds.map { ($0.start + $0.end) / 2 } ?? placement.chainageM
             let half = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2
             postBoard(c - 430, signLat, "scenery_sign_station_limit", tag: "stationlimit-a-\(placement.stationId)")
             postBoard(c + 430, signLat, "scenery_sign_station_limit", tag: "stationlimit-b-\(placement.stationId)")
@@ -3455,48 +9014,228 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
 
         // -- Stop markers and long boards on the platforms.
+        // batch34 (2026-11-14, user photo): the stop targets are
+        // diamond boards on short poles stuck beside the track —
+        // orange diamond outline, cream face, black number — like
+        // the real 停止位置目標. The board is a 0.55 m square
+        // whose face axes are rotated 45 deg, so the square reads
+        // as a diamond; the texture is drawn pre-rotated to match
+        // (square orange frame, number tilted -45 deg). A marker
+        // stands where the FRONT of a consist stops for a
+        // platform-centred stop: station centre ± cars * 19.5 / 2
+        // (8 cars = ±78 m, 10 cars = ±97.5 m) — the same position
+        // the scoring target uses, so stopping at the marker
+        // scores. Only consists that fit the platform get one
+        // (main line: 8 and 10 cars; branch: 8 cars only).
+        // batch50 (2026-11-14, marker close-ups 0/3 in batch46):
+        // placement.chainageM is NOT the station centre — it is
+        // the stop-scoring TARGET (platform centre + half the
+        // scoring consist, StopScoringRouteAdapter batch34), so
+        // the old `placement.chainageM ± cars*19.5/2` put every
+        // board half a consist past its design position (tour:
+        // 6-car scoring, target centre+58.5, so the 8-car boards
+        // stood at centre-19.5 / centre+136.5 while the tour's
+        // close-up spots sit at centre+66 — 70 m from the
+        // nearest board, hence 0/3). Recover the true centre by
+        // subtracting the scoring half-consist (scoringCarCount
+        // is the profile the scoring session was built with, so
+        // it always matches the target's offset) and place each
+        // board at centre ± half ITS OWN consist. The long
+        // boards and fouling markers below stay relative to
+        // placement.chainageM: they mark the drawn platform
+        // ends and the fan throats, which are placement-based.
+        // batch74 (2026-11-15) + scene follow-up: the adapter's
+        // target is no longer the centred stop — it IS the
+        // margin line, platformEnd − 5 m, at every consist
+        // length — so the batch50 centre recovery (target −
+        // scoring half-consist) is off by the batch74 shift
+        // (+17 m at 8-car scoring) and centre ± half-consist
+        // boards no longer stand at any target (a 10-car board
+        // recovered that way stood 14.5 m PAST the canonical
+        // platform end). The boards now stand at the front
+        // position itself: canonical platform end − margin in
+        // the direction of travel, start + margin for the other
+        // direction (canonicalPlatformBounds), the same
+        // chainage for every consist. The driving consist's
+        // board sits exactly on the target — which for the
+        // travel direction IS placement.chainageM, so stopping
+        // at the marker still scores — and the other consists'
+        // boards step 0.9 m toward the platform centre per
+        // board so the coincident boards do not z-fight. At the
+        // head-end terminals the canonical bounds already put
+        // the buffer side at the outer end (S01 start = 0,
+        // S28 end = 60 000), so the terminating direction's
+        // board lands buffer-side − margin with no special
+        // case.
         let topFull: Float = 0.3065 + 1.10
+        let diamondRoot2: Float = 0.70710678
         var markerBatches: [Int: MeshBatchBuilder] = [:]
         var longBatch = MeshBatchBuilder()
         var standBatch = MeshBatchBuilder()
         var seenMarkers = Set<String>()
+        let fanCenters = throatFanSpecs().map(\.center)
+        func addDiamondMarker(chainageM: Double, trackLateral: Float, lateralOffset: Float, flip: Bool, cars: Int, boardY: Float, poleCenterY: Float, poleHeight: Float) {
+            let key = "\(Int(chainageM))-\(Int(trackLateral * 10))-\(Int(lateralOffset * 10))-\(cars)-\(flip ? 1 : 0)"
+            if seenMarkers.contains(key) { return }
+            seenMarkers.insert(key)
+            let frame = profileStation(at: chainageM, trackLateral: trackLateral)
+            let axisZ = simd_cross(frame.xAxis, frame.yAxis)
+            let ax = flip ? frame.xAxis * -1 : frame.xAxis
+            let az = flip ? axisZ * -1 : axisZ
+            // Rotate the board's face axes 45 deg so the square
+            // reads as a diamond. The rotation keeps the frame
+            // right-handed (cross(ax', ay') == az), so the box
+            // faces stay valid.
+            let diaAx = (ax + frame.yAxis) * diamondRoot2
+            let diaAy = (frame.yAxis - ax) * diamondRoot2
+            let boardCenter = frame.center + frame.xAxis * lateralOffset + frame.yAxis * boardY
+            if markerBatches[cars] == nil { markerBatches[cars] = MeshBatchBuilder() }
+            // batch55 (2026-11-15, user photo: 「停止位置の看板
+            // 上下反転してる」 — the 10-car board read "01"):
+            // the served driver always sees the board's -az
+            // face (both travel directions: the board stands at
+            // the front of the stop, facing back along the
+            // approach). MeshBatchBuilder maps BOTH az faces
+            // with U toward +ax and V toward +ay in geometry
+            // space, so on the -az face U runs toward the
+            // viewer's LEFT — the pre-rotated numeral came out
+            // mirrored, reading "01" instead of "10" (the "8"
+            // boards hid it: 8 is mirror-symmetric). In the
+            // flip case ax/az negate but yAxis does not, which
+            // swaps diaAx/diaAy — composing the same mirror on
+            // the other direction's face, so ALL boards were
+            // wrong, not just one direction. Fix: hand the
+            // builder the swapped face axes and the negated az
+            // (ax: diaAy, ay: diaAx, az: -az) — still right-
+            // handed (diaAy x diaAx == -az), the square box
+            // maps onto itself (the diamond's vertices swap
+            // sides), and the driver face's U now runs toward
+            // the viewer's right with V up: the numeral reads
+            // upright for flip and non-flip alike, verified by
+            // transform algebra over headings 0-310 deg.
+            markerBatches[cars]!.addBoxAxes(center: boardCenter, size: SIMD3<Float>(0.55, 0.55, 0.04), ax: diaAy, ay: diaAx, az: az * -1)
+            standBatch.addBoxAxes(center: frame.center + frame.xAxis * lateralOffset + frame.yAxis * poleCenterY, size: SIMD3<Float>(0.06, poleHeight, 0.06), ax: frame.xAxis, ay: frame.yAxis, az: axisZ)
+        }
         for placement in stationModelPlacements {
             let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
+            // batch74 follow-up: the stop boards anchor on the
+            // canonical platform bounds from the station data
+            // (see the diamond comment above). The batch50
+            // centre recovery from placement.chainageM is gone:
+            // the target it recovered from changed meaning in
+            // batch74. Fallback to the drawn span around the
+            // placement when the manifest has no bounds.
+            let canonicalBounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM)
+            let platformStart = canonicalBounds?.start ?? (placement.chainageM - length / 2)
+            let platformEnd = canonicalBounds?.end ?? (placement.chainageM + length / 2)
+            // Consists that fit this platform (8 cars = 156 m,
+            // 10 cars = 195 m); only these get a stop marker.
+            let stopCars = [8, 10].filter { Double($0) * 19.5 <= length - 4 }
+            // Every consist's front stops on the same margin
+            // line, so all boards share one chainage per
+            // direction end. The driving consist's board (the
+            // longest board when the driving consist has none)
+            // stands exactly on the front position; the other
+            // boards step 0.9 m toward the platform centre per
+            // board so the coincident boards do not z-fight.
+            let orderedStopCars = stopCars.sorted(by: >)
+            let exactCars = orderedStopCars.contains(scoringCarCount) ? scoringCarCount : (orderedStopCars.first ?? -1)
+            var markerOffsets: [Int: Double] = [:]
+            var nextMarkerOffset = 0.9
+            for cars in orderedStopCars {
+                if cars == exactCars {
+                    markerOffsets[cars] = 0
+                } else {
+                    markerOffsets[cars] = nextMarkerOffset
+                    nextMarkerOffset += 0.9
+                }
+            }
+            // batch36: at island stations the platform is
+            // between the tracks, so the stop board stands
+            // on the island — the same 1.95 m from the served
+            // track, but on the inner side, at the same
+            // platform-top heights. The diamond's nearest
+            // vertex stays 1.561 m from the served track's
+            // centre (clear of the 1.475 m gauge). batch42:
+            // the frame lateral is the spread track (±4.0 at
+            // an island station, ±2.1 elsewhere — the spread
+            // function returns 0 away from island stations),
+            // so the board centre stands 2.05 m from the route
+            // centre, on the 4.96 m island (edge at 2.48 m).
+            let isIsland = placement.archetype == "island_platform" && placement.platformCount == 1
             let wide = placement.archetype.contains("terminal") || placement.archetype.contains("major") || placement.archetype == "junction_3platform"
             let midSample = sample(at: placement.chainageM)
             let isMainlineSection = travelDirection == .up ? midSample.distanceM < 60_000 : midSample.distanceM >= 8_000
             let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
-            let trackLaterals: [Float] = hasPassingTrack ? [-2.1, 2.1] : [travelDirection == .up ? -2.1 : 2.1]
+            let markerSpread = islandTrackSpread(at: placement.chainageM)
+            let trackLaterals: [Float] = hasPassingTrack ? [-(2.1 + markerSpread), 2.1 + markerSpread] : [travelDirection == .up ? -2.1 : 2.1]
             for trackLateral in trackLaterals {
                 let sides: [Float] = hasPassingTrack ? [trackLateral < 0 ? -1.0 : 1.0] : [-1.0, 1.0]
                 for sideSign in sides {
-                    for cars in [4, 6, 8, 10] {
-                        for dirSign in [-1.0, 1.0] {
-                            let cm = placement.chainageM + dirSign * (Double(cars) * 10 + 1)
-                            let key = "\(Int(cm))-\(Int(trackLateral * 10))-\(Int(sideSign))-\(cars)-\(Int(dirSign))"
-                            if seenMarkers.contains(key) { continue }
-                            seenMarkers.insert(key)
-                            let frame = profileStation(at: cm, trackLateral: trackLateral)
-                            let axisZ = simd_cross(frame.xAxis, frame.yAxis)
-                            let flip = dirSign > 0
-                            let ax = flip ? frame.xAxis * -1 : frame.xAxis
-                            let az = flip ? axisZ * -1 : axisZ
-                            let center = frame.center + frame.xAxis * (sideSign * 1.85) + frame.yAxis * (topFull + 0.62)
-                            if markerBatches[cars] == nil { markerBatches[cars] = MeshBatchBuilder() }
-                            markerBatches[cars]!.addBoxAxes(center: center, size: SIMD3<Float>(0.55, 0.55, 0.04), ax: ax, ay: frame.yAxis, az: az)
-                            standBatch.addBoxAxes(center: frame.center + frame.xAxis * (sideSign * 1.85) + frame.yAxis * (topFull + 0.28), size: SIMD3<Float>(0.06, 0.56, 0.06), ax: frame.xAxis, ay: frame.yAxis, az: axisZ)
+                    // -- Diamond stop markers on the platform edge.
+                    // The board sits 1.95 m out from the track
+                    // centre (clear of the 2.95 m carbody: the
+                    // diamond's inner edge is at 1.56 m) and low
+                    // on a short pole, like the photo.
+                    // batch74 follow-up: one board position per
+                    // direction end — the front position on the
+                    // margin line (platform end − margin for the
+                    // + direction, platform start + margin for
+                    // the − direction) — independent of consist
+                    // length; only the anti-overlap step toward
+                    // the centre differs per board.
+                    for endSign in [-1.0, 1.0] {
+                        let frontPos = endSign > 0 ? platformEnd - StopScoringRouteAdapter.platformEndMarginM : platformStart + StopScoringRouteAdapter.platformEndMarginM
+                        for cars in stopCars {
+                            let cm = frontPos - endSign * (markerOffsets[cars] ?? 0)
+                            addDiamondMarker(chainageM: cm, trackLateral: trackLateral, lateralOffset: isIsland ? -sideSign * 1.95 : sideSign * 1.95, flip: endSign > 0, cars: cars, boardY: topFull + 0.55, poleCenterY: topFull + 0.085, poleHeight: 0.17)
+                        }
+                    }
+                    // -- The same markers on the passing-loop
+                    // siding (the station's loop target, both
+                    // sides): the waiting train's front stops on
+                    // the same margin line, so the markers sit
+                    // at the same chainages as the platform
+                    // boards, low on short poles in the ballast.
+                    // batch46: the frame follows the loop target
+                    // (11.54 m at the widened island stations).
+                    // batch75: the fan gate and the loop-target
+                    // key follow the fan specs' centre, which is
+                    // the canonical platform centre since this
+                    // batch — the span midpoint below (canonical
+                    // when bounds exist, the placement under the
+                    // fallback, exactly as the specs fall back).
+                    if fanCenters.contains(where: { abs($0 - (platformStart + platformEnd) / 2) < 1.0 }) {
+                        for side: Float in [-1.0, 1.0] {
+                            for endSign in [-1.0, 1.0] {
+                                let frontPos = endSign > 0 ? platformEnd - StopScoringRouteAdapter.platformEndMarginM : platformStart + StopScoringRouteAdapter.platformEndMarginM
+                                for cars in stopCars {
+                                    let cm = frontPos - endSign * (markerOffsets[cars] ?? 0)
+                                    addDiamondMarker(chainageM: cm, trackLateral: side * loopTarget(atStationCenter: (platformStart + platformEnd) / 2), lateralOffset: side * 1.95, flip: endSign > 0, cars: cars, boardY: 1.46, poleCenterY: 0.58, poleHeight: 1.0)
+                                }
+                            }
                         }
                     }
                     if wide {
-                        let cm = placement.chainageM - length / 2 + 10
+                        // batch75: the long board marks the drawn
+                        // platform's start end (batch50's keep
+                        // decision was premised on the drawn span
+                        // being placement-based; the span is
+                        // canonical now, so the board follows it —
+                        // under the fallback this is the same
+                        // chainage as before).
+                        let cm = platformStart + 10
                         let frame = profileStation(at: cm, trackLateral: trackLateral)
                         let axisZ = simd_cross(frame.xAxis, frame.yAxis)
                         longBatch.addBoxAxes(center: frame.center + frame.xAxis * (sideSign * 1.85) + frame.yAxis * (topFull + 0.85), size: SIMD3<Float>(0.95, 0.6, 0.04), ax: frame.xAxis, ay: frame.yAxis, az: axisZ)
                     }
                     // Fouling-point markers at both throats.
+                    // batch75: 28 m past the drawn platform ends
+                    // (canonical span; identical under the
+                    // fallback).
                     if hasPassingTrack {
                         for endSign in [-1.0, 1.0] {
-                            let fm = placement.chainageM + endSign * (length / 2 + 28)
+                            let fm = endSign > 0 ? platformEnd + 28 : platformStart - 28
                             let fp = groundOffsetPoint(sample(at: fm), lateral: 0)
                             _ = addBox(parent: world, name: "sign-fouling-\(placement.stationId)-\(Int(endSign))", size: SIMD3<Float>(0.14, 0.85, 0.14), position: SIMD3<Float>(fp.x, fp.y + 0.42, fp.z), material: mat("scenery_sign_stop_train"), orientation: simd_quatf(angle: -sample(at: fm).heading, axis: SIMD3<Float>(0, 1, 0)))
                         }
@@ -3504,8 +9243,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 }
             }
         }
+        // -- Diamond stop markers at the depot stables: the E231
+        // 10-car (nose 27,797 m) and the 117 8-car (nose 27,760 m)
+        // stop with their fronts at the buffer end, so each gets
+        // its own marker beside its track. Chainages follow the
+        // depot boards' travelD convention; the lateral follows
+        // the yard side (see buildDepotYard).
+        if routeVariant == .mainline || routeVariant == .throughBranch {
+            let depotTravel: (Double) -> Double = { travelDirection == .up ? $0 : route.distanceM - $0 }
+            let depotSide: Float = -seaSideSign(travelDirection: travelDirection)
+            addDiamondMarker(chainageM: depotTravel(27_797), trackLateral: depotSide * 19.5, lateralOffset: depotSide * 1.95, flip: true, cars: 10, boardY: 1.46, poleCenterY: 0.58, poleHeight: 1.0)
+            addDiamondMarker(chainageM: depotTravel(27_760), trackLateral: depotSide * 24.5, lateralOffset: depotSide * 1.95, flip: true, cars: 8, boardY: 1.46, poleCenterY: 0.58, poleHeight: 1.0)
+        }
         for (cars, batch) in markerBatches {
-            if let mesh = batch.build(name: "sign-stopmarkers-\(cars)", material: mat("scenery_sign_stopmark_\(cars)")) { world.addChild(mesh) }
+            if let mesh = batch.build(name: "sign-stopdiamonds-\(cars)", material: mat("scenery_sign_stopdiamond_\(cars)")) { world.addChild(mesh) }
         }
         if let mesh = longBatch.build(name: "sign-long-boards", material: mat("scenery_sign_long")) { world.addChild(mesh) }
         if let mesh = standBatch.build(name: "sign-stopmarker-stands", material: postMat) { world.addChild(mesh) }
@@ -3515,7 +9266,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let totalCentre: Double = routeVariant == .throughBranch ? 68_000 : (routeVariant == .branchShuttle ? 8_000 : 60_000)
             func travelD(_ c: Double) -> Double { up ? c : route.distanceM - c }
             for placement in stationModelPlacements {
-                let centre = chainageFromCenter(distanceM: placement.chainageM, route: route, travelDirection: travelDirection)
+                // batch74 follow-up: the approach / departure
+                // boards key off the canonical station centre
+                // from the station data, not the stop target —
+                // the target's batch74 move to the margin line
+                // had shifted every one of these boards with it.
+                let bounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM)
+                let anchorRoute = bounds.map { ($0.start + $0.end) / 2 } ?? placement.chainageM
+                let centre = chainageFromCenter(distanceM: anchorRoute, route: route, travelDirection: travelDirection)
                 guard centre > 300, centre < totalCentre - 300 else { continue }
                 let approachC = centre + (up ? -400 : 400)
                 let departureC = centre + (up ? 170 : -170)
@@ -3543,12 +9301,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // Shunting signals at the junction throats.
             for junctionId in ["S24", "S26"] {
                 if let placement = stationModelPlacements.first(where: { $0.stationId == junctionId }) {
-                    let base = groundOffsetPoint(sample(at: placement.chainageM - 320), lateral: signLat)
-                    let yaw = simd_quatf(angle: -sample(at: placement.chainageM - 320).heading, axis: SIMD3<Float>(0, 1, 0))
+                    // batch74 follow-up: the throat anchor is
+                    // the canonical station centre, not the stop
+                    // target (see the signal extras above).
+                    let bounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM)
+                    let throat = (bounds.map { ($0.start + $0.end) / 2 } ?? placement.chainageM) - 320
+                    let base = groundOffsetPoint(sample(at: throat), lateral: signLat)
+                    let yaw = simd_quatf(angle: -sample(at: throat).heading, axis: SIMD3<Float>(0, 1, 0))
                     _ = addBox(parent: world, name: "sign-shunt-\(junctionId)", size: SIMD3<Float>(0.3, 0.55, 0.24), position: SIMD3<Float>(base.x, base.y + 0.85, base.z), material: headMat, orientation: yaw)
                     let lampEntity = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.06), materials: [redLamp])
                     lampEntity.name = "sign-shunt-lamp-\(junctionId)"
-                    let back = groundOffsetPoint(sample(at: placement.chainageM - 320 - 0.15), lateral: signLat)
+                    let back = groundOffsetPoint(sample(at: throat - 0.15), lateral: signLat)
                     lampEntity.position = SIMD3<Float>(back.x, base.y + 0.98, back.z)
                     world.addChild(lampEntity)
                 }
@@ -3860,6 +9623,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     board.name = "zoo-animal-\(species)-\(paddockIndex)-\(animalIndex)-\(cross)"
                     world.addChild(board)
                 }
+                // batch92: grounding kit under the cross
+                // boards too (see addPanelGrounding) — the
+                // board bottom already buries 0.14 m into
+                // the pad, but with no mound or shadow the
+                // cross still read as a prop from the
+                // mainline. The pad top is 0.14 m above the
+                // boards' bottom point; the footprint is
+                // square because the boards cross.
+                addPanelGrounding(parent: world, origin: SIMD3<Float>(aPoint.x, groundY - 0.04, aPoint.z), orientation: simd_quatf(angle: -aSample.heading + Float(paddockIndex) * 0.35, axis: SIMD3<Float>(0, 1, 0)), alongWidth: size * 1.04, acrossWidth: size * 1.04, surfaceLift: 0.14)
             }
             addTree(parent: world, name: "zoo-tree-\(paddockIndex)", x: c.x + 9, z: c.z - 7, height: 6.5, material: foliageMaterials[paddockIndex % foliageMaterials.count], groundY: groundY)
         }
@@ -3962,7 +9734,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let base = parkCenter + tangent * spot.along + xAxis * spot.lat
             let material = Self.pbr(pastels[fairyIndex % pastels.count], roughness: 0.8)
             _ = addBox(parent: world, name: "park-fairy-\(fairyIndex)", size: SIMD3<Float>(spot.w, spot.h, spot.d), position: SIMD3<Float>(base.x, parkGroundY + spot.h / 2, base.z), material: material, orientation: parkYaw)
-            let roof = addBox(parent: world, name: "park-fairy-roof-\(fairyIndex)", size: SIMD3<Float>(spot.w * 0.78, spot.w * 0.78, spot.d + 0.4), position: SIMD3<Float>(base.x, parkGroundY + spot.h + spot.w * 0.24, base.z), material: Self.pbr(pastels[(fairyIndex + 1) % pastels.count], roughness: 0.7), orientation: parkYaw)
+            let roof = addBox(parent: world, name: "park-fairy-roof-\(fairyIndex)", size: SIMD3<Float>(spot.w * 0.78, spot.w * 0.78, spot.d + 0.4), position: SIMD3<Float>(base.x, parkGroundY + spot.h, base.z), material: Self.pbr(pastels[(fairyIndex + 1) % pastels.count], roughness: 0.7), orientation: parkYaw)
             roof.orientation = roof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
         }
         let castleBase = parkCenter + tangent * -6 + xAxis * (sideSign * 40)
@@ -3973,7 +9745,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let tp = castleBase + xAxis * tx + tangent * tz
             _ = addBox(parent: world, name: "park-castle-turret-\(turret)", size: SIMD3<Float>(2.4, 24, 2.4), position: SIMD3<Float>(tp.x, parkGroundY + 12, tp.z), material: Self.pbr(pastels[0], roughness: 0.8), orientation: parkYaw)
         }
-        let castleRoof = addBox(parent: world, name: "park-castle-roof", size: SIMD3<Float>(8.6, 8.6, 11.4), position: SIMD3<Float>(castleBase.x, parkGroundY + 19 + 2.1, castleBase.z), material: Self.pbr(pastels[3], roughness: 0.7), orientation: parkYaw)
+        let castleRoof = addBox(parent: world, name: "park-castle-roof", size: SIMD3<Float>(8.6, 8.6, 11.4), position: SIMD3<Float>(castleBase.x, parkGroundY + 19, castleBase.z), material: Self.pbr(pastels[3], roughness: 0.7), orientation: parkYaw)
         castleRoof.orientation = castleRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
     }
 
@@ -3986,197 +9758,170 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         return entity
     }
 
-    /// Builds one articulated animal under a fresh root entity. The
-    /// caller positions the root inside its paddock and fills the
-    /// rig's route/paddock fields. Local frame: forward is -Z, the
-    /// ground is y = 0. Animals are part-built volumes (body, head,
-    /// neck, legs, tail, trunk), never flat boards.
-    private func makeZooAnimal(species: Int, mane: Bool) -> ZooAnimalRig {
-        let root = Entity()
-        root.name = "zoo-animal-\(species)"
-        var legs: [Entity] = []
-        var trunk: [Entity] = []
-        var neckPivot: Entity? = nil
-        let body: Entity
-        let headPivot: Entity
-        let tailPivot: Entity
-        let standY: Float
-        let restY: Float
+    /// batch92: grounding kit for the photo panels (the zoo
+    /// animal panels here; the same treatment is applied to
+    /// the scenic-strip boards in buildZooAndPark). A cutout
+    /// card whose bottom edge meets a flat pad in one hard
+    /// straight line, with no shadow under it, reads as a
+    /// signboard — the 2026-11-15 photo verdict on the zoo
+    /// (only the elephant read as an animal). The kit adds,
+    /// in the caller's frame:
+    /// - a low soil mound the card emerges from (the caller
+    ///   buries the card's bottom edge separately), sunk
+    ///   0.16 m below the walking surface and rising 0.10 m
+    ///   above it;
+    /// - a two-step contact shadow (a wide faint ellipse
+    ///   under a smaller darker one) lying on the surface.
+    /// `origin` is the panel's bottom-edge point and
+    /// `surfaceLift` is the walking surface's height above
+    /// that origin (the paddock pad top sits 0.045 m above
+    /// the panel root; the scenic pad top 0.14 m above the
+    /// board's bottom point). `alongWidth` runs along the
+    /// card, `acrossWidth` across it.
+    private func addPanelGrounding(parent: Entity, origin: SIMD3<Float>, orientation: simd_quatf, alongWidth: Float, acrossWidth: Float, surfaceLift: Float) {
+        let moundMaterial = Self.texturedPBR(UIColor(red: 0.55, green: 0.50, blue: 0.36, alpha: 1), roughness: 1, textureName: "scenery_grass")
+        let mound = ModelEntity(mesh: MeshResource.generateSphere(radius: 1), materials: [moundMaterial])
+        mound.name = "panel-grounding-mound"
+        mound.scale = SIMD3<Float>(acrossWidth / 2, 0.13, alongWidth / 2)
+        mound.position = origin + SIMD3<Float>(0, surfaceLift - 0.03, 0)
+        mound.orientation = orientation
+        parent.addChild(mound)
+        var shadowOuterMaterial = Self.pbr(UIColor(red: 0.04, green: 0.045, blue: 0.03, alpha: 1), roughness: 1)
+        shadowOuterMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.15))
+        var shadowInnerMaterial = Self.pbr(UIColor(red: 0.04, green: 0.045, blue: 0.03, alpha: 1), roughness: 1)
+        shadowInnerMaterial.blending = .transparent(opacity: .init(floatLiteral: 0.27))
+        let shadowOuter = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.02, radius: 1), materials: [shadowOuterMaterial])
+        shadowOuter.name = "panel-grounding-shadow"
+        shadowOuter.scale = SIMD3<Float>(acrossWidth * 0.62, 1, alongWidth * 0.62)
+        shadowOuter.position = origin + SIMD3<Float>(0, surfaceLift + 0.004, 0)
+        shadowOuter.orientation = orientation
+        parent.addChild(shadowOuter)
+        let shadowInner = ModelEntity(mesh: FallbackCylinderMesh.make(height: 0.02, radius: 1), materials: [shadowInnerMaterial])
+        shadowInner.name = "panel-grounding-shadow-inner"
+        shadowInner.scale = SIMD3<Float>(acrossWidth * 0.46, 1, alongWidth * 0.46)
+        shadowInner.position = origin + SIMD3<Float>(0, surfaceLift + 0.011, 0)
+        shadowInner.orientation = orientation
+        parent.addChild(shadowInner)
+    }
 
-        if species == 5 {
-            // Penguin: a single rounded body with belly, beak and
-            // flippers; it waddles instead of swinging legs.
-            let black = Self.pbr(UIColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1), roughness: 0.9)
-            let white = Self.pbr(UIColor(red: 0.93, green: 0.93, blue: 0.90, alpha: 1), roughness: 0.9)
-            let orange = Self.pbr(UIColor(red: 0.90, green: 0.55, blue: 0.15, alpha: 1), roughness: 0.8)
-            body = zooPart(MeshResource.generateSphere(radius: 1), black, SIMD3<Float>(0, 0.40, 0), name: "penguin-body")
-            body.scale = SIMD3<Float>(0.30, 0.40, 0.27)
-            root.addChild(body)
-            let belly = zooPart(MeshResource.generateSphere(radius: 1), white, SIMD3<Float>(0, 0.36, -0.155), name: "penguin-belly")
-            belly.scale = SIMD3<Float>(0.20, 0.29, 0.10)
-            root.addChild(belly)
-            let headBall = zooPart(MeshResource.generateSphere(radius: 0.155), black, SIMD3<Float>(0, 0.70, -0.02), name: "penguin-head")
-            root.addChild(headBall)
-            headPivot = Entity()
-            headPivot.position = SIMD3<Float>(0, 0.70, -0.02)
-            let beak = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.03, 0.11), cornerRadius: 0.01), orange, SIMD3<Float>(0, -0.02, -0.17), name: "penguin-beak")
-            headPivot.addChild(beak)
-            root.addChild(headPivot)
-            for side: Float in [-1.0, 1.0] {
-                let flipper = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.34, 0.15), cornerRadius: 0.02), black, SIMD3<Float>(side * 0.30, 0.42, 0.01), name: "penguin-flipper")
-                flipper.orientation = simd_quatf(angle: side * -0.28, axis: SIMD3<Float>(0, 0, 1))
-                root.addChild(flipper)
-                let foot = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.09, 0.03, 0.15), cornerRadius: 0.01), orange, SIMD3<Float>(side * 0.09, 0.02, -0.05), name: "penguin-foot")
-                root.addChild(foot)
-            }
-            tailPivot = Entity()
-            root.addChild(tailPivot)
-            standY = 0
-            restY = 0
-            return ZooAnimalRig(root: root, body: body, headPivot: headPivot, neckPivot: nil, trunkPivots: [],
-                                legs: [], tailPivot: tailPivot, species: species, routeDistanceM: 0,
-                                paddockCenter: .zero, axisX: SIMD3<Float>(1, 0, 0), axisZ: SIMD3<Float>(0, 0, 1),
-                                heading: 0, walkTarget: .zero, rngState: 0x9E37_79B9, bodyStandY: standY, bodyRestY: restY)
-        }
-
-        // Quadruped dimensions per species (metres, from real animals).
-        let legLen: Float, legR: Float, bodySize: SIMD3<Float>, headLen: Float
-        let coat: PhysicallyBasedMaterial
+    /// One zoo animal as a photo-style cutout panel (batch47,
+    /// 2026-11-14, user: 「動物園の動物実写パネルにして」
+    /// 「3Dのクオリティが低すぎる」): two back-to-back planes
+    /// carrying an AI-generated photo-style cutout — the same
+    /// construction as the people billboards (makePersonFigure,
+    /// batch31), replacing the primitive-mesh articulated
+    /// animals. Every zoo texture's figure faces image-left
+    /// with its feet on the canvas bottom edge (verified by
+    /// reading the textures), so under the profile-plane
+    /// derivation the nose lands on the root's -Z: the root's
+    /// -Z is the animal's facing and both broad sides show the
+    /// side profile. Card sizes derive from each texture's
+    /// measured alpha fill so the figure renders at its real
+    /// height: cardH = figure height / fillH, cardW follows
+    /// the canvas aspect.
+    private func makeZooAnimalPanel(species: Int) -> Entity {
+        let textureName: String
+        let cardW: Float
+        let cardH: Float
+        // batch58 (diagnosis §4): readability from the tour
+        // spots is decided by the figure's rendered height
+        // alone — the elephant (3.10 m figure) was the only
+        // animal that read in the batch56 photos. The small
+        // cards are therefore enlarged past life size on
+        // purpose (penguin group ×2, lion/tiger ×1.75,
+        // zebra ×1.5), putting every figure at ~2.0-2.3 m;
+        // giraffe and elephant already read and stay.
+        // batch92 (scale check against the real animals):
+        // the batch58 inflation overshot — an emperor
+        // penguin stands 1.15 m, a lion's head tops out
+        // ~1.5 m, a tiger's ~1.3 m, a zebra's ~1.8 m — so
+        // the inflated figures (2.0-2.3 m) read as props,
+        // not animals, and the 2026-11-15 verdict still
+        // called them boards. The cards now come back to
+        // ~1.2-1.35x life size (the panels sit 9 m from
+        // the track since batch50, not 15 m), and the
+        // grounding kit below does the anti-board work
+        // instead of raw size. Giraffe (4.5-5.5 m real)
+        // and elephant (3.0-3.4 m real) were already at
+        // life size and stay.
         switch species {
-        case 0: // lion
-            legLen = 0.62; legR = 0.055; bodySize = SIMD3<Float>(0.55, 0.60, 1.70); headLen = 0.42
-            coat = Self.pbr(UIColor(red: 0.78, green: 0.62, blue: 0.40, alpha: 1), roughness: 0.95)
-        case 1: // tiger
-            legLen = 0.60; legR = 0.055; bodySize = SIMD3<Float>(0.52, 0.58, 1.65); headLen = 0.40
-            coat = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_zoo_coat_tiger")
-        case 2: // giraffe
-            legLen = 1.72; legR = 0.06; bodySize = SIMD3<Float>(0.60, 0.72, 1.85); headLen = 0.52
-            coat = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_zoo_coat_giraffe")
-        case 3: // elephant
-            legLen = 1.22; legR = 0.15; bodySize = SIMD3<Float>(1.55, 1.65, 2.90); headLen = 0.70
-            coat = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_zoo_coat_giraffe")
-        default: // zebra
-            legLen = 0.80; legR = 0.045; bodySize = SIMD3<Float>(0.50, 0.58, 1.75); headLen = 0.48
-            coat = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_zoo_coat_zebra")
+        case 5:
+            // Penguin group (scenery_zoo_penguin, 512x512,
+            // fillH 0.746): seven emperor penguins. batch92:
+            // card 3.02 → 2.08 m, tallest bird ~1.55 m.
+            textureName = "scenery_zoo_penguin"
+            cardH = 2.08
+            cardW = 2.08
+        case 0:
+            // Lion (512x512, fillH 0.846). batch92: card
+            // 2.70 → 2.01 m, figure ~1.70 m.
+            textureName = "scenery_zoo_lion"
+            cardH = 2.01
+            cardW = 2.01
+        case 1:
+            // Tiger (scenery_zoo_tiger, 512x512, fillH
+            // 0.578). batch92: card 3.69 → 2.68 m, figure
+            // ~1.55 m tall, ~2.66 m long.
+            textureName = "scenery_zoo_tiger"
+            cardH = 2.68
+            cardW = 2.68
+        case 2:
+            // Giraffe (512x512, fillH 1.00): figure 4.80 m.
+            textureName = "scenery_zoo_giraffe"
+            cardH = 4.80
+            cardW = 4.80
+        case 3:
+            // Elephant (512x512, fillH 0.715): figure 3.10 m.
+            textureName = "scenery_zoo_elephant"
+            cardH = 4.34
+            cardW = 4.34
+        default:
+            // Zebra (512x512, fillH 0.725). batch92: card
+            // 2.79 → 2.48 m, figure ~1.80 m.
+            textureName = "scenery_zoo_zebra"
+            cardH = 2.48
+            cardW = 2.48
         }
-        let bodyY = legLen + bodySize.y / 2
-        if species == 3 {
-            // Elephant body is an ellipsoid, not a box.
-            body = zooPart(MeshResource.generateSphere(radius: 1), Self.pbr(UIColor(red: 0.52, green: 0.50, blue: 0.48, alpha: 1), roughness: 0.95), SIMD3<Float>(0, bodyY, 0), name: "elephant-body")
-            body.scale = SIMD3<Float>(bodySize.x / 2, bodySize.y / 2, bodySize.z / 2)
-        } else {
-            body = zooPart(MeshResource.generateBox(size: bodySize, cornerRadius: min(bodySize.x, bodySize.y) * 0.32), coat, SIMD3<Float>(0, bodyY, 0), name: "animal-body")
+        var material = Self.texturedPBR(.white, roughness: 0.95, textureName: textureName)
+        material.blending = .transparent(opacity: .init(floatLiteral: 1))
+        // .back culling, as on the people cards: each side
+        // renders only its own outward face, so the far face's
+        // photo cannot ghost through the transparent parts.
+        material.faceCulling = .back
+        let mesh = MeshResource.generatePlane(width: cardW, height: cardH)
+        let root = Entity()
+        root.name = "zoo-animal-panel-\(species)"
+        func panelPlane(rotationY: Float, offsetX: Float, flip: Bool) -> ModelEntity {
+            let plane = ModelEntity(mesh: mesh, materials: [material])
+            plane.name = "zoo-animal-card"
+            // batch92: the card's bottom edge (the figure's
+            // feet) sits 0.07 m BELOW the root, buried in
+            // the grounding mound, instead of meeting the
+            // pad in a hard straight line at the root.
+            plane.position = SIMD3<Float>(offsetX, cardH / 2 - 0.07, 0)
+            plane.orientation = simd_quatf(angle: rotationY, axis: SIMD3<Float>(0, 1, 0))
+            if flip { plane.scale = SIMD3<Float>(-1, 1, 1) }
+            return plane
         }
-        root.addChild(body)
-        standY = bodyY
-        restY = legLen * 0.35 + bodySize.y / 2
-
-        // Legs on hip pivots so they can swing and fold.
-        for corner in 0..<4 {
-            let sx: Float = corner % 2 == 0 ? -1 : 1
-            let sz: Float = corner < 2 ? -1 : 1
-            let hip = Entity()
-            hip.name = "leg-\(corner)"
-            hip.position = SIMD3<Float>(sx * (bodySize.x / 2 - 0.07), legLen, sz * (bodySize.z / 2 - 0.30))
-            let legMesh = zooPart(FallbackCylinderMesh.make(height: legLen, radius: legR), species == 3 ? Self.pbr(UIColor(red: 0.52, green: 0.50, blue: 0.48, alpha: 1), roughness: 0.95) : coat, SIMD3<Float>(0, -legLen / 2 + 0.02, 0), name: "leg-mesh")
-            hip.addChild(legMesh)
-            root.addChild(hip)
-            legs.append(hip)
-        }
-
-        // Neck and head.
-        let headMat = species == 3 ? Self.pbr(UIColor(red: 0.52, green: 0.50, blue: 0.48, alpha: 1), roughness: 0.95) : coat
-        if species == 2 {
-            let neck = Entity()
-            neck.name = "giraffe-neck"
-            neck.position = SIMD3<Float>(0, bodyY + 0.24, -bodySize.z / 2 + 0.10)
-            neck.orientation = simd_quatf(angle: 0.42, axis: SIMD3<Float>(1, 0, 0))
-            let neckMesh = zooPart(FallbackCylinderMesh.make(height: 1.5, radius: 0.115), coat, SIMD3<Float>(0, 0.72, -0.16), name: "giraffe-neck-mesh")
-            neck.addChild(neckMesh)
-            root.addChild(neck)
-            neckPivot = neck
-            headPivot = Entity()
-            headPivot.position = SIMD3<Float>(0, 1.44, -0.34)
-            let headMesh = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.20, 0.26, headLen), cornerRadius: 0.07), coat, SIMD3<Float>(0, 0.04, -headLen / 2), name: "giraffe-head")
-            headPivot.addChild(headMesh)
-            for side: Float in [-1.0, 1.0] {
-                let horn = zooPart(FallbackCylinderMesh.make(height: 0.16, radius: 0.025), headMat, SIMD3<Float>(side * 0.06, 0.22, -0.10), name: "giraffe-ossicone")
-                headPivot.addChild(horn)
-            }
-            neck.addChild(headPivot)
-        } else if species == 3 {
-            headPivot = Entity()
-            headPivot.position = SIMD3<Float>(0, bodyY + 0.22, -bodySize.z / 2 + 0.05)
-            let headMesh = zooPart(MeshResource.generateSphere(radius: 0.60), headMat, SIMD3<Float>(0, 0, -0.30), name: "elephant-head")
-            headPivot.addChild(headMesh)
-            for side: Float in [-1.0, 1.0] {
-                let ear = zooPart(MeshResource.generateSphere(radius: 1), headMat, SIMD3<Float>(side * 0.55, 0.08, -0.12), name: "elephant-ear")
-                ear.scale = SIMD3<Float>(0.10, 0.58, 0.48)
-                headPivot.addChild(ear)
-                let tusk = zooPart(FallbackCylinderMesh.make(height: 0.42, radius: 0.028), Self.pbr(.white, roughness: 0.5), SIMD3<Float>(side * 0.20, -0.42, -0.62), name: "elephant-tusk")
-                tusk.orientation = simd_quatf(angle: 0.5, axis: SIMD3<Float>(1, 0, 0))
-                headPivot.addChild(tusk)
-            }
-            // Trunk: three chained segments hanging from the head.
-            var parent = headPivot
-            var radius: Float = 0.105
-            for segment in 0..<3 {
-                let pivot = Entity()
-                pivot.name = "trunk-\(segment)"
-                pivot.position = segment == 0 ? SIMD3<Float>(0, -0.28, -0.78) : SIMD3<Float>(0, -0.52, -0.03)
-                let mesh = zooPart(FallbackCylinderMesh.make(height: 0.55, radius: radius), headMat, SIMD3<Float>(0, -0.26, 0), name: "trunk-mesh")
-                pivot.addChild(mesh)
-                parent.addChild(pivot)
-                trunk.append(pivot)
-                parent = pivot
-                radius -= 0.018
-            }
-            root.addChild(headPivot)
-        } else {
-            headPivot = Entity()
-            headPivot.position = SIMD3<Float>(0, bodyY + bodySize.y / 2 - 0.10, -bodySize.z / 2 - 0.02)
-            let headMesh = zooPart(MeshResource.generateBox(size: SIMD3<Float>(headLen * 0.52, headLen * 0.58, headLen), cornerRadius: headLen * 0.16), headMat, SIMD3<Float>(0, 0.02, -headLen / 2), name: "animal-head")
-            headPivot.addChild(headMesh)
-            if species == 0 && mane {
-                let maneMesh = zooPart(MeshResource.generateSphere(radius: 0.30), Self.pbr(UIColor(red: 0.45, green: 0.32, blue: 0.18, alpha: 1), roughness: 1), SIMD3<Float>(0, 0.05, -0.10), name: "lion-mane")
-                headPivot.addChild(maneMesh)
-            }
-            for side: Float in [-1.0, 1.0] {
-                let ear = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.09, 0.11, 0.03), cornerRadius: 0.01), headMat, SIMD3<Float>(side * headLen * 0.20, headLen * 0.30, -0.06), name: "animal-ear")
-                headPivot.addChild(ear)
-            }
-            if species == 4 {
-                let maneStrip = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.05, 0.30, 0.95), cornerRadius: 0.01), Self.pbr(UIColor(red: 0.12, green: 0.11, blue: 0.11, alpha: 1), roughness: 1), SIMD3<Float>(0, legLen + bodySize.y + 0.06, -bodySize.z / 2 + 0.42), name: "zebra-mane")
-                maneStrip.orientation = simd_quatf(angle: 0.35, axis: SIMD3<Float>(1, 0, 0))
-                root.addChild(maneStrip)
-            }
-            root.addChild(headPivot)
-        }
-
-        // Tail on a pivot at the rear top of the body.
-        tailPivot = Entity()
-        tailPivot.position = SIMD3<Float>(0, bodyY + bodySize.y / 2 - 0.10, bodySize.z / 2 - 0.02)
-        tailPivot.orientation = simd_quatf(angle: 0.30, axis: SIMD3<Float>(1, 0, 0))
-        let tailLen: Float = species == 3 ? 1.0 : 0.78
-        let tailMesh = zooPart(FallbackCylinderMesh.make(height: tailLen, radius: species == 3 ? 0.035 : 0.028), headMat, SIMD3<Float>(0, -tailLen / 2, 0), name: "animal-tail")
-        tailPivot.addChild(tailMesh)
-        if species == 0 {
-            let tuft = zooPart(MeshResource.generateSphere(radius: 0.07), Self.pbr(UIColor(red: 0.30, green: 0.22, blue: 0.12, alpha: 1), roughness: 1), SIMD3<Float>(0, -tailLen, 0), name: "lion-tuft")
-            tailPivot.addChild(tuft)
-        }
-        root.addChild(tailPivot)
-
-        return ZooAnimalRig(root: root, body: body, headPivot: headPivot, neckPivot: neckPivot, trunkPivots: trunk,
-                            legs: legs, tailPivot: tailPivot, species: species, routeDistanceM: 0,
-                            paddockCenter: .zero, axisX: SIMD3<Float>(1, 0, 0), axisZ: SIMD3<Float>(0, 0, 1),
-                            heading: 0, walkTarget: .zero, rngState: 0x9E37_79B9, bodyStandY: standY, bodyRestY: restY)
+        root.addChild(panelPlane(rotationY: -Float.pi / 2, offsetX: -0.008, flip: false))
+        root.addChild(panelPlane(rotationY: Float.pi / 2, offsetX: 0.008, flip: true))
+        // batch92: grounding kit (soil mound + contact
+        // shadow) — see addPanelGrounding. The paddock pad
+        // top sits 0.045 m above the panel root: the
+        // placement in buildZooPaddock puts the root
+        // 0.02 m over the ground point and the pad top is
+        // 0.065 m over it. The card runs along the root's
+        // Z, so alongWidth follows cardW and acrossWidth
+        // is the narrow axis.
+        addPanelGrounding(parent: root, origin: SIMD3<Float>(0, 0, 0), orientation: simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0)), alongWidth: cardW * 1.04, acrossWidth: cardW * 0.52, surfaceLift: 0.045)
+        return root
     }
 
     /// One volumetric enclosure: ground pad, chain-link cage (tall
     /// with a top rail for the big cats), visitor safety fence,
     /// rocks, a pond and shelter where the species wants them, an
     /// explanation panel facing the track, and the animals
-    /// themselves, registered for animation.
+    /// themselves as photo cutout panels (batch47).
     private func buildZooPaddock(centerM: Double, sideSign: Float, species: Int, count: Int, hasCage: Bool, travelDirection: RegionalTravelDirection) {
         let mid = sample(at: centerM)
         let yaw = simd_quatf(angle: -mid.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -4185,10 +9930,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let savannaMat = Self.pbr(UIColor(red: 0.60, green: 0.57, blue: 0.36, alpha: 1), roughness: 1)
         let gravelMat = Self.pbr(UIColor(red: 0.78, green: 0.78, blue: 0.76, alpha: 1), roughness: 1)
         let padMat = species == 5 ? gravelMat : (species == 0 || species == 1 ? sandMat : savannaMat)
+        // batch32 (2026-11-14, user spec): the whole paddock
+        // cross-section pulls in toward the track — guard
+        // fence 3.3 m and chain-link 5.5 m from the track
+        // centre, right at the vehicle clearance limit
+        // (laterals here are route-centre relative; the
+        // track itself sits at +/-2.1).
         var padD = centerM - 21
         while padD <= centerM + 21 {
-            let p = gp(padD, sideSign * 26)
-            _ = addBox(parent: world, name: "zoo-pad-\(Int(centerM))-\(Int(padD))", size: SIMD3<Float>(31, 0.09, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: padMat, orientation: yaw)
+            let p = gp(padD, sideSign * 23)
+            _ = addBox(parent: world, name: "zoo-pad-\(Int(centerM))-\(Int(padD))", size: SIMD3<Float>(30, 0.09, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: padMat, orientation: yaw)
             padD += 15
         }
         // Chain-link fences: track side, far side and both ends.
@@ -4208,38 +9959,38 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 d += seg
             }
         }
-        fenceRun(from: centerM - 21, to: centerM + 21, lateral: sideSign * 11)
-        fenceRun(from: centerM - 21, to: centerM + 21, lateral: sideSign * 41)
+        fenceRun(from: centerM - 21, to: centerM + 21, lateral: sideSign * 7.6)
+        fenceRun(from: centerM - 21, to: centerM + 21, lateral: sideSign * 38)
         for endSign: Float in [-1.0, 1.0] {
             let endD = centerM + Double(endSign) * 21
-            var lat = 11.0 as Double
-            while lat < 41 {
-                let seg = min(7.5, 41 - lat)
+            var lat = 7.6 as Double
+            while lat < 38 {
+                let seg = min(7.5, 38 - lat)
                 let p = gp(endD, sideSign * Float(lat + seg / 2))
                 _ = addBox(parent: world, name: "zoo-fence-end-\(Int(centerM))", size: SIMD3<Float>(Float(seg) + 0.05, fenceH, 0.03), position: SIMD3<Float>(p.x, p.y + fenceH / 2, p.z), material: fenceMat, orientation: yaw)
                 lat += seg
             }
         }
         if hasCage {
-            let top = gp(centerM, sideSign * 11)
+            let top = gp(centerM, sideSign * 7.6)
             _ = addBox(parent: world, name: "zoo-cage-toprail-\(Int(centerM))", size: SIMD3<Float>(0.07, 0.07, 42.5), position: SIMD3<Float>(top.x, top.y + fenceH + 0.03, top.z), material: postMat, orientation: yaw)
         }
         // Visitor safety fence between the track and the enclosure.
         var postD = centerM - 21
         while postD <= centerM + 21 {
-            let p = gp(postD, sideSign * 8.2)
+            let p = gp(postD, sideSign * 5.4)
             _ = addBox(parent: world, name: "zoo-guard-post-\(Int(centerM))", size: SIMD3<Float>(0.07, 1.1, 0.07), position: SIMD3<Float>(p.x, p.y + 0.55, p.z), material: postMat, orientation: yaw)
             postD += 3.5
         }
         for railY: Float in [0.62, 1.04] {
-            let p = gp(centerM, sideSign * 8.2)
+            let p = gp(centerM, sideSign * 5.4)
             _ = addBox(parent: world, name: "zoo-guard-rail-\(Int(centerM))", size: SIMD3<Float>(0.05, 0.05, 42.5), position: SIMD3<Float>(p.x, p.y + railY, p.z), material: postMat, orientation: yaw)
         }
         // Rocks, pond, shelter, feeder, tree.
         let rockMat = Self.pbr(UIColor(red: 0.55, green: 0.54, blue: 0.52, alpha: 1), roughness: 0.95)
         for rock in 0..<4 {
             let along = Double(stableIndex("zoorock-\(Int(centerM))-\(rock)", count: 25)) - 12
-            let lat = 15 + Float(stableIndex("zoorocklat-\(Int(centerM))-\(rock)", count: 22))
+            let lat = 12 + Float(stableIndex("zoorocklat-\(Int(centerM))-\(rock)", count: 20))
             let p = gp(centerM + along, sideSign * lat)
             let r = 0.5 + Float(stableIndex("zoorockr-\(Int(centerM))-\(rock)", count: 10)) * 0.09
             let rockEntity = zooPart(MeshResource.generateSphere(radius: r), rockMat, SIMD3<Float>(p.x, p.y + r * 0.35, p.z), name: "zoo-rock")
@@ -4247,24 +9998,45 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             world.addChild(rockEntity)
         }
         if species == 5 || species == 3 || species == 2 {
-            let p = gp(centerM - 8, sideSign * 33)
+            let p = gp(centerM - 8, sideSign * 30)
             let pond = zooPart(FallbackCylinderMesh.make(height: 0.07, radius: species == 5 ? 3.4 : 2.7), Self.pbr(UIColor(red: 0.25, green: 0.45, blue: 0.62, alpha: 1), metallic: 0.1, roughness: 0.18), SIMD3<Float>(p.x, p.y + 0.06, p.z), name: "zoo-pond")
             world.addChild(pond)
         }
-        let hut = gp(centerM + 13, sideSign * 36)
+        let hut = gp(centerM + 13, sideSign * 33)
         _ = addBox(parent: world, name: "zoo-shelter-\(Int(centerM))", size: SIMD3<Float>(3.2, 2.3, 2.6), position: SIMD3<Float>(hut.x, hut.y + 1.15, hut.z), material: Self.pbr(UIColor(red: 0.45, green: 0.35, blue: 0.24, alpha: 1), roughness: 0.9), orientation: yaw)
         _ = addBox(parent: world, name: "zoo-shelter-roof-\(Int(centerM))", size: SIMD3<Float>(3.7, 0.12, 3.1), position: SIMD3<Float>(hut.x, hut.y + 2.42, hut.z), material: Self.pbr(UIColor(red: 0.30, green: 0.28, blue: 0.27, alpha: 1), roughness: 0.8), orientation: yaw)
         let feed = gp(centerM + 6, sideSign * 18)
         _ = addBox(parent: world, name: "zoo-feeder-\(Int(centerM))", size: SIMD3<Float>(1.4, 0.5, 0.6), position: SIMD3<Float>(feed.x, feed.y + 0.25, feed.z), material: postMat, orientation: yaw)
         _ = addBox(parent: world, name: "zoo-hay-\(Int(centerM))", size: SIMD3<Float>(1.2, 0.3, 0.45), position: SIMD3<Float>(feed.x, feed.y + 0.62, feed.z), material: Self.pbr(UIColor(red: 0.82, green: 0.72, blue: 0.38, alpha: 1), roughness: 1), orientation: yaw)
-        buildZooTree(at: gp(centerM - 14, sideSign * 30), seed: Int(centerM))
-        // Explanation panel facing the track.
-        let panel = gp(centerM, sideSign * 9.4)
-        _ = addBox(parent: world, name: "zoo-panel-\(Int(centerM))", size: SIMD3<Float>(1.3, 0.85, 0.05), position: SIMD3<Float>(panel.x, panel.y + 1.05, panel.z), material: Self.pbr(UIColor(red: 0.94, green: 0.93, blue: 0.88, alpha: 1), roughness: 0.6), orientation: yaw)
-        _ = addBox(parent: world, name: "zoo-panel-stripe-\(Int(centerM))", size: SIMD3<Float>(1.3, 0.22, 0.055), position: SIMD3<Float>(panel.x, panel.y + 1.36, panel.z), material: Self.pbr(UIColor(red: 0.85, green: 0.45, blue: 0.15, alpha: 1), roughness: 0.6), orientation: yaw)
+        buildZooTree(at: gp(centerM - 14, sideSign * 27), seed: Int(centerM))
+        // batch55 (2026-11-15, user: 「動物の檻以外なにもない
+        // の不自然すぎ」): the paddock interior held one tree,
+        // one feeder and four rocks behind the animal panels.
+        // A second tree, a shrub cluster and a second feeder
+        // fill the far half (laterals 21-30 m) — all behind
+        // the photo panels (9.0-17.5 m), so the sightline
+        // from the track to the animals stays open.
+        buildZooTree(at: gp(centerM + 18, sideSign * 26), seed: Int(centerM) + 31, scale: 1.15)
+        for (shrubIndex, shrubSpot) in [(-4.0, Float(24)), (8.0, Float(28)), (16.0, Float(21))].enumerated() {
+            let shrubP = gp(centerM + shrubSpot.0, sideSign * shrubSpot.1)
+            let shrubMat = foliageMaterials[(Int(centerM) + shrubIndex) % foliageMaterials.count]
+            _ = addBox(parent: world, name: "zoo-shrub-\(Int(centerM))-\(shrubIndex)", size: SIMD3<Float>(1.35, 0.85, 1.35), position: SIMD3<Float>(shrubP.x, shrubP.y + 0.42, shrubP.z), material: shrubMat, orientation: yaw)
+        }
+        let feed2 = gp(centerM - 7, sideSign * 21)
+        _ = addBox(parent: world, name: "zoo-feeder2-\(Int(centerM))", size: SIMD3<Float>(1.4, 0.5, 0.6), position: SIMD3<Float>(feed2.x, feed2.y + 0.25, feed2.z), material: postMat, orientation: yaw)
+        _ = addBox(parent: world, name: "zoo-hay2-\(Int(centerM))", size: SIMD3<Float>(1.2, 0.3, 0.45), position: SIMD3<Float>(feed2.x, feed2.y + 0.62, feed2.z), material: Self.pbr(UIColor(red: 0.82, green: 0.72, blue: 0.38, alpha: 1), roughness: 1), orientation: yaw)
+        // Explanation panel facing the track. batch58
+        // (diagnosis §4): the orange/white sign stood at the
+        // paddock centre, directly in the sightline from the
+        // tour spots to the animal panels, visually competing
+        // with them — it moves to the paddock's near end and
+        // drops 0.1 m, out of that sightline.
+        let panel = gp(centerM - 18.5, sideSign * 6.4)
+        _ = addBox(parent: world, name: "zoo-panel-\(Int(centerM))", size: SIMD3<Float>(1.3, 0.85, 0.05), position: SIMD3<Float>(panel.x, panel.y + 0.95, panel.z), material: Self.pbr(UIColor(red: 0.94, green: 0.93, blue: 0.88, alpha: 1), roughness: 0.6), orientation: yaw)
+        _ = addBox(parent: world, name: "zoo-panel-stripe-\(Int(centerM))", size: SIMD3<Float>(1.3, 0.22, 0.055), position: SIMD3<Float>(panel.x, panel.y + 1.26, panel.z), material: Self.pbr(UIColor(red: 0.85, green: 0.45, blue: 0.15, alpha: 1), roughness: 0.6), orientation: yaw)
         // Visitors watching from behind the far fence (people).
         for v in 0..<2 {
-            let vp = gp(centerM - 6 + Double(v) * 13, sideSign * 44.5)
+            let vp = gp(centerM - 6 + Double(v) * 13, sideSign * 41)
             let axis = SIMD3<Float>(sin(mid.heading), 0, -cos(mid.heading))
             if v == 0 {
                 let face = SIMD3<Float>(cos(mid.heading), 0, sin(mid.heading)) * -sideSign
@@ -4273,39 +10045,90 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 addPerson(position: vp, yaw: atan2(axis.x, -axis.z), role: 3, mode: 1, routeDistanceM: centerM, walkAxis: axis, range: 7, seedKey: "zoovis-\(Int(centerM))-1")
             }
         }
-        // Animals.
-        let spots: [(along: Double, lat: Float)] = [(-9, 20), (6, 29), (-2, 24), (11, 33)]
-        let axisX = SIMD3<Float>(cos(mid.heading), 0, sin(mid.heading))
+        // Animals (batch47): photo cutout panels instead of
+        // the primitive articulated animals — see
+        // makeZooAnimalPanel. Static placement, broad side to
+        // the track so the driver reads a full side profile,
+        // facing along the enclosure's along-track axis.
+        // batch58 (diagnosis §4): each panel additionally
+        // yaws 25° toward the approaching tour spot. The
+        // panels' broad normals were perpendicular to the
+        // track axis, so from a spot ~12 m away the nearest
+        // panel sat at ~44° obliquity (×0.71 foreshortening);
+        // pre-multiplying this world-Y tilt turns the
+        // track-facing normal back along the line of travel,
+        // cutting the obliquity to ~20-30°. The sign follows
+        // sideSign so the normal leans toward the track side
+        // the paddock sits on.
+        let spotTilt = simd_quatf(angle: sideSign * (Float.pi * 25 / 180), axis: SIMD3<Float>(0, 1, 0))
         let axisZ = SIMD3<Float>(sin(mid.heading), 0, -cos(mid.heading))
-        for index in 0..<count {
-            let spot = spots[index % spots.count]
-            var rig = makeZooAnimal(species: species, mane: index == 0)
-            let p = gp(centerM + spot.along, sideSign * spot.lat)
-            rig.root.position = SIMD3<Float>(p.x, p.y + 0.07, p.z)
-            rig.heading = Float(stableIndex("zoohead-\(Int(centerM))-\(index)", count: 628)) / 100 - 3.14
-            rig.root.orientation = simd_quatf(angle: -rig.heading, axis: SIMD3<Float>(0, 1, 0))
-            rig.routeDistanceM = centerM + spot.along
-            rig.paddockCenter = SIMD3<Float>(p.x, p.y + 0.07, p.z)
-            rig.axisX = axisX
-            rig.axisZ = axisZ
-            rig.walkTarget = rig.root.position
-            rig.rngState = UInt64(0x2545 + Int(centerM) * 131 + index * 17_171)
-            world.addChild(rig.root)
-            zooAnimalRigs.append(rig)
+        if species == 5 {
+            // Penguins: the batch46 fence-line cluster (spots
+            // at 9.5-11.5 m) becomes two group panels — each
+            // texture already shows a seven-bird group — set
+            // inside the chain-link fence (7.6 m), facing
+            // opposite ways along the fence. batch50: the panels
+            // pull to 8.2/8.8 m (0.6-1.2 m inside the fence) so
+            // the 1.51 m group cards read ~40 px from the tour
+            // spot at 544 instead of ~19 px dots from 505.
+            let groupSpots: [(along: Double, lat: Float, flip: Bool, scale: Float)] = [
+                (-3.5, 8.2, false, 1.0), (3.5, 8.8, true, 0.94),
+            ]
+            for (groupIndex, spot) in groupSpots.enumerated() {
+                let p = gp(centerM + spot.along, sideSign * spot.lat)
+                let panel = makeZooAnimalPanel(species: species)
+                panel.name = "zoo-penguin-group-\(Int(centerM))-\(groupIndex)"
+                // batch92: root drops from +0.07 to +0.02 —
+                // the grounding kit inside the panel (mound
+                // + shadow) is sized from this root height.
+                panel.position = SIMD3<Float>(p.x, p.y + 0.02, p.z)
+                panel.scale = SIMD3<Float>(spot.scale, spot.scale, spot.scale)
+                let face = spot.flip ? -axisZ : axisZ
+                panel.orientation = spotTilt * simd_quatf(angle: -atan2(face.x, -face.z), axis: SIMD3<Float>(0, 1, 0))
+                world.addChild(panel)
+            }
+        } else {
+            // Other species on the track side of the
+            // enclosure (lat 9.0-9.5 for the front pair, inside
+            // the 7.6-38 m fence span, clear of the feeder at
+            // (+6, 18), the pond at (-8, 30) and the shelter at
+            // (+13, 33)). batch50: the front pair pulls from
+            // 13.5/15.5 m to 9.0/9.5 m (just inside the fence)
+            // so the side-profile cards are not seen nearly
+            // edge-on from the tour spots (lion/tiger/elephant
+            // read ~40-50 px instead of ~25 px).
+            let spots: [(along: Double, lat: Float)] = [(-9, 9.0), (5, 9.5), (-2, 17.5), (11, 12.5)]
+            for index in 0..<count {
+                let spot = spots[index % spots.count]
+                let p = gp(centerM + spot.along, sideSign * spot.lat)
+                let panel = makeZooAnimalPanel(species: species)
+                // batch92: root at +0.02 (see the penguin
+                // placement above).
+                panel.position = SIMD3<Float>(p.x, p.y + 0.02, p.z)
+                let s = 0.95 + Float(stableIndex("zoopanel-scale-\(Int(centerM))-\(index)", count: 11)) * 0.01
+                panel.scale = SIMD3<Float>(s, s, s)
+                let face = index % 2 == 0 ? axisZ : -axisZ
+                panel.orientation = spotTilt * simd_quatf(angle: -atan2(face.x, -face.z), axis: SIMD3<Float>(0, 1, 0))
+                world.addChild(panel)
+            }
         }
     }
 
-    private func buildZooTree(at point: SIMD3<Float>, seed: Int) {
+    /// batch46: `scale` multiplies every dimension (the zoo
+    /// mountain's forest mixes 0.85-1.9x trees so the slope
+    /// reads as woodland, not a row of identical shrubs);
+    /// existing callers keep the default 1.
+    private func buildZooTree(at point: SIMD3<Float>, seed: Int, scale: Float = 1) {
         let trunkMat = Self.pbr(UIColor(red: 0.36, green: 0.28, blue: 0.20, alpha: 1), roughness: 1)
         let leafMat = Self.pbr(UIColor(red: 0.22, green: 0.38, blue: 0.20, alpha: 1), roughness: 1)
-        let trunkH: Float = 2.0 + Float(abs(seed) % 7) * 0.12
-        let trunk = zooPart(FallbackCylinderMesh.make(height: trunkH, radius: 0.13), trunkMat, SIMD3<Float>(point.x, point.y + trunkH / 2, point.z), name: "zoo-tree-trunk")
+        let trunkH: Float = (2.0 + Float(abs(seed) % 7) * 0.12) * scale
+        let trunk = zooPart(FallbackCylinderMesh.make(height: trunkH, radius: 0.13 * scale), trunkMat, SIMD3<Float>(point.x, point.y + trunkH / 2, point.z), name: "zoo-tree-trunk")
         world.addChild(trunk)
-        let canopyR: Float = 1.5 + Float(abs(seed) % 5) * 0.18
+        let canopyR: Float = (1.5 + Float(abs(seed) % 5) * 0.18) * scale
         let canopy = zooPart(MeshResource.generateSphere(radius: canopyR), leafMat, SIMD3<Float>(point.x, point.y + trunkH + canopyR * 0.55, point.z), name: "zoo-tree-canopy")
         canopy.scale = SIMD3<Float>(1, 0.82, 1)
         world.addChild(canopy)
-        let canopy2 = zooPart(MeshResource.generateSphere(radius: canopyR * 0.66), leafMat, SIMD3<Float>(point.x + 0.8, point.y + trunkH + canopyR * 0.95, point.z + 0.4), name: "zoo-tree-canopy2")
+        let canopy2 = zooPart(MeshResource.generateSphere(radius: canopyR * 0.66), leafMat, SIMD3<Float>(point.x + 0.8 * scale, point.y + trunkH + canopyR * 0.95, point.z + 0.4 * scale), name: "zoo-tree-canopy2")
         world.addChild(canopy2)
     }
 
@@ -4316,8 +10139,6 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// world keeps its scenic zoo strip from buildZooAndPark.
     private func buildZooLineWorld(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         guard routeVariant == .zooLine else { return }
-        zooAnimalRigs = []
-        zooLastAnimTime = 0
         let up = travelDirection == .up
         let sideSign: Float = up ? -1 : 1
         let trackLat: Float = up ? -2.1 : 2.1
@@ -4354,12 +10175,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         while treeD < 2_280 {
             for side: Float in [-1.0, 1.0] {
                 let inPaddockBand = side == sideSign && treeD > 500 && treeD < 1_960
+                // batch32: the mountain side of the enclosure
+                // stretch is planted by the ridge builder
+                // below, on the slope itself — scattered flat
+                // trees there would sink into the hillside.
+                let inMountainBand = side == -sideSign && treeD > 430 && treeD < 1_980
                 let jitter = Float(stableIndex("zootree-\(Int(treeD))-\(side > 0 ? 1 : 0)", count: 12))
-                if !inPaddockBand && stableIndex("zootreeok-\(Int(treeD))-\(side > 0 ? 1 : 0)", count: 4) != 0 {
+                if !inPaddockBand && !inMountainBand && stableIndex("zootreeok-\(Int(treeD))-\(side > 0 ? 1 : 0)", count: 4) != 0 {
                     buildZooTree(at: gp(treeD, side * (16 + jitter)), seed: Int(treeD) + (side > 0 ? 7 : 0))
                 }
             }
-            treeD += 55
+            treeD += 38
         }
 
         // Speed-limit signs at the enclosure zone boundaries
@@ -4392,12 +10218,322 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
 
         // The six enclosures along the 30 km/h stretch.
-        buildZooPaddock(centerM: 560, sideSign: sideSign, species: 5, count: 4, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: 560, sideSign: sideSign, species: 5, count: 6, hasCage: false, travelDirection: travelDirection)
         buildZooPaddock(centerM: 770, sideSign: sideSign, species: 4, count: 3, hasCage: false, travelDirection: travelDirection)
         buildZooPaddock(centerM: 990, sideSign: sideSign, species: 0, count: 2, hasCage: true, travelDirection: travelDirection)
         buildZooPaddock(centerM: 1_230, sideSign: sideSign, species: 2, count: 2, hasCage: false, travelDirection: travelDirection)
         buildZooPaddock(centerM: 1_490, sideSign: sideSign, species: 1, count: 2, hasCage: true, travelDirection: travelDirection)
         buildZooPaddock(centerM: 1_710, sideSign: sideSign, species: 3, count: 2, hasCage: false, travelDirection: travelDirection)
+        // batch32 (2026-11-14, user spec — replaces the
+        // batch31 both-sides paddocks): the cross-section
+        // through the enclosures is 檻・線路・山(森) —
+        // paddocks on the down-left, a forested mountain
+        // hard against the down-right, both at the vehicle
+        // clearance limit. Two more paddocks fill the gaps
+        // on the enclosure side (~110 m spacing), and the
+        // opposite side becomes the ridge below.
+        buildZooPaddock(centerM: 880, sideSign: sideSign, species: 4, count: 4, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: 1_360, sideSign: sideSign, species: 2, count: 3, hasCage: false, travelDirection: travelDirection)
+        // batch55 (2026-11-15, user: 「動物の檻以外なにもない
+        // の不自然すぎ」「もっとオブジェクトの密度上げて」):
+        // the eight enclosures stood as islands — between
+        // them lay 60-200 m of bare apron with no fence, no
+        // path and no planting, and the entrance stretch past
+        // the booth read the same. This pass joins the
+        // enclosures into one zoo: connecting chain-link runs
+        // close the gaps on both fence lines, a visitor path
+        // runs behind the far fence with shade shelters,
+        // benches and lamps, tree clusters and hedge shrubs
+        // fill the gaps on the enclosure side, and two keeper
+        // sheds stand behind the paddocks.
+        let paddockCenters: [Double] = [560, 770, 880, 990, 1_230, 1_360, 1_490, 1_710]
+        var gapSpans: [(from: Double, to: Double)] = []
+        for gapIndex in 0..<(paddockCenters.count - 1) {
+            gapSpans.append((from: paddockCenters[gapIndex] + 21, to: paddockCenters[gapIndex + 1] - 21))
+        }
+        var gapFenceMat = Self.texturedPBR(.white, metallic: 0.55, roughness: 0.45, textureName: "scenery_fence_chainlink")
+        gapFenceMat.blending = .transparent(opacity: .init(floatLiteral: 1))
+        gapFenceMat.faceCulling = .none
+        var gapFenceBatch = MeshBatchBuilder()
+        var gapPostBatch = MeshBatchBuilder()
+        var gapHedgeBatch = MeshBatchBuilder()
+        for gap in gapSpans {
+            for fenceLat in [Float(7.6), Float(38)] {
+                var fenceD = gap.from
+                while fenceD < gap.to {
+                    let segLen = min(7.0, gap.to - fenceD)
+                    let midD = fenceD + segLen / 2
+                    let fp = gp(midD, sideSign * fenceLat)
+                    gapFenceBatch.addBox(center: SIMD3<Float>(fp.x, fp.y + 0.85, fp.z), size: SIMD3<Float>(0.03, 1.7, Float(segLen) + 0.05), yaw: -sample(at: midD).heading)
+                    let postP = gp(fenceD, sideSign * fenceLat)
+                    gapPostBatch.addBox(center: SIMD3<Float>(postP.x, postP.y + 0.9, postP.z), size: SIMD3<Float>(0.09, 1.8, 0.09), yaw: -sample(at: fenceD).heading)
+                    fenceD += segLen
+                }
+            }
+            var hedgeD = gap.from + 3
+            while hedgeD < gap.to - 2 {
+                let hp = gp(hedgeD, sideSign * 6.3)
+                gapHedgeBatch.addBox(center: SIMD3<Float>(hp.x, hp.y + 0.38, hp.z), size: SIMD3<Float>(1.1, 0.75, 3.2), yaw: -sample(at: hedgeD).heading)
+                hedgeD += 7.6
+            }
+            for treeSlot in 0..<3 {
+                let treeD = gap.from + (gap.to - gap.from) * Double(treeSlot + 1) / 4
+                let treeLat: Float = 16 + Float(stableIndex("zoogaptree-\(Int(treeD))", count: 15))
+                let treeScale: Float = 0.95 + Float(stableIndex("zoogaptree-scale-\(Int(treeD))", count: 6)) * 0.11
+                buildZooTree(at: gp(treeD, sideSign * treeLat), seed: Int(treeD) + treeSlot * 13, scale: treeScale)
+            }
+        }
+        if let fence = gapFenceBatch.build(name: "zoo-gap-fences", material: gapFenceMat) { world.addChild(fence) }
+        if let posts = gapPostBatch.build(name: "zoo-gap-fence-posts", material: postMat) { world.addChild(posts) }
+        if let hedges = gapHedgeBatch.build(name: "zoo-gap-hedges", material: foliageMaterials[0]) { world.addChild(hedges) }
+        // Visitor path behind the far fence (the fence stands
+        // at 38 m, the paddocks' visitors at 41 m), with
+        // shade shelters, benches and lamps along it.
+        var pathBatch = MeshBatchBuilder()
+        var pathD = 500.0
+        while pathD < 1_960 {
+            let midD = pathD + 7.6
+            let pp = gp(midD, sideSign * 43.5)
+            pathBatch.addBox(center: SIMD3<Float>(pp.x, pp.y + 0.035, pp.z), size: SIMD3<Float>(3.2, 0.07, 15.4), yaw: -sample(at: midD).heading)
+            pathD += 15.2
+        }
+        if let path = pathBatch.build(name: "zoo-visitor-path", material: Self.pbr(UIColor(red: 0.78, green: 0.78, blue: 0.76, alpha: 1), roughness: 1)) { world.addChild(path) }
+        let shelterWood = Self.pbr(UIColor(red: 0.55, green: 0.42, blue: 0.30, alpha: 1), roughness: 0.85)
+        var shelterPostBatch = MeshBatchBuilder()
+        var shelterRoofBatch = MeshBatchBuilder()
+        for shelterD in [620.0, 830.0, 1_110.0, 1_300.0, 1_600.0, 1_860.0] {
+            for postAlong in [-1.6, 1.6] {
+                for postLat in [-1.3, 1.3] {
+                    let pp = gp(shelterD + postAlong, sideSign * (43.5 + Float(postLat)))
+                    shelterPostBatch.addBox(center: SIMD3<Float>(pp.x, pp.y + 1.25, pp.z), size: SIMD3<Float>(0.14, 2.5, 0.14), yaw: -sample(at: shelterD).heading)
+                }
+            }
+            let roofP = gp(shelterD, sideSign * 43.5)
+            shelterRoofBatch.addBox(center: SIMD3<Float>(roofP.x, roofP.y + 2.62, roofP.z), size: SIMD3<Float>(3.4, 0.12, 4.2), yaw: -sample(at: shelterD).heading)
+            let benchP = gp(shelterD + 3.4, sideSign * 41.8)
+            shelterRoofBatch.addBox(center: SIMD3<Float>(benchP.x, benchP.y + 0.45, benchP.z), size: SIMD3<Float>(0.45, 0.09, 1.9), yaw: -sample(at: shelterD + 3.4).heading)
+            shelterPostBatch.addBox(center: SIMD3<Float>(benchP.x, benchP.y + 0.21, benchP.z), size: SIMD3<Float>(0.3, 0.42, 1.5), yaw: -sample(at: shelterD + 3.4).heading)
+        }
+        if let shelterPosts = shelterPostBatch.build(name: "zoo-shelter-posts", material: postMat) { world.addChild(shelterPosts) }
+        if let shelterRoofs = shelterRoofBatch.build(name: "zoo-shelter-roofs", material: shelterWood) { world.addChild(shelterRoofs) }
+        var lampD = 545.0
+        while lampD < 1_950 {
+            let lp = gp(lampD, sideSign * 41.2)
+            let pole = zooPart(FallbackCylinderMesh.make(height: 3.4, radius: 0.07), postMat, SIMD3<Float>(lp.x, lp.y + 1.7, lp.z), name: "zoo-path-lamp-pole")
+            world.addChild(pole)
+            let ball = zooPart(MeshResource.generateSphere(radius: 0.22), Self.pbr(UIColor(red: 0.98, green: 0.94, blue: 0.82, alpha: 1), roughness: 0.4), SIMD3<Float>(lp.x, lp.y + 3.5, lp.z), name: "zoo-path-lamp-ball")
+            world.addChild(ball)
+            lampD += 120
+        }
+        // Keeper sheds behind the paddocks, beside the path.
+        for (shedIndex, shedD) in [1_105.0, 1_595.0].enumerated() {
+            let sp = gp(shedD, sideSign * 48)
+            _ = addBox(parent: world, name: "zoo-keeper-shed-\(shedIndex)", size: SIMD3<Float>(6, 3.0, 4), position: SIMD3<Float>(sp.x, sp.y + 1.5, sp.z), material: shelterWood, orientation: yawAt(shedD))
+            _ = addBox(parent: world, name: "zoo-keeper-shed-roof-\(shedIndex)", size: SIMD3<Float>(6.6, 0.16, 4.6), position: SIMD3<Float>(sp.x, sp.y + 3.1, sp.z), material: postMat, orientation: yawAt(shedD))
+            let doorP = gp(shedD, sideSign * 45.8)
+            _ = addBox(parent: world, name: "zoo-keeper-shed-door-\(shedIndex)", size: SIMD3<Float>(1.1, 2.1, 0.08), position: SIMD3<Float>(doorP.x, doorP.y + 1.05, doorP.z), material: postMat, orientation: yawAt(shedD))
+        }
+        // Entrance stretch (booth to first paddock): a snack
+        // kiosk on the enclosure side and tree clusters on
+        // both sides, so the run-in is planted too.
+        let kioskP = gp(430, sideSign * 13)
+        _ = addBox(parent: world, name: "zoo-kiosk", size: SIMD3<Float>(3.2, 2.5, 2.6), position: SIMD3<Float>(kioskP.x, kioskP.y + 1.25, kioskP.z), material: Self.pbr(UIColor(red: 0.88, green: 0.84, blue: 0.76, alpha: 1), roughness: 0.8), orientation: yawAt(430))
+        _ = addBox(parent: world, name: "zoo-kiosk-roof", size: SIMD3<Float>(3.7, 0.14, 3.1), position: SIMD3<Float>(kioskP.x, kioskP.y + 2.6, kioskP.z), material: Self.pbr(UIColor(red: 0.85, green: 0.45, blue: 0.15, alpha: 1), roughness: 0.7), orientation: yawAt(430))
+        let kioskSignP = gp(430, sideSign * 11.6)
+        _ = addBox(parent: world, name: "zoo-kiosk-sign", size: SIMD3<Float>(2.6, 0.6, 0.07), position: SIMD3<Float>(kioskSignP.x, kioskSignP.y + 2.2, kioskSignP.z), material: Self.pbr(UIColor(red: 0.96, green: 0.94, blue: 0.88, alpha: 1), roughness: 0.6), orientation: yawAt(430))
+        var entranceTreeD = 340.0
+        while entranceTreeD < 500 {
+            for side: Float in [-1.0, 1.0] {
+                // The ridge starts at 430 on the mountain
+                // side; flat trees there would sink into it
+                // (the scattered-tree loop above skips the
+                // same band for the same reason).
+                if side == -sideSign && entranceTreeD >= 425 { continue }
+                if stableIndex("zooent-treeok-\(Int(entranceTreeD))-\(side > 0 ? 1 : 0)", count: 4) != 0 {
+                    buildZooTree(at: gp(entranceTreeD, side * (16 + Float(stableIndex("zooent-tree-\(Int(entranceTreeD))-\(side > 0 ? 1 : 0)", count: 11)))), seed: Int(entranceTreeD) + (side > 0 ? 5 : 0))
+                }
+            }
+            entranceTreeD += 32
+        }
+        // The mountain: a forested ridge running beside the
+        // enclosures, built as one continuous heightfield strip
+        // on the ground datum (the gp frame). Cross-section:
+        // a buried toe skirt 5.5 m from the running-track
+        // centre, front slopes easing 33-20 degrees to a 12.8 m
+        // crest at 36 m out, a gentle back slope and a buried
+        // rear skirt, so the landform is grounded at both edges
+        // and along both ends. Slope trees plant on the same
+        // height function, so they stand on the surface.
+        //
+        // batch82 (2026-11-15, user device photo on IPA #10):
+        // the batch46 ridge — pitched MeshBatchBuilder planks,
+        // 21.4 m crest, toe 3.5 m out, full height from its
+        // first metre at 430 — read as a huge warped green
+        // SHEET draped over the line, trees on its rim. A
+        // geometry replica of the seeded alignment (same
+        // SplitMix64 curve runs, sampler and plank math,
+        // rendered from the driver's seat at 371 m) reproduces
+        // the sheet exactly and pins the cause: the zoo line's
+        // first curve (R373, ~431-768 m) starts at the ridge's
+        // first metre and turns TOWARD the ridge side, so the
+        // ridge stands on the inside of that curve; at 21.4 m
+        // tall with its toe 3.5 m from the track, its crest
+        // wraps across the forward view like a breaking wave,
+        // the abrupt full-height start at 430 m presents a
+        // wall corner beside the track, and every plank face
+        // maps the whole forest photo 0..1, smearing the
+        // surface into streaks at glancing angles. The
+        // batch38/46 intent (a real mountain, not a grassy
+        // bank) is kept; the landform is rebuilt to terrain
+        // rules instead:
+        // - crest 12.8 m, toe 5.5 m out: still a mountain
+        //   beside the train, no longer a wall over it;
+        // - an along-track envelope (smoothstep in over
+        //   430-600 m, out over 1,810-1,980 m) scales every
+        //   height, so the ridge rises out of the ground and
+        //   dies back into it — no end walls;
+        // - one continuous strip instead of 1,464 pitched
+        //   slabs: no slab edges and no per-face texture
+        //   squash. UVs run in world metres (12 m tiles, the
+        //   ground apron's scale); normals are accumulated
+        //   from the grid itself, with cross(profile edge,
+        //   tangent edge) orienting them up and toward the
+        //   track by construction — the two failure modes
+        //   the batch38 strip rebuild ran from (a textured
+        //   mesh with no UV channel, downward analytic
+        //   normals) cannot recur, because this strip carries
+        //   a UV channel and takes its normals from its own
+        //   geometry;
+        // - heights ride on groundLevelM (the gp datum), not
+        //   the rail elevation, so the toe can never float
+        //   above the ground it stands on;
+        // - the two steepest front segments keep the rock
+        //   material and the rest the forest photo texture,
+        //   as batch46 established.
+        let ridgeOffsets: [Float] = [5.5, 9.0, 13.0, 18.0, 24.0, 30.0, 36.0, 44.0, 52.0, 64.0]
+        let ridgeHeights: [Float] = [-0.6, 1.6, 4.2, 7.0, 9.8, 12.0, 12.8, 10.6, 5.5, -0.8]
+        let ridgeSide: Float = -sideSign
+        // Along-track taper: 0 at both ends of the
+        // 430-1,980 m stretch, 1 through the enclosures.
+        func ridgeEnvelope(_ d: Double) -> Float {
+            let rise = min(max((d - 430) / 170, 0), 1)
+            let fall = min(max((1_980 - d) / 170, 0), 1)
+            let t = min(rise, fall)
+            return Float(t * t * (3 - 2 * t))
+        }
+        // Cross-section height at a lateral offset (metres
+        // from the running-track centre) and chainage. The
+        // buried skirt points (negative heights) stay buried
+        // at any envelope value; positive heights scale.
+        func ridgeHeightAt(_ off: Float, atChainage d: Double) -> Float {
+            let env = ridgeEnvelope(d)
+            for j in 0..<(ridgeOffsets.count - 1) where off >= ridgeOffsets[j] && off <= ridgeOffsets[j + 1] {
+                let f = (off - ridgeOffsets[j]) / (ridgeOffsets[j + 1] - ridgeOffsets[j])
+                let h = ridgeHeights[j] + f * (ridgeHeights[j + 1] - ridgeHeights[j])
+                return h < 0 ? h : h * env
+            }
+            let h = ridgeHeights[ridgeHeights.count - 1]
+            return h < 0 ? h : h * env
+        }
+        // One continuous strip over a span of profile
+        // segments (0-1 rock, the rest forest). Stations
+        // every 8.5 m — the alignment sampling — with the
+        // last station exactly on 1,980.
+        func buildRidgeStrip(name: String, segmentRange: Range<Int>, material: PhysicallyBasedMaterial, censusTexture: String) -> ModelEntity? {
+            var stationDs: [Double] = []
+            var stationD = 430.0
+            while stationD < 1_980 {
+                stationDs.append(stationD)
+                stationD += 8.5
+            }
+            stationDs.append(1_980)
+            let cols = segmentRange.count + 1
+            var positions: [SIMD3<Float>] = []
+            var uvs: [SIMD2<Float>] = []
+            positions.reserveCapacity(stationDs.count * cols)
+            // Texture u along the profile, in world metres.
+            var profileU: [Float] = [0]
+            for j in 1..<cols {
+                let gi = segmentRange.lowerBound + j
+                let dx = ridgeOffsets[gi] - ridgeOffsets[gi - 1]
+                let dy = ridgeHeights[gi] - ridgeHeights[gi - 1]
+                profileU.append(profileU[j - 1] + sqrt(dx * dx + dy * dy))
+            }
+            for d in stationDs {
+                for j in 0..<cols {
+                    let off = ridgeOffsets[segmentRange.lowerBound + j]
+                    var p = gp(d, trackLat + ridgeSide * off)
+                    p.y += ridgeHeightAt(off, atChainage: d)
+                    positions.append(p)
+                    uvs.append(SIMD2<Float>(profileU[j] / 12, Float(d) / 12))
+                }
+            }
+            var normals = [SIMD3<Float>](repeating: SIMD3<Float>(0, 0, 0), count: positions.count)
+            var indices: [UInt32] = []
+            for i in 0..<(stationDs.count - 1) {
+                for j in 0..<(cols - 1) {
+                    let a = i * cols + j
+                    let b = a + 1
+                    let c = a + cols
+                    let e = c + 1
+                    indices.append(contentsOf: [UInt32(a), UInt32(c), UInt32(b), UInt32(b), UInt32(c), UInt32(e)])
+                    // Face normal from the grid itself: cross
+                    // of the profile edge with the tangent
+                    // edge points up and toward the track for
+                    // a profile ordered outward (header note).
+                    let pa = positions[a]
+                    let profileEdge = positions[b] - pa
+                    let tangentEdge = positions[c] - pa
+                    var n = simd_cross(profileEdge, tangentEdge)
+                    if simd_length(n) < 1e-9 { n = SIMD3<Float>(0, 1, 0) }
+                    for v in [a, b, c, e] { normals[v] += n }
+                    CensusSink.recordTexturedPosition((positions[a] + positions[b] + positions[c] + positions[e]) / 4, texture: censusTexture)
+                }
+            }
+            var descriptor = MeshDescriptor(name: name)
+            descriptor.positions = MeshBuffers.Positions(positions)
+            descriptor.normals = MeshBuffers.Normals(normals.map { simd_normalize($0) })
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+            descriptor.primitives = .triangles(indices)
+            guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return nil }
+            var material = material
+            material.faceCulling = .none
+            return ModelEntity(mesh: mesh, materials: [material])
+        }
+        let ridgeMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_mountain_forest")
+        if let ridge = buildRidgeStrip(name: "zoo-mountain-ridge", segmentRange: 2..<(ridgeOffsets.count - 1), material: ridgeMaterial, censusTexture: "scenery_mountain_forest") { world.addChild(ridge) }
+        let ridgeRockMaterial = Self.texturedPBR(UIColor(red: 0.58, green: 0.55, blue: 0.51, alpha: 1), roughness: 1, textureName: "scenery_concrete")
+        if let ridgeRock = buildRidgeStrip(name: "zoo-mountain-rock", segmentRange: 0..<2, material: ridgeRockMaterial, censusTexture: "scenery_concrete") { world.addChild(ridgeRock) }
+        // Slope trees on the same enveloped cross-section
+        // (gp frame, roots sunk 0.15 m into the surface).
+        // batch46: the batch38 planting (one tree every
+        // 13-19 m, ~90 trees) left the slope reading as bare
+        // grass with shrubs. The forest now plants two trees
+        // every 5.5 m across six slope bands — roughly 460
+        // trees over the 1,525 m stretch, sizes mixed
+        // 0.85-1.9x (~4-12 m tall) by hash, with a ~1-in-6
+        // skip so the stand has natural gaps. All bands sit
+        // on the forest segments (offset >= 9 m); the rock
+        // faces below stay bare. batch82: heights come from
+        // the enveloped profile and the outer band moves in
+        // from 30.5 m to 29 m, so no tree stands on the
+        // crest rim against the sky and the taper ends stay
+        // planted at the surface the strip actually has.
+        let slopeTreeBands: [Float] = [10.5, 14.0, 18.0, 22.0, 26.0, 29.0]
+        var slopeTreeD = 445.0
+        while slopeTreeD < 1_970 {
+            for treeSlot in 0..<2 {
+                let key = "zooslope46-\(Int(slopeTreeD))-\(treeSlot)"
+                if stableIndex(key + "ok", count: 6) == 0 { continue }
+                let lat = slopeTreeBands[Int(stableIndex(key, count: 6))]
+                let treeScale: Float = 0.85 + Float(stableIndex(key + "scale", count: 9)) * 0.13
+                let treeD = slopeTreeD + Double(treeSlot) * 2.2
+                var p = gp(treeD, trackLat + ridgeSide * lat)
+                p.y += ridgeHeightAt(lat, atChainage: treeD) - 0.15
+                buildZooTree(at: p, seed: Int(treeD) * 3 + treeSlot * 7, scale: treeScale)
+            }
+            slopeTreeD += 5.5
+        }
 
         // 動物園 terminal: platform, furniture, station house,
         // departure board and a buffer stop past the end.
@@ -4428,6 +10564,48 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let face = SIMD3<Float>(cos(h), 0, sin(h)) * -sideSign
             addPerson(position: pos, yaw: atan2(face.x, -face.z), role: p == 1 ? 1 : 0, mode: 0, routeDistanceM: c, walkAxis: SIMD3<Float>(1, 0, 0), range: 0, seedKey: "zoostation-\(p)")
         }
+        // batch15 (2026-11-13, user verdict "動物園の焼け野原"):
+        // the terminal stood alone in the dry field — the only
+        // building was the station house. Fill its surroundings:
+        // a parking apron with cars on the far side, an annex
+        // building beside the station house, a hedge line along
+        // the far side, green pads, and a tree cluster closing
+        // the gap between the last paddock and the station.
+        var zooTermParkD = 2_300.0
+        while zooTermParkD <= 2_470 {
+            let p = gp(zooTermParkD, -sideSign * 15)
+            _ = addBox(parent: world, name: "zoo-terminal-parking", size: SIMD3<Float>(17, 0.07, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.32, green: 0.32, blue: 0.34, alpha: 1), roughness: 0.95), orientation: yawAt(zooTermParkD))
+            zooTermParkD += 15
+        }
+        for car in 0..<3 {
+            let p = gp(2_320 + Double(car) * 42, -sideSign * 13.5)
+            addParkedCar(name: "zoo-terminal-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 2_320 + Double(car) * 42).heading + Float.pi / 2, seed: car * 3 + 5)
+        }
+        let annex = gp(2_330, sideSign * 16.5)
+        _ = addBox(parent: world, name: "zoo-annex", size: SIMD3<Float>(9, 3.6, 6), position: SIMD3<Float>(annex.x, annex.y + 1.8, annex.z), material: Self.texturedPBR(.white, roughness: 0.85, textureName: "scenery_house_facade_5"), orientation: yawAt(2_330))
+        _ = addBox(parent: world, name: "zoo-annex-roof", size: SIMD3<Float>(9.6, 0.3, 6.6), position: SIMD3<Float>(annex.x, annex.y + 3.75, annex.z), material: Self.pbr(UIColor(red: 0.45, green: 0.38, blue: 0.30, alpha: 1), roughness: 0.8), orientation: yawAt(2_330))
+        let hedgeMat = Self.pbr(UIColor(red: 0.22, green: 0.36, blue: 0.18, alpha: 1), roughness: 1)
+        var hedgeD = 2_010.0
+        while hedgeD < 2_490 {
+            let hp = gp(hedgeD, -sideSign * 11)
+            _ = addBox(parent: world, name: "zoo-terminal-hedge", size: SIMD3<Float>(1.0, 0.9, 15.2), position: SIMD3<Float>(hp.x, hp.y + 0.45, hp.z), material: hedgeMat, orientation: yawAt(hedgeD))
+            hedgeD += 15
+        }
+        let zooFieldMat = Self.pbr(UIColor(red: 0.36, green: 0.48, blue: 0.27, alpha: 1), roughness: 1)
+        for fieldD in [2_050.0, 2_250.0, 2_450.0] {
+            let fp = gp(fieldD, -sideSign * 34)
+            _ = addBox(parent: world, name: "zoo-terminal-field-\(Int(fieldD))", size: SIMD3<Float>(44, 0.06, 24), position: SIMD3<Float>(fp.x, fp.y + 0.03, fp.z), material: zooFieldMat, orientation: yawAt(fieldD))
+        }
+        var zooTermTreeD = 2_000.0
+        while zooTermTreeD < 2_490 {
+            for side: Float in [-1.0, 1.0] {
+                if stableIndex("zootermtreeok-\(Int(zooTermTreeD))-\(side > 0 ? 1 : 0)", count: 4) != 0 {
+                    buildZooTree(at: gp(zooTermTreeD, side * (15 + Float(stableIndex("zootermtree-\(Int(zooTermTreeD))-\(side > 0 ? 1 : 0)", count: 11)))), seed: Int(zooTermTreeD) + (side > 0 ? 11 : 0))
+                }
+            }
+            zooTermTreeD += 42
+        }
+
         // Buffer stop on a short stub past the terminal.
         let endSample = sample(at: 2_500)
         let endPoint = routeOffsetPoint(endSample, lateral: trackLat)
@@ -4447,99 +10625,6 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// folds the legs and lowers the body, and every animal turns
     /// its head toward the train when it passes within 130 m.
     /// Animals beyond 430 m of the train are not posed (load gate).
-    private func updateZooAnimals(trainPositionM: Double, time: Double) {
-        guard !zooAnimalRigs.isEmpty else { return }
-        let dt = min(max(time - zooLastAnimTime, 0.001), 0.1)
-        zooLastAnimTime = time
-        for index in zooAnimalRigs.indices {
-            var rig = zooAnimalRigs[index]
-            if abs(trainPositionM - rig.routeDistanceM) > 430 && rig.state != 2 {
-                zooAnimalRigs[index] = rig
-                continue
-            }
-            func nextUnit() -> Double {
-                rig.rngState = rig.rngState &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                return Double((rig.rngState >> 33) % 1_000) / 1_000
-            }
-            if time >= rig.stateUntil {
-                let roll = nextUnit()
-                if rig.species == 5 {
-                    rig.state = roll < 0.45 ? 0 : 2
-                    rig.stateUntil = time + 5 + nextUnit() * 6
-                } else if roll < 0.30 {
-                    rig.state = 0; rig.stateUntil = time + 4 + nextUnit() * 5
-                } else if roll < 0.58 {
-                    rig.state = 1; rig.stateUntil = time + 6 + nextUnit() * 6
-                } else if roll < 0.85 {
-                    rig.state = 2; rig.stateUntil = time + 26
-                    let along = (nextUnit() - 0.5) * 30
-                    let lat = (nextUnit() - 0.5) * 20
-                    rig.walkTarget = rig.paddockCenter + rig.axisZ * Float(along) + rig.axisX * Float(lat)
-                    rig.walkTarget.y = rig.root.position.y
-                } else {
-                    rig.state = 3; rig.stateUntil = time + 8 + nextUnit() * 8
-                }
-            }
-            let trainNear = abs(trainPositionM - rig.routeDistanceM) < 130
-            let grazeTarget: Float = (rig.state == 1 && !trainNear) ? 1 : 0
-            rig.grazeAmount += (grazeTarget - rig.grazeAmount) * Float(min(1, dt * 2.5))
-            let restTarget: Float = rig.state == 3 ? 1 : 0
-            rig.restAmount += (restTarget - rig.restAmount) * Float(min(1, dt * 2.0))
-
-            // Legs: swing while walking, fold while resting.
-            let walkSpeed: Float = rig.species == 3 ? 0.55 : (rig.species == 2 ? 0.85 : (rig.species == 5 ? 0.22 : 0.7))
-            if rig.state == 2 {
-                let toTarget = rig.walkTarget - rig.root.position
-                let dist = simd_length(SIMD2<Float>(toTarget.x, toTarget.z))
-                if dist < 0.4 {
-                    rig.state = 0
-                    rig.stateUntil = time + 3 + nextUnit() * 4
-                } else {
-                    let desired = atan2(toTarget.x, -toTarget.z)
-                    var delta = desired - rig.heading
-                    while delta > Float.pi { delta -= 2 * Float.pi }
-                    while delta < -Float.pi { delta += 2 * Float.pi }
-                    rig.heading += delta * Float(min(1, dt * 2.2))
-                    rig.root.orientation = simd_quatf(angle: -rig.heading, axis: SIMD3<Float>(0, 1, 0))
-                    let step = min(Float(dist), walkSpeed * Float(dt))
-                    rig.root.position += SIMD3<Float>(sin(rig.heading), 0, -cos(rig.heading)) * step
-                    rig.routeDistanceM += Double(step) * (abs(delta) < 1.2 ? 1 : 0.3)
-                    rig.phase += Float(dt) * (rig.species == 5 ? 9 : 5.2) * walkSpeed
-                }
-            }
-            for (legIndex, leg) in rig.legs.enumerated() {
-                let diagonal: Float = (legIndex == 0 || legIndex == 3) ? 0 : Float.pi
-                let swing: Float = rig.state == 2 ? sin(rig.phase + diagonal) * 0.42 : 0
-                let fold: Float = (legIndex < 2 ? -1.25 : 1.25) * rig.restAmount
-                leg.orientation = simd_quatf(angle: swing + fold, axis: SIMD3<Float>(1, 0, 0))
-            }
-            // Body height: stand, or lowered onto folded legs at rest.
-            if rig.species != 5 {
-                rig.body.position.y = rig.bodyStandY + (rig.bodyRestY - rig.bodyStandY) * rig.restAmount + (rig.state == 2 ? abs(sin(rig.phase)) * 0.03 : 0)
-            } else if rig.state == 2 {
-                rig.body.orientation = simd_quatf(angle: sin(rig.phase) * 0.07, axis: SIMD3<Float>(0, 0, 1))
-            }
-            // Head: graze pitch, plus a look toward the train.
-            var headYaw: Float = 0
-            if trainNear {
-                // The track lies toward -axisX * sideSign from the
-                // paddock; approximate the look with a fixed yaw
-                // toward the track side relative to the body.
-                headYaw = -0.65
-            }
-            rig.headPivot.orientation = simd_quatf(angle: -0.78 * rig.grazeAmount, axis: SIMD3<Float>(1, 0, 0)) * simd_quatf(angle: headYaw * (1 - rig.grazeAmount), axis: SIMD3<Float>(0, 1, 0))
-            if let neck = rig.neckPivot {
-                neck.orientation = simd_quatf(angle: 0.42 - 0.95 * rig.grazeAmount, axis: SIMD3<Float>(1, 0, 0))
-            }
-            // Tail sway and trunk sway keep idle animals alive.
-            rig.tailPivot.orientation = simd_quatf(angle: 0.30, axis: SIMD3<Float>(1, 0, 0)) * simd_quatf(angle: sin(Float(time) * 1.4 + Float(index) * 1.7) * 0.28, axis: SIMD3<Float>(0, 1, 0))
-            for (seg, pivot) in rig.trunkPivots.enumerated() {
-                pivot.orientation = simd_quatf(angle: sin(Float(time) * 0.8 + Float(seg) * 0.7 + Float(index)) * 0.10, axis: SIMD3<Float>(1, 0, 0))
-            }
-            zooAnimalRigs[index] = rig
-        }
-    }
-
     /// The theme park line's own world: entrance plaza, the park
     /// grounds beside the line (ferris wheel, roller coaster,
     /// fairy-tale buildings and castle on a plaza pad), fishplates
@@ -4567,11 +10652,74 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             _ = addBox(parent: world, name: "park-entrance", size: SIMD3<Float>(20, 0.07, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.85, green: 0.78, blue: 0.70, alpha: 1), roughness: 0.95), orientation: yawAt(plazaD))
             plazaD += 15
         }
-        for car in 0..<2 {
-            let p = gp(160 + Double(car) * 60, -sideSign * 13.5)
-            addParkedCar(name: "park-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 160 + Double(car) * 60).heading + Float.pi / 2, seed: car * 2 + 2)
+        // batch15: an entrance GATE, copied from the zoo line's
+        // pattern — the flat pads alone gave the tour's first
+        // photo nothing vertical to read as an entrance.
+        let parkGateA = gp(140, sideSign * 10.5)
+        let parkGateB = gp(140, sideSign * 17.5)
+        for gatePost in [parkGateA, parkGateB] {
+            _ = addBox(parent: world, name: "park-gate-post", size: SIMD3<Float>(0.45, 4.2, 0.45), position: SIMD3<Float>(gatePost.x, gatePost.y + 2.1, gatePost.z), material: Self.pbr(pastels[0], roughness: 0.8), orientation: yawAt(140))
         }
-        // Park trees along both sides.
+        let parkGateMid = gp(140, sideSign * 14)
+        _ = addBox(parent: world, name: "park-gate-beam", size: SIMD3<Float>(7.6, 0.5, 0.4), position: SIMD3<Float>(parkGateMid.x, parkGateMid.y + 4.05, parkGateMid.z), material: Self.pbr(pastels[0], roughness: 0.8), orientation: yawAt(140))
+        _ = addBox(parent: world, name: "park-gate-sign", size: SIMD3<Float>(3.6, 1.0, 0.1), position: SIMD3<Float>(parkGateMid.x, parkGateMid.y + 3.15, parkGateMid.z), material: Self.pbr(UIColor(red: 0.98, green: 0.95, blue: 0.80, alpha: 1), roughness: 0.6), orientation: yawAt(140))
+        let parkBooth = gp(300, sideSign * 13)
+        _ = addBox(parent: world, name: "park-booth", size: SIMD3<Float>(2.4, 2.6, 2.2), position: SIMD3<Float>(parkBooth.x, parkBooth.y + 1.3, parkBooth.z), material: Self.pbr(pastels[2], roughness: 0.8), orientation: yawAt(300))
+        _ = addBox(parent: world, name: "park-booth-roof", size: SIMD3<Float>(2.8, 0.14, 2.6), position: SIMD3<Float>(parkBooth.x, parkBooth.y + 2.7, parkBooth.z), material: Self.pbr(pastels[3], roughness: 0.8), orientation: yawAt(300))
+        // batch39: the origin end was a gate standing in a
+        // field. A row of houses on the far side (the 館川
+        // side of the junction), a park direction sign facing
+        // departing trains and banner poles at the gate give
+        // the first 300 m a sense of place.
+        let originRoofMat = Self.pbr(UIColor(red: 0.35, green: 0.33, blue: 0.36, alpha: 1), roughness: 0.85)
+        let originFacades: [String] = ["scenery_house_facade_2", "scenery_house_facade_3", "scenery_house_facade_4", "scenery_house_facade_6", "scenery_house_facade_7"]
+        for (houseIndex, houseD) in [55.0, 100.0, 145.0, 190.0, 235.0].enumerated() {
+            let hb = gp(houseD, -sideSign * 25)
+            let hw: Float = 7.6 + Float(houseIndex % 3) * 0.7
+            let hh: Float = 4.6 + Float(houseIndex % 2) * 0.6
+            _ = addBox(parent: world, name: "parkline-origin-house-\(houseIndex)", size: SIMD3<Float>(hw, hh, 6.2), position: SIMD3<Float>(hb.x, hb.y + hh / 2, hb.z), material: Self.texturedPBR(.white, roughness: 0.9, textureName: originFacades[houseIndex]), orientation: yawAt(houseD))
+            // batch72: the 45°-rolled box reads as a gable
+            // roof only with its centre AT the wall top — the
+            // diamond's side vertices (its eaves) are at centre
+            // height, so the old +0.24·width lift floated the
+            // widest line of the "roof" ~2 m above the walls
+            // and the slab read as hovering diagonally (user
+            // report on the park line, 2026-11-15). Every
+            // rolled-box roof in the zoo/park worlds is seated
+            // on its wall top now; the greenhouse roof always
+            // was (eaves at wall top, apex at centre + half
+            // diagonal).
+            let hroof = addBox(parent: world, name: "parkline-origin-roof-\(houseIndex)", size: SIMD3<Float>(hw * 0.78, hw * 0.78, 6.6), position: SIMD3<Float>(hb.x, hb.y + hh, hb.z), material: originRoofMat, orientation: yawAt(houseD))
+            hroof.orientation = hroof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+        }
+        // Park direction sign facing the origin, park side:
+        // posts under the board's lateral span, face plate
+        // proud toward the approaching (departing) train.
+        let signStation = profileStation(at: 60, trackLateral: 0)
+        let signTangent = -simd_cross(signStation.xAxis, signStation.yAxis)
+        for postLat in [Float(9.9), Float(13.1)] {
+            let pp = gp(60, sideSign * postLat)
+            _ = addBox(parent: world, name: "park-origin-sign-post", size: SIMD3<Float>(0.16, 3.4, 0.16), position: SIMD3<Float>(pp.x, pp.y + 1.7, pp.z), material: postMat, orientation: yawAt(60))
+        }
+        let signBase = gp(60, sideSign * 11.5)
+        _ = addBox(parent: world, name: "park-origin-sign", size: SIMD3<Float>(4.6, 1.6, 0.1), position: SIMD3<Float>(signBase.x, signBase.y + 2.7, signBase.z), material: Self.pbr(pastels[0], roughness: 0.7), orientation: yawAt(60))
+        _ = addBox(parent: world, name: "park-origin-sign-face", size: SIMD3<Float>(4.0, 1.15, 0.14), position: SIMD3<Float>(signBase.x, signBase.y + 2.7, signBase.z) - signTangent * 0.03, material: Self.pbr(UIColor(red: 0.98, green: 0.95, blue: 0.80, alpha: 1), roughness: 0.6), orientation: yawAt(60))
+        // Banner poles flanking the entrance gate.
+        let gateStation = profileStation(at: 140, trackLateral: 0)
+        let gateTangent = -simd_cross(gateStation.xAxis, gateStation.yAxis)
+        for (flagIndex, flagLat) in [Float(7.6), Float(20.4)].enumerated() {
+            let fp = gp(140, sideSign * flagLat)
+            let pole = zooPart(FallbackCylinderMesh.make(height: 7.2, radius: 0.06), postMat, SIMD3<Float>(fp.x, fp.y + 3.6, fp.z), name: "park-gate-flag-pole-\(flagIndex)")
+            world.addChild(pole)
+            let bannerMat = flagIndex == 0 ? Self.pbr(UIColor(red: 0.92, green: 0.35, blue: 0.30, alpha: 1), roughness: 0.85) : Self.pbr(pastels[1], roughness: 0.85)
+            _ = addBox(parent: world, name: "park-gate-flag-\(flagIndex)", size: SIMD3<Float>(0.05, 3.0, 0.95), position: SIMD3<Float>(fp.x, fp.y + 5.4, fp.z) + gateTangent * 0.55, material: bannerMat, orientation: yawAt(140))
+        }
+        for car in 0..<5 {
+            let p = gp(150 + Double(car) * 38, -sideSign * 13.5)
+            addParkedCar(name: "park-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 150 + Double(car) * 38).heading + Float.pi / 2, seed: car * 2 + 2)
+        }
+        // Park trees along both sides (batch15: twice the
+        // density — 30 m spacing instead of 60 m).
         var treeD = 80.0
         while treeD < 1_750 {
             for side: Float in [-1.0, 1.0] {
@@ -4579,7 +10727,101 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     buildZooTree(at: gp(treeD, side * (15 + Float(stableIndex("parktree-\(Int(treeD))-\(side > 0 ? 1 : 0)", count: 12)))), seed: Int(treeD) + (side > 0 ? 3 : 0))
                 }
             }
-            treeD += 60
+            treeD += 30
+        }
+        // batch32 (2026-11-14, user: the park surroundings
+        // are empty too): give the line a corridor and the
+        // mid-section its own attractions, instead of grass
+        // from the entrance to the grounds.
+        // Hedge walls along both sides of the track.
+        // batch39 (2026-11-14, user: 駅間も何もない): the
+        // batch32 hedge was 0.9 m tall on BOTH sides, read as
+        // nothing at tour distance, and cost ~180 loose
+        // entities. Now one batched 1.6 m hedge on the PARK
+        // side only (the boundary a real park would fence),
+        // with nobori banner poles every ~110 m — vertical
+        // colour the driver can actually see. The far side
+        // gets fields, a service road and farmhouses instead
+        // (batch39 field block below).
+        var parkFenceBatch = MeshBatchBuilder()
+        var fenceD = 330.0
+        while fenceD <= 1_720 {
+            let p = gp(fenceD, sideSign * 9.3)
+            parkFenceBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.8, p.z), size: SIMD3<Float>(1.5, 1.6, 15.4), yaw: -sample(at: fenceD).heading)
+            fenceD += 15
+        }
+        if let fence = parkFenceBatch.build(name: "park-fence-hedge", material: foliageMaterials[0]) {
+            world.addChild(fence)
+        }
+        var bannerPoleBatch = MeshBatchBuilder()
+        var bannerBatches = pastels.map { _ in MeshBatchBuilder() }
+        var bannerIndex = 0
+        var bannerD = 385.0
+        while bannerD <= 1_700 {
+            let p = gp(bannerD, sideSign * 10.9)
+            bannerPoleBatch.addBox(center: SIMD3<Float>(p.x, p.y + 3.4, p.z), size: SIMD3<Float>(0.09, 6.8, 0.09), yaw: -sample(at: bannerD).heading)
+            let bannerStation = profileStation(at: bannerD, trackLateral: 0)
+            let bannerTangent = -simd_cross(bannerStation.xAxis, bannerStation.yAxis)
+            let bannerCenter = SIMD3<Float>(p.x, p.y + 5.1, p.z) + bannerTangent * 0.55
+            bannerBatches[bannerIndex % pastels.count].addBox(center: bannerCenter, size: SIMD3<Float>(0.05, 2.9, 0.95), yaw: -sample(at: bannerD).heading)
+            bannerIndex += 1
+            bannerD += 110
+        }
+        if let bannerPoles = bannerPoleBatch.build(name: "park-banner-poles", material: postMat) {
+            world.addChild(bannerPoles)
+        }
+        for (bannerBatchIndex, bannerBatch) in bannerBatches.enumerated() {
+            if let banner = bannerBatch.build(name: "park-banner-\(bannerBatchIndex)", material: Self.pbr(pastels[bannerBatchIndex], roughness: 0.85)) {
+                world.addChild(banner)
+            }
+        }
+        // Lamp posts along the park side of the line.
+        var lampD = 360.0
+        while lampD <= 1_680 {
+            let p = gp(lampD, sideSign * 7.2)
+            let pole = zooPart(FallbackCylinderMesh.make(height: 3.4, radius: 0.07), postMat, SIMD3<Float>(p.x, p.y + 1.7, p.z), name: "park-lamp-pole")
+            world.addChild(pole)
+            let lampBall = zooPart(MeshResource.generateSphere(radius: 0.22), Self.pbr(UIColor(red: 0.98, green: 0.94, blue: 0.82, alpha: 1), roughness: 0.4), SIMD3<Float>(p.x, p.y + 3.5, p.z), name: "park-lamp-ball")
+            world.addChild(lampBall)
+            lampD += 60
+        }
+        // Food stalls between the entrance and the grounds.
+        // batch39: the 2.6 m batch32 stalls read as toys at
+        // tour distance — enlarged, given sign boards on the
+        // track face, and a second cluster added on the
+        // terminal approach (1,430-1,520 m).
+        for (stallIndex, stallD) in [480.0, 525.0, 570.0, 1_430.0, 1_475.0, 1_520.0].enumerated() {
+            let p = gp(stallD, sideSign * 17)
+            _ = addBox(parent: world, name: "park-stall-\(stallIndex)", size: SIMD3<Float>(3.4, 2.6, 2.6), position: SIMD3<Float>(p.x, p.y + 1.3, p.z), material: Self.pbr(pastels[stallIndex % pastels.count], roughness: 0.85), orientation: yawAt(stallD))
+            _ = addBox(parent: world, name: "park-stall-roof-\(stallIndex)", size: SIMD3<Float>(3.9, 0.16, 3.1), position: SIMD3<Float>(p.x, p.y + 2.72, p.z), material: Self.pbr(UIColor(red: 0.92, green: 0.35, blue: 0.30, alpha: 1), roughness: 0.8), orientation: yawAt(stallD))
+            let awningP = gp(stallD, sideSign * 15.9)
+            _ = addBox(parent: world, name: "park-stall-awning-\(stallIndex)", size: SIMD3<Float>(3.6, 0.06, 1.3), position: SIMD3<Float>(awningP.x, awningP.y + 2.25, awningP.z), material: Self.pbr(.white, roughness: 0.8), orientation: yawAt(stallD))
+            let signP = gp(stallD, sideSign * 15.5)
+            _ = addBox(parent: world, name: "park-stall-sign-\(stallIndex)", size: SIMD3<Float>(0.08, 0.7, 2.4), position: SIMD3<Float>(signP.x, signP.y + 3.15, signP.z), material: Self.pbr(UIColor(red: 0.98, green: 0.95, blue: 0.80, alpha: 1), roughness: 0.6), orientation: yawAt(stallD))
+        }
+        // A carousel in the mid-section, close to the line.
+        let carouselBase = gp(700, sideSign * 24)
+        let carouselY = carouselBase.y
+        let carouselYaw = yawAt(700)
+        let carouselDeck = zooPart(FallbackCylinderMesh.make(height: 0.35, radius: 7), Self.pbr(pastels[1], roughness: 0.7), SIMD3<Float>(carouselBase.x, carouselY + 0.18, carouselBase.z), name: "park-carousel-deck")
+        world.addChild(carouselDeck)
+        let carouselPole = zooPart(FallbackCylinderMesh.make(height: 4.6, radius: 0.35), Self.pbr(UIColor(red: 0.92, green: 0.93, blue: 0.94, alpha: 1), metallic: 0.4, roughness: 0.4), SIMD3<Float>(carouselBase.x, carouselY + 2.3, carouselBase.z), name: "park-carousel-pole")
+        world.addChild(carouselPole)
+        let carouselRoof = zooPart(FallbackCylinderMesh.make(height: 0.3, radius: 8.2), Self.pbr(UIColor(red: 0.92, green: 0.35, blue: 0.30, alpha: 1), roughness: 0.7), SIMD3<Float>(carouselBase.x, carouselY + 4.9, carouselBase.z), name: "park-carousel-roof")
+        world.addChild(carouselRoof)
+        let carouselCrown = zooPart(MeshResource.generateSphere(radius: 0.8), Self.pbr(UIColor(red: 0.98, green: 0.85, blue: 0.40, alpha: 1), metallic: 0.5, roughness: 0.35), SIMD3<Float>(carouselBase.x, carouselY + 5.6, carouselBase.z), name: "park-carousel-crown")
+        world.addChild(carouselCrown)
+        for carIndex in 0..<6 {
+            let a = Float(carIndex) / 6 * Float.pi * 2
+            let st = profileStation(at: 700, trackLateral: trackLat)
+            let tang = -simd_cross(st.xAxis, st.yAxis)
+            let cp = SIMD3<Float>(carouselBase.x, carouselY + 1.0, carouselBase.z) + st.xAxis * (cos(a) * 5.2) + tang * (sin(a) * 5.2)
+            _ = addBox(parent: world, name: "park-carousel-car-\(carIndex)", size: SIMD3<Float>(1.1, 0.9, 0.6), position: cp, material: Self.pbr(pastels[carIndex % pastels.count], roughness: 0.7), orientation: carouselYaw)
+        }
+        // Second row of parked cars at the entrance lot.
+        for car in 0..<5 {
+            let p = gp(169 + Double(car) * 38, -sideSign * 19.5)
+            addParkedCar(name: "park-car-b-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 169 + Double(car) * 38).heading + Float.pi / 2, seed: car * 3 + 5)
         }
 
         // Fishplates at every 25 m joint (standard-length rail).
@@ -4599,17 +10841,121 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             world.addChild(plates)
         }
 
+        // batch39: two more rides on the park side of the
+        // mid-section and a hotel skyline behind the grounds,
+        // so the park reads from the train long before the
+        // grounds themselves arrive — the batch32 photos
+        // showed 900 m of grass before anything vertical.
+        // Drop tower at 1,050 m (27 m column, ring cabin).
+        let towerBase = gp(1_050, sideSign * 21)
+        let towerYaw = yawAt(1_050)
+        _ = addBox(parent: world, name: "park-drop-tower", size: SIMD3<Float>(2.6, 27, 2.6), position: SIMD3<Float>(towerBase.x, towerBase.y + 13.5, towerBase.z), material: Self.pbr(pastels[1], roughness: 0.6), orientation: towerYaw)
+        _ = addBox(parent: world, name: "park-drop-tower-crown", size: SIMD3<Float>(4.6, 2.0, 4.6), position: SIMD3<Float>(towerBase.x, towerBase.y + 28, towerBase.z), material: Self.pbr(UIColor(red: 0.92, green: 0.35, blue: 0.30, alpha: 1), roughness: 0.6), orientation: towerYaw)
+        let towerRing = zooPart(FallbackCylinderMesh.make(height: 2.4, radius: 4.6), Self.pbr(pastels[2], roughness: 0.6), SIMD3<Float>(towerBase.x, towerBase.y + 17, towerBase.z), name: "park-drop-tower-ring")
+        world.addChild(towerRing)
+        let towerFinial = zooPart(MeshResource.generateSphere(radius: 0.9), Self.pbr(UIColor(red: 0.98, green: 0.85, blue: 0.40, alpha: 1), metallic: 0.5, roughness: 0.35), SIMD3<Float>(towerBase.x, towerBase.y + 29.8, towerBase.z), name: "park-drop-tower-finial")
+        world.addChild(towerFinial)
+        // Balloon tower at 470 m, just before the stall row.
+        let balloonBase = gp(470, sideSign * 21)
+        let balloonPole = zooPart(FallbackCylinderMesh.make(height: 11, radius: 0.16), postMat, SIMD3<Float>(balloonBase.x, balloonBase.y + 5.5, balloonBase.z), name: "park-balloon-pole")
+        world.addChild(balloonPole)
+        let balloon = zooPart(MeshResource.generateSphere(radius: 3.4), Self.pbr(UIColor(red: 0.92, green: 0.55, blue: 0.25, alpha: 1), roughness: 0.55), SIMD3<Float>(balloonBase.x, balloonBase.y + 14.6, balloonBase.z), name: "park-balloon")
+        world.addChild(balloon)
+        _ = addBox(parent: world, name: "park-balloon-basket", size: SIMD3<Float>(1.3, 1.1, 1.3), position: SIMD3<Float>(balloonBase.x, balloonBase.y + 10.4, balloonBase.z), material: Self.pbr(UIColor(red: 0.55, green: 0.42, blue: 0.30, alpha: 1), roughness: 0.85), orientation: yawAt(470))
+        // Park hotels behind the grounds (skyline backdrop).
+        // batch46: a fourth hotel at 1,700 m carries the
+        // skyline into the terminal approach.
+        let hotelHeights: [Float] = [30, 34, 27, 31]
+        let hotelFacades: [String] = ["scenery_office_facade_2", "scenery_office_facade_3", "scenery_office_facade_2", "scenery_office_facade_3"]
+        for (hotelIndex, hotelSpot) in [(1_120.0, 84.0), (1_390.0, 92.0), (1_540.0, 84.0), (1_700.0, 78.0)].enumerated() {
+            let hb = gp(hotelSpot.0, sideSign * Float(hotelSpot.1))
+            let hotelH = hotelHeights[hotelIndex]
+            _ = addBox(parent: world, name: "parkline-hotel-\(hotelIndex)", size: SIMD3<Float>(16, hotelH, 14), position: SIMD3<Float>(hb.x, hb.y + hotelH / 2, hb.z), material: Self.texturedPBR(pastels[hotelIndex % pastels.count], roughness: 0.85, textureName: hotelFacades[hotelIndex]), orientation: yawAt(hotelSpot.0))
+            _ = addBox(parent: world, name: "parkline-hotel-roof-\(hotelIndex)", size: SIMD3<Float>(17, 0.5, 15), position: SIMD3<Float>(hb.x, hb.y + hotelH + 0.25, hb.z), material: Self.pbr(UIColor(red: 0.40, green: 0.38, blue: 0.42, alpha: 1), roughness: 0.8), orientation: yawAt(hotelSpot.0))
+        }
+
+        // batch46 (2026-11-14, user: 「左側も奥が更地」): the
+        // park side's middle band (25-50 m) ran empty outside
+        // the grounds — the hedge and lamp rows hug the track
+        // and everything else sat at the grounds or the
+        // entrance. A swing ride fills the 880 m stretch, a
+        // second carousel the terminal approach, and a loose
+        // tree planting fills the band behind the hedge on
+        // both open stretches.
+        // Swing ride (chain tower) at 880 m.
+        let swingBase = gp(880, sideSign * 25)
+        let swingY = swingBase.y
+        let swingDeck = zooPart(FallbackCylinderMesh.make(height: 0.3, radius: 4.6), Self.pbr(pastels[3], roughness: 0.7), SIMD3<Float>(swingBase.x, swingY + 0.15, swingBase.z), name: "park-swing-deck")
+        world.addChild(swingDeck)
+        let swingPole = zooPart(FallbackCylinderMesh.make(height: 10.5, radius: 0.26), Self.pbr(UIColor(red: 0.92, green: 0.93, blue: 0.94, alpha: 1), metallic: 0.4, roughness: 0.4), SIMD3<Float>(swingBase.x, swingY + 5.25, swingBase.z), name: "park-swing-pole")
+        world.addChild(swingPole)
+        let swingHub = zooPart(FallbackCylinderMesh.make(height: 0.3, radius: 3.3), Self.pbr(UIColor(red: 0.92, green: 0.35, blue: 0.30, alpha: 1), roughness: 0.6), SIMD3<Float>(swingBase.x, swingY + 10.2, swingBase.z), name: "park-swing-hub")
+        world.addChild(swingHub)
+        let swingRoof = zooPart(FallbackCylinderMesh.make(height: 0.25, radius: 4.3), Self.pbr(pastels[1], roughness: 0.6), SIMD3<Float>(swingBase.x, swingY + 11.3, swingBase.z), name: "park-swing-roof")
+        world.addChild(swingRoof)
+        let swingCrown = zooPart(MeshResource.generateSphere(radius: 0.7), Self.pbr(UIColor(red: 0.98, green: 0.85, blue: 0.40, alpha: 1), metallic: 0.5, roughness: 0.35), SIMD3<Float>(swingBase.x, swingY + 12.1, swingBase.z), name: "park-swing-crown")
+        world.addChild(swingCrown)
+        let swingStation = profileStation(at: 880, trackLateral: trackLat)
+        let swingTangent = -simd_cross(swingStation.xAxis, swingStation.yAxis)
+        for chairIndex in 0..<8 {
+            let a = Float(chairIndex) / 8 * Float.pi * 2
+            let hangTop = SIMD3<Float>(swingBase.x, swingY + 10.05, swingBase.z) + swingStation.xAxis * (cos(a) * 3.1) + swingTangent * (sin(a) * 3.1)
+            _ = addBox(parent: world, name: "park-swing-chain-\(chairIndex)", size: SIMD3<Float>(0.03, 2.3, 0.03), position: SIMD3<Float>(hangTop.x, hangTop.y - 1.15, hangTop.z), material: postMat, orientation: yawAt(880))
+            let seatPos = SIMD3<Float>(swingBase.x, swingY + 7.7, swingBase.z) + swingStation.xAxis * (cos(a) * 3.35) + swingTangent * (sin(a) * 3.35)
+            _ = addBox(parent: world, name: "park-swing-seat-\(chairIndex)", size: SIMD3<Float>(0.55, 0.45, 0.06), position: seatPos, material: Self.pbr(pastels[chairIndex % pastels.count], roughness: 0.7), orientation: yawAt(880))
+            let postPos = SIMD3<Float>(swingBase.x, swingY, swingBase.z) + swingStation.xAxis * (cos(a) * 4.4) + swingTangent * (sin(a) * 4.4)
+            let post = zooPart(FallbackCylinderMesh.make(height: 1.1, radius: 0.05), postMat, SIMD3<Float>(postPos.x, postPos.y + 0.55, postPos.z), name: "park-swing-fencepost-\(chairIndex)")
+            world.addChild(post)
+        }
+        // Second carousel at 1,690 m, on the terminal
+        // approach past the grounds (deck radius 6.5 m, so it
+        // stands clear of the 1,600 m fairy cluster).
+        let carousel2Base = gp(1_690, sideSign * 30)
+        let carousel2Y = carousel2Base.y
+        let carousel2Yaw = yawAt(1_690)
+        let carousel2Deck = zooPart(FallbackCylinderMesh.make(height: 0.35, radius: 6.5), Self.pbr(pastels[2], roughness: 0.7), SIMD3<Float>(carousel2Base.x, carousel2Y + 0.18, carousel2Base.z), name: "park-carousel2-deck")
+        world.addChild(carousel2Deck)
+        let carousel2Pole = zooPart(FallbackCylinderMesh.make(height: 4.2, radius: 0.32), Self.pbr(UIColor(red: 0.92, green: 0.93, blue: 0.94, alpha: 1), metallic: 0.4, roughness: 0.4), SIMD3<Float>(carousel2Base.x, carousel2Y + 2.1, carousel2Base.z), name: "park-carousel2-pole")
+        world.addChild(carousel2Pole)
+        let carousel2Roof = zooPart(FallbackCylinderMesh.make(height: 0.3, radius: 7.6), Self.pbr(pastels[0], roughness: 0.7), SIMD3<Float>(carousel2Base.x, carousel2Y + 4.5, carousel2Base.z), name: "park-carousel2-roof")
+        world.addChild(carousel2Roof)
+        let carousel2Crown = zooPart(MeshResource.generateSphere(radius: 0.75), Self.pbr(UIColor(red: 0.98, green: 0.85, blue: 0.40, alpha: 1), metallic: 0.5, roughness: 0.35), SIMD3<Float>(carousel2Base.x, carousel2Y + 5.2, carousel2Base.z), name: "park-carousel2-crown")
+        world.addChild(carousel2Crown)
+        for carIndex in 0..<6 {
+            let a = Float(carIndex) / 6 * Float.pi * 2
+            let st2 = profileStation(at: 1_690, trackLateral: trackLat)
+            let tang2 = -simd_cross(st2.xAxis, st2.yAxis)
+            let cp = SIMD3<Float>(carousel2Base.x, carousel2Y + 1.0, carousel2Base.z) + st2.xAxis * (cos(a) * 4.8) + tang2 * (sin(a) * 4.8)
+            _ = addBox(parent: world, name: "park-carousel2-car-\(carIndex)", size: SIMD3<Float>(1.1, 0.9, 0.6), position: cp, material: Self.pbr(pastels[(carIndex + 1) % pastels.count], roughness: 0.7), orientation: carousel2Yaw)
+        }
+        // Loose trees in the park side's middle band, on the
+        // two stretches outside the grounds pad (950-1,620 m).
+        for (bandStart, bandEnd, bandStep) in [(350.0, 930.0, 40.0), (1_630.0, 1_770.0, 35.0)] {
+            var midTreeD = bandStart
+            while midTreeD <= bandEnd {
+                if abs(midTreeD - 880) > 14 && stableIndex("parkmid-treeok-\(Int(midTreeD))", count: 3) != 0 {
+                    buildZooTree(at: gp(midTreeD, sideSign * (30 + Float(stableIndex("parkmid-tree-\(Int(midTreeD))", count: 17)))), seed: Int(midTreeD) + 53)
+                }
+                midTreeD += bandStep
+            }
+        }
+
         // Park grounds: plaza pad under the attractions.
+        // batch15: the grounds sat 115 m from the track, so the
+        // wheel/coaster/castle read as tiny toys ~400 m away in
+        // the tour photos. The whole cluster moves to 58 m —
+        // the wheel base lands ~21 m from the centreline, the
+        // same viewing distance as the zoo paddocks.
         let parkStation = profileStation(at: 1_280, trackLateral: 0)
         let xAxis = parkStation.xAxis
         let tangent = -simd_cross(xAxis, parkStation.yAxis)
-        let parkGround = gp(1_280, sideSign * 115)
+        let parkGround = gp(1_280, sideSign * 58)
         let parkGroundY = parkGround.y
         let parkCenter = SIMD3<Float>(parkGround.x, parkGroundY, parkGround.z)
         var padD = 950.0
         while padD <= 1_620 {
-            let p = gp(padD, sideSign * 115)
-            _ = addBox(parent: world, name: "park-plaza", size: SIMD3<Float>(150, 0.09, 16.6), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.82, green: 0.76, blue: 0.68, alpha: 1), roughness: 0.95), orientation: yawAt(padD))
+            let p = gp(padD, sideSign * 58)
+            _ = addBox(parent: world, name: "park-plaza", size: SIMD3<Float>(84, 0.09, 16.6), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.82, green: 0.76, blue: 0.68, alpha: 1), roughness: 0.95), orientation: yawAt(padD))
             padD += 16
         }
         let parkYaw = yawAt(1_280)
@@ -4617,7 +10963,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // Ferris wheel (diameter 56 m) facing the line.
         let wheelBase = parkCenter - xAxis * (sideSign * 37)
         let wheelCenter = SIMD3<Float>(wheelBase.x, parkGroundY + 30, wheelBase.z)
-        let wheelMat = Self.pbr(UIColor(red: 0.92, green: 0.93, blue: 0.94, alpha: 1), metallic: 0.4, roughness: 0.4)
+        // batch39: the batch15 wheel was a hair-thin white
+        // rim that vanished against the sky in the tour
+        // photos — thicker segments in a saturated park red.
+        let wheelMat = Self.pbr(UIColor(red: 0.88, green: 0.30, blue: 0.34, alpha: 1), metallic: 0.35, roughness: 0.4)
         var wheelBatch = MeshBatchBuilder()
         let rimSegments = 28
         for i in 0..<rimSegments {
@@ -4625,9 +10974,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let a1 = Float(i + 1) / Float(rimSegments) * Float.pi * 2
             let p0 = wheelCenter + (xAxis * cos(a0) + SIMD3<Float>(0, 1, 0) * sin(a0)) * 28
             let p1 = wheelCenter + (xAxis * cos(a1) + SIMD3<Float>(0, 1, 0) * sin(a1)) * 28
-            wheelBatch.addSegment(from: p0, to: p1, thickness: 0.35)
+            wheelBatch.addSegment(from: p0, to: p1, thickness: 0.6)
             if i % 7 == 0 {
-                wheelBatch.addSegment(from: wheelCenter, to: p0, thickness: 0.22)
+                wheelBatch.addSegment(from: wheelCenter, to: p0, thickness: 0.32)
             }
         }
         for legSign: Float in [-1, 1] {
@@ -4645,7 +10994,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
 
         // Roller coaster: closed ellipse with two hills.
-        let coasterOrigin = parkCenter + xAxis * (sideSign * 35) - tangent * 10
+        // batch15: origin pulled toward the line with the rest
+        // of the grounds (centre lateral ≈ 46 m, trackside edge
+        // of the ellipse ≈ 12 m — clear of the portal legs).
+        let coasterOrigin = parkCenter - xAxis * (sideSign * 12) - tangent * 10
         var coasterStations: [ProfileStation] = []
         var coasterPoints: [SIMD3<Float>] = []
         let coasterN = 40
@@ -4680,19 +11032,218 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for (fairyIndex, spot) in fairySpots.enumerated() {
             let base = parkCenter + tangent * spot.along + xAxis * spot.lat
             _ = addBox(parent: world, name: "parkline-fairy-\(fairyIndex)", size: SIMD3<Float>(spot.w, spot.h, spot.d), position: SIMD3<Float>(base.x, parkGroundY + spot.h / 2, base.z), material: Self.pbr(pastels[fairyIndex % pastels.count], roughness: 0.8), orientation: parkYaw)
-            let roof = addBox(parent: world, name: "parkline-fairy-roof-\(fairyIndex)", size: SIMD3<Float>(spot.w * 0.78, spot.w * 0.78, spot.d + 0.4), position: SIMD3<Float>(base.x, parkGroundY + spot.h + spot.w * 0.24, base.z), material: Self.pbr(pastels[(fairyIndex + 1) % pastels.count], roughness: 0.7), orientation: parkYaw)
+            let roof = addBox(parent: world, name: "parkline-fairy-roof-\(fairyIndex)", size: SIMD3<Float>(spot.w * 0.78, spot.w * 0.78, spot.d + 0.4), position: SIMD3<Float>(base.x, parkGroundY + spot.h, base.z), material: Self.pbr(pastels[(fairyIndex + 1) % pastels.count], roughness: 0.7), orientation: parkYaw)
             roof.orientation = roof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
         }
-        let castleBase = parkCenter + tangent * -6 + xAxis * (sideSign * 40)
+        // batch15: castle pulled toward the line with the
+        // grounds (centre lateral ≈ 35 m instead of ≈ 155 m).
+        let castleBase = parkCenter + tangent * -6 - xAxis * (sideSign * 23)
         _ = addBox(parent: world, name: "parkline-castle", size: SIMD3<Float>(11, 19, 11), position: SIMD3<Float>(castleBase.x, parkGroundY + 9.5, castleBase.z), material: Self.pbr(pastels[1], roughness: 0.8), orientation: parkYaw)
         for turret in 0..<4 {
             let tx = (turret % 2 == 0 ? -5.5 : 5.5) as Float
             let tz = (turret < 2 ? -5.5 : 5.5) as Float
             let tp = castleBase + xAxis * tx + tangent * tz
             _ = addBox(parent: world, name: "parkline-castle-turret-\(turret)", size: SIMD3<Float>(2.4, 24, 2.4), position: SIMD3<Float>(tp.x, parkGroundY + 12, tp.z), material: Self.pbr(pastels[0], roughness: 0.8), orientation: parkYaw)
+            // batch39: turrets were flat-topped slabs; give
+            // them the same pyramid caps as the keep, in a
+            // saturated blue that reads against the sky.
+            let turretRoof = addBox(parent: world, name: "parkline-castle-turret-roof-\(turret)", size: SIMD3<Float>(2.0, 2.0, 2.9), position: SIMD3<Float>(tp.x, parkGroundY + 24, tp.z), material: Self.pbr(UIColor(red: 0.30, green: 0.42, blue: 0.78, alpha: 1), roughness: 0.7), orientation: parkYaw)
+            turretRoof.orientation = turretRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
         }
-        let castleRoof = addBox(parent: world, name: "parkline-castle-roof", size: SIMD3<Float>(8.6, 8.6, 11.4), position: SIMD3<Float>(castleBase.x, parkGroundY + 19 + 2.1, castleBase.z), material: Self.pbr(pastels[3], roughness: 0.7), orientation: parkYaw)
+        let castleRoof = addBox(parent: world, name: "parkline-castle-roof", size: SIMD3<Float>(8.6, 8.6, 11.4), position: SIMD3<Float>(castleBase.x, parkGroundY + 19, castleBase.z), material: Self.pbr(UIColor(red: 0.30, green: 0.42, blue: 0.78, alpha: 1), roughness: 0.7), orientation: parkYaw)
         castleRoof.orientation = castleRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+
+        // batch15: mid-line clusters so no stretch of the line
+        // runs empty — a pair of fairy houses on the park side
+        // at 600 m and 1,600 m, and green field pads on the far
+        // side breaking up the single dry sheet.
+        for (clusterIndex, clusterD) in [600.0, 1_600.0].enumerated() {
+            for houseIndex in 0..<2 {
+                let hd = clusterD + Double(houseIndex) * 26 - 13
+                let hbase = gp(hd, sideSign * (24 + Float(houseIndex) * 7))
+                let hw: Float = houseIndex == 0 ? 10 : 8.5
+                let hh: Float = houseIndex == 0 ? 7 : 6
+                _ = addBox(parent: world, name: "parkline-mid-fairy-\(clusterIndex)-\(houseIndex)", size: SIMD3<Float>(hw, hh, 8), position: SIMD3<Float>(hbase.x, hbase.y + hh / 2, hbase.z), material: Self.pbr(pastels[(clusterIndex + houseIndex) % pastels.count], roughness: 0.8), orientation: yawAt(hd))
+                let hroof = addBox(parent: world, name: "parkline-mid-fairy-roof-\(clusterIndex)-\(houseIndex)", size: SIMD3<Float>(hw * 0.78, hw * 0.78, 8.4), position: SIMD3<Float>(hbase.x, hbase.y + hh, hbase.z), material: Self.pbr(pastels[(clusterIndex + houseIndex + 1) % pastels.count], roughness: 0.7), orientation: yawAt(hd))
+                hroof.orientation = hroof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+            }
+            let stroll = gp(clusterD, sideSign * 17)
+            addPerson(position: SIMD3<Float>(stroll.x, stroll.y, stroll.z), yaw: atan2(tangent.x, -tangent.z), role: 3, mode: 1, routeDistanceM: clusterD, walkAxis: tangent, range: 9, seedKey: "parkmidvis-\(clusterIndex)")
+        }
+        // batch39: the far side was four identical green pads
+        // on a green sheet — invisible in the photos. Now a
+        // patchwork of individually coloured fields in two
+        // rows, a hedgerow line between them, farmhouses, a
+        // service road with cars, and advertisement boards
+        // facing the line, so the far side changes character
+        // every few hundred metres instead of running bare.
+        let fieldPalette: [UIColor] = [
+            UIColor(red: 0.36, green: 0.48, blue: 0.27, alpha: 1),
+            UIColor(red: 0.76, green: 0.64, blue: 0.33, alpha: 1),
+            UIColor(red: 0.45, green: 0.36, blue: 0.26, alpha: 1),
+            UIColor(red: 0.45, green: 0.62, blue: 0.30, alpha: 1),
+            UIColor(red: 0.55, green: 0.50, blue: 0.68, alpha: 1),
+        ]
+        // batch46 (2026-11-14, user: 「右側更地じゃん」): the
+        // six bands left ~110 m gaps of bare base sheet
+        // between them, and the flat pads alone read as a
+        // coloured carpet. The patchwork is now continuous
+        // (seven 215 m bands, 272-1,747 m) and the substance
+        // below — greenhouses, barns, tractors, tree lines —
+        // stands on it along the whole line.
+        for (bandIndex, bandD) in [380.0, 595.0, 810.0, 1_025.0, 1_240.0, 1_455.0, 1_640.0].enumerated() {
+            let bandLength: Float = 215
+            let nearP = gp(bandD, -sideSign * 25)
+            _ = addBox(parent: world, name: "parkline-field-near-\(bandIndex)", size: SIMD3<Float>(17, 0.06, bandLength), position: SIMD3<Float>(nearP.x, nearP.y + 0.03, nearP.z), material: Self.pbr(fieldPalette[(bandIndex * 2) % fieldPalette.count], roughness: 1), orientation: yawAt(bandD))
+            let farP = gp(bandD, -sideSign * 47)
+            _ = addBox(parent: world, name: "parkline-field-far-\(bandIndex)", size: SIMD3<Float>(19, 0.06, bandLength), position: SIMD3<Float>(farP.x, farP.y + 0.03, farP.z), material: Self.pbr(fieldPalette[(bandIndex * 2 + 2) % fieldPalette.count], roughness: 1), orientation: yawAt(bandD))
+        }
+        // Hedgerow between the field rows (batch46: extended
+        // to the full field stretch, still leaving a gap at
+        // the farmhouse at 1,030 m).
+        var hedgerowBatch = MeshBatchBuilder()
+        for (runStart, runEnd) in [(340.0, 1_000.0), (1_060.0, 1_700.0)] {
+            var hrD = runStart
+            while hrD <= runEnd {
+                let p = gp(hrD, -sideSign * 35.5)
+                hedgerowBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.5, p.z), size: SIMD3<Float>(1.2, 1.0, 15.4), yaw: -sample(at: hrD).heading)
+                hrD += 15
+            }
+        }
+        if let hedgerow = hedgerowBatch.build(name: "parkline-hedgerow", material: foliageMaterials[2]) {
+            world.addChild(hedgerow)
+        }
+        // Service road along the far side (one batched
+        // entity), with cars on it.
+        var serviceRoadBatch = MeshBatchBuilder()
+        var roadD = 340.0
+        while roadD <= 1_720 {
+            let p = gp(roadD, -sideSign * 13.8)
+            serviceRoadBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.028, p.z), size: SIMD3<Float>(5.0, 0.05, 16.6), yaw: -sample(at: roadD).heading)
+            roadD += 16
+        }
+        if let serviceRoad = serviceRoadBatch.build(name: "parkline-service-road", material: Self.pbr(UIColor(red: 0.32, green: 0.32, blue: 0.34, alpha: 1), roughness: 0.95)) {
+            world.addChild(serviceRoad)
+        }
+        for (roadCarIndex, roadCarD) in [520.0, 700.0, 980.0, 1_180.0, 1_400.0, 1_580.0].enumerated() {
+            let p = gp(roadCarD, -sideSign * 13.8)
+            addParkedCar(name: "parkline-road-car-\(roadCarIndex)", center: p, groundY: p.y + 0.06, yaw: -sample(at: roadCarD).heading, seed: roadCarIndex * 7 + 11)
+        }
+        // Farmhouses among the fields, each with a barn.
+        let farmFacades: [String] = ["scenery_house_facade_3", "scenery_house_facade_4", "scenery_house_facade_6"]
+        for (farmIndex, farmD) in [500.0, 1_030.0, 1_560.0].enumerated() {
+            let fb = gp(farmD, -sideSign * 33)
+            _ = addBox(parent: world, name: "parkline-farm-\(farmIndex)", size: SIMD3<Float>(8.2, 4.4, 6.4), position: SIMD3<Float>(fb.x, fb.y + 2.2, fb.z), material: Self.texturedPBR(.white, roughness: 0.9, textureName: farmFacades[farmIndex]), orientation: yawAt(farmD))
+            let froof = addBox(parent: world, name: "parkline-farm-roof-\(farmIndex)", size: SIMD3<Float>(6.4, 6.4, 6.8), position: SIMD3<Float>(fb.x, fb.y + 4.4, fb.z), material: Self.pbr(UIColor(red: 0.38, green: 0.34, blue: 0.32, alpha: 1), roughness: 0.85), orientation: yawAt(farmD))
+            froof.orientation = froof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+            let barnP = gp(farmD + 14, -sideSign * 38)
+            _ = addBox(parent: world, name: "parkline-farm-barn-\(farmIndex)", size: SIMD3<Float>(6.5, 3.4, 5.0), position: SIMD3<Float>(barnP.x, barnP.y + 1.7, barnP.z), material: Self.pbr(UIColor(red: 0.55, green: 0.42, blue: 0.30, alpha: 1), roughness: 0.9), orientation: yawAt(farmD + 14))
+        }
+        // Advertisement boards on the far side, faces toward
+        // the approaching train — the classic railway-side
+        // park advert. The board spans laterally, so its
+        // posts stand at the span's two ends.
+        for (boardIndex, boardD) in [420.0, 600.0, 760.0, 1_100.0, 1_300.0, 1_480.0].enumerated() {
+            for postLat in [Float(16.3), Float(20.7)] {
+                let pp = gp(boardD, -sideSign * postLat)
+                _ = addBox(parent: world, name: "parkline-ad-post-\(boardIndex)", size: SIMD3<Float>(0.18, 3.4, 0.18), position: SIMD3<Float>(pp.x, pp.y + 1.7, pp.z), material: postMat, orientation: yawAt(boardD))
+            }
+            let bp = gp(boardD, -sideSign * 18.5)
+            let boardStation = profileStation(at: boardD, trackLateral: 0)
+            let boardTangent = -simd_cross(boardStation.xAxis, boardStation.yAxis)
+            _ = addBox(parent: world, name: "parkline-ad-frame-\(boardIndex)", size: SIMD3<Float>(7.0, 2.6, 0.14), position: SIMD3<Float>(bp.x, bp.y + 3.6, bp.z), material: Self.pbr(pastels[(boardIndex + 1) % pastels.count], roughness: 0.7), orientation: yawAt(boardD))
+            _ = addBox(parent: world, name: "parkline-ad-face-\(boardIndex)", size: SIMD3<Float>(6.5, 2.2, 0.18), position: SIMD3<Float>(bp.x, bp.y + 3.6, bp.z) - boardTangent * 0.02, material: Self.pbr(UIColor(red: 0.98, green: 0.95, blue: 0.80, alpha: 1), roughness: 0.6), orientation: yawAt(boardD))
+        }
+
+        // batch46: farm substance spread along the whole far
+        // side, so no stretch of it runs bare — glasshouses on
+        // the far field row, barn sheds on the near row,
+        // tractors standing in the fields, and a windbreak
+        // tree line closing the fields' far edge at ~58 m, so
+        // the horizon no longer sits on an empty sheet.
+        let greenhouseGlass = Self.pbr(UIColor(red: 0.78, green: 0.86, blue: 0.82, alpha: 0.55), roughness: 0.25)
+        let greenhouseFrame = Self.pbr(UIColor(red: 0.82, green: 0.83, blue: 0.84, alpha: 1), metallic: 0.5, roughness: 0.45)
+        let cropMat = Self.pbr(UIColor(red: 0.30, green: 0.48, blue: 0.24, alpha: 1), roughness: 1)
+        for (ghIndex, ghD) in [470.0, 830.0, 1_190.0, 1_470.0, 1_660.0].enumerated() {
+            let ghBase = gp(ghD, -sideSign * 41)
+            let ghYaw = yawAt(ghD)
+            _ = addBox(parent: world, name: "parkline-greenhouse-skirt-\(ghIndex)", size: SIMD3<Float>(5.6, 0.25, 13.4), position: SIMD3<Float>(ghBase.x, ghBase.y + 0.13, ghBase.z), material: Self.pbr(UIColor(red: 0.62, green: 0.60, blue: 0.57, alpha: 1), roughness: 0.9), orientation: ghYaw)
+            for wallSide: Float in [-1, 1] {
+                let wp = gp(ghD, -sideSign * (41 + wallSide * 2.55))
+                _ = addBox(parent: world, name: "parkline-greenhouse-wall-\(ghIndex)-\(Int(wallSide))", size: SIMD3<Float>(0.08, 1.45, 13), position: SIMD3<Float>(wp.x, wp.y + 0.98, wp.z), material: greenhouseGlass, orientation: ghYaw)
+            }
+            // A-frame glass roof: the farm-roof prism trick in
+            // glass — a square-section box rolled 45 degrees,
+            // its eaves meeting the wall tops at ±2.55 m, apex
+            // at 4.25 m, lower vertex sunk in the skirt.
+            let ghRoof = addBox(parent: world, name: "parkline-greenhouse-roof-\(ghIndex)", size: SIMD3<Float>(3.6, 3.6, 13), position: SIMD3<Float>(ghBase.x, ghBase.y + 1.70, ghBase.z), material: greenhouseGlass, orientation: ghYaw)
+            ghRoof.orientation = ghRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+            _ = addBox(parent: world, name: "parkline-greenhouse-ridge-\(ghIndex)", size: SIMD3<Float>(0.14, 0.14, 13.3), position: SIMD3<Float>(ghBase.x, ghBase.y + 4.28, ghBase.z), material: greenhouseFrame, orientation: ghYaw)
+            for endSign: Float in [-1, 1] {
+                let ep = gp(ghD + Double(endSign) * 6.5, -sideSign * 41)
+                _ = addBox(parent: world, name: "parkline-greenhouse-end-\(ghIndex)-\(Int(endSign))", size: SIMD3<Float>(5.1, 1.45, 0.08), position: SIMD3<Float>(ep.x, ep.y + 0.98, ep.z), material: greenhouseGlass, orientation: ghYaw)
+            }
+            let doorP = gp(ghD - 6.5, -sideSign * 41)
+            _ = addBox(parent: world, name: "parkline-greenhouse-door-\(ghIndex)", size: SIMD3<Float>(0.95, 1.9, 0.1), position: SIMD3<Float>(doorP.x, doorP.y + 1.05, doorP.z), material: Self.pbr(UIColor(red: 0.35, green: 0.38, blue: 0.40, alpha: 1), roughness: 0.7), orientation: yawAt(ghD - 6.5))
+            for postLat: Float in [-2.55, 2.55] {
+                for postAlong: Float in [-6.4, 6.4] {
+                    let pp = gp(ghD + Double(postAlong), -sideSign * (41 + postLat))
+                    _ = addBox(parent: world, name: "parkline-greenhouse-post-\(ghIndex)", size: SIMD3<Float>(0.09, 1.7, 0.09), position: SIMD3<Float>(pp.x, pp.y + 0.85, pp.z), material: greenhouseFrame, orientation: ghYaw)
+                }
+            }
+            for rowIndex in 0..<3 {
+                let rp = gp(ghD, -sideSign * (41 + Float(rowIndex - 1) * 1.5))
+                _ = addBox(parent: world, name: "parkline-greenhouse-crops-\(ghIndex)-\(rowIndex)", size: SIMD3<Float>(0.85, 0.5, 11.5), position: SIMD3<Float>(rp.x, rp.y + 0.5, rp.z), material: cropMat, orientation: ghYaw)
+            }
+        }
+        // Barn sheds among the near fields (the three
+        // farmhouses keep their own barns; these are the
+        // working sheds of the other holdings).
+        for (barnIndex, barnD) in [700.0, 1_300.0].enumerated() {
+            let bb = gp(barnD, -sideSign * 30)
+            let barnYaw = yawAt(barnD)
+            _ = addBox(parent: world, name: "parkline-barn-\(barnIndex)", size: SIMD3<Float>(7, 3.6, 5.5), position: SIMD3<Float>(bb.x, bb.y + 1.8, bb.z), material: Self.pbr(UIColor(red: 0.50, green: 0.38, blue: 0.27, alpha: 1), roughness: 0.9), orientation: barnYaw)
+            let barnRoof = addBox(parent: world, name: "parkline-barn-roof-\(barnIndex)", size: SIMD3<Float>(5.5, 5.5, 6.1), position: SIMD3<Float>(bb.x, bb.y + 3.6, bb.z), material: Self.pbr(UIColor(red: 0.42, green: 0.40, blue: 0.42, alpha: 1), roughness: 0.85), orientation: barnYaw)
+            barnRoof.orientation = barnRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+            let barnDoorP = gp(barnD, -sideSign * 26.4)
+            _ = addBox(parent: world, name: "parkline-barn-door-\(barnIndex)", size: SIMD3<Float>(0.08, 2.4, 2.2), position: SIMD3<Float>(barnDoorP.x, barnDoorP.y + 1.2, barnDoorP.z), material: Self.pbr(UIColor(red: 0.30, green: 0.26, blue: 0.22, alpha: 1), roughness: 0.9), orientation: barnYaw)
+        }
+        // Tractors standing in the near fields: chassis, hood,
+        // glazed cab, big rear and small front wheels, exhaust.
+        let tractorBody = Self.pbr(UIColor(red: 0.75, green: 0.30, blue: 0.16, alpha: 1), roughness: 0.55)
+        let tractorGlass = Self.pbr(UIColor(red: 0.16, green: 0.20, blue: 0.24, alpha: 1), metallic: 0.3, roughness: 0.3)
+        let tyreMat = Self.pbr(UIColor(red: 0.12, green: 0.12, blue: 0.13, alpha: 1), roughness: 0.95)
+        for (tractorIndex, tractorD) in [640.0, 1_350.0].enumerated() {
+            let tb = gp(tractorD, -sideSign * 22)
+            let tYaw = yawAt(tractorD)
+            _ = addBox(parent: world, name: "parkline-tractor-body-\(tractorIndex)", size: SIMD3<Float>(1.25, 0.55, 2.7), position: SIMD3<Float>(tb.x, tb.y + 0.78, tb.z), material: tractorBody, orientation: tYaw)
+            let hoodP = gp(tractorD + 0.85, -sideSign * 22)
+            _ = addBox(parent: world, name: "parkline-tractor-hood-\(tractorIndex)", size: SIMD3<Float>(1.05, 0.5, 1.15), position: SIMD3<Float>(hoodP.x, hoodP.y + 1.05, hoodP.z), material: tractorBody, orientation: tYaw)
+            let cabP = gp(tractorD - 0.75, -sideSign * 22)
+            _ = addBox(parent: world, name: "parkline-tractor-cab-\(tractorIndex)", size: SIMD3<Float>(1.2, 1.1, 1.25), position: SIMD3<Float>(cabP.x, cabP.y + 1.55, cabP.z), material: tractorBody, orientation: tYaw)
+            _ = addBox(parent: world, name: "parkline-tractor-cabglass-\(tractorIndex)", size: SIMD3<Float>(1.24, 0.5, 1.29), position: SIMD3<Float>(cabP.x, cabP.y + 1.78, cabP.z), material: tractorGlass, orientation: tYaw)
+            for wheelSide: Float in [-1, 1] {
+                let rearP = gp(tractorD - 0.85, -sideSign * (22 + wheelSide * 0.72))
+                let rearWheel = zooPart(FallbackCylinderMesh.make(height: 0.34, radius: 0.62), tyreMat, SIMD3<Float>(rearP.x, rearP.y + 0.62, rearP.z), name: "parkline-tractor-rearwheel-\(tractorIndex)")
+                rearWheel.orientation = tYaw * simd_quatf(angle: Float.pi / 2, axis: SIMD3<Float>(0, 0, 1))
+                world.addChild(rearWheel)
+                let frontP = gp(tractorD + 0.95, -sideSign * (22 + wheelSide * 0.62))
+                let frontWheel = zooPart(FallbackCylinderMesh.make(height: 0.26, radius: 0.38), tyreMat, SIMD3<Float>(frontP.x, frontP.y + 0.38, frontP.z), name: "parkline-tractor-frontwheel-\(tractorIndex)")
+                frontWheel.orientation = tYaw * simd_quatf(angle: Float.pi / 2, axis: SIMD3<Float>(0, 0, 1))
+                world.addChild(frontWheel)
+            }
+            let exhaustP = gp(tractorD + 0.45, -sideSign * 21.6)
+            let exhaust = zooPart(FallbackCylinderMesh.make(height: 0.8, radius: 0.045), postMat, SIMD3<Float>(exhaustP.x, exhaustP.y + 1.6, exhaustP.z), name: "parkline-tractor-exhaust-\(tractorIndex)")
+            world.addChild(exhaust)
+        }
+        // Windbreak tree line on the fields' far edge.
+        var farTreeD = 350.0
+        while farTreeD <= 1_710 {
+            if stableIndex("parkfar-treeok-\(Int(farTreeD))", count: 4) != 0 {
+                buildZooTree(at: gp(farTreeD, -sideSign * (57 + Float(stableIndex("parkfar-tree-\(Int(farTreeD))", count: 5)))), seed: Int(farTreeD) + 31)
+            }
+            farTreeD += 28
+        }
 
         // Visitors strolling the plaza (people).
         for v in 0..<5 {
@@ -4724,7 +11275,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // texture (windows and door included), like the zoo
         // line's station house.
         _ = addBox(parent: world, name: "park-station-house", size: SIMD3<Float>(12, 4.6, 6.5), position: SIMD3<Float>(house.x, house.y + 2.3, house.z), material: Self.texturedPBR(UIColor(red: 0.96, green: 0.80, blue: 0.85, alpha: 1), roughness: 0.85, textureName: "scenery_house_facade_5"), orientation: yawAt(1_940))
-        let houseRoof = addBox(parent: world, name: "park-station-roof", size: SIMD3<Float>(9.4, 9.4, 7.3), position: SIMD3<Float>(house.x, house.y + 4.6 + 2.2, house.z), material: Self.pbr(pastels[2], roughness: 0.7), orientation: yawAt(1_940))
+        let houseRoof = addBox(parent: world, name: "park-station-roof", size: SIMD3<Float>(9.4, 9.4, 7.3), position: SIMD3<Float>(house.x, house.y + 4.6, house.z), material: Self.pbr(pastels[2], roughness: 0.7), orientation: yawAt(1_940))
         houseRoof.orientation = houseRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
         let endSample = sample(at: 2_000)
         let endPoint = routeOffsetPoint(endSample, lateral: trackLat)
@@ -4736,125 +11287,388 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let lp = SIMD3<Float>(legPoint.x, legPoint.y, legPoint.z) + forward * 9
             _ = addBox(parent: world, name: "park-buffer-leg", size: SIMD3<Float>(0.22, 0.95, 0.22), position: SIMD3<Float>(lp.x, lp.y + 0.45, lp.z), material: postMat, orientation: yawAt(2_000))
         }
+
+        // batch39 (2026-11-14, user: テーマパーク駅の周りも
+        // 何もない): the terminus gets the full station-front
+        // treatment — plaza, rotary with a shuttle bus, the
+        // park's main gate beside the station house, visitors
+        // walking between them, a car park on the far side,
+        // and a park skyline straight past the buffer stop,
+        // so the end of the line no longer faces bare grass
+        // to the horizon (the batch32 terminal photo).
+        // Fairy houses bridging the grounds and the station.
+        for (termHouseIndex, termHouseSpot) in [(1_695.0, 23.0), (1_730.0, 29.0)].enumerated() {
+            let tb = gp(termHouseSpot.0, sideSign * Float(termHouseSpot.1))
+            let tw: Float = termHouseIndex == 0 ? 10 : 8.5
+            let th: Float = termHouseIndex == 0 ? 7 : 6
+            _ = addBox(parent: world, name: "parkline-term-fairy-\(termHouseIndex)", size: SIMD3<Float>(tw, th, 8), position: SIMD3<Float>(tb.x, tb.y + th / 2, tb.z), material: Self.pbr(pastels[(termHouseIndex + 2) % pastels.count], roughness: 0.8), orientation: yawAt(termHouseSpot.0))
+            let troof = addBox(parent: world, name: "parkline-term-fairy-roof-\(termHouseIndex)", size: SIMD3<Float>(tw * 0.78, tw * 0.78, 8.4), position: SIMD3<Float>(tb.x, tb.y + th, tb.z), material: Self.pbr(pastels[(termHouseIndex + 3) % pastels.count], roughness: 0.7), orientation: yawAt(termHouseSpot.0))
+            troof.orientation = troof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+        }
+        // Station-front plaza on the park side.
+        var termPlazaD = 1_795.0
+        while termPlazaD <= 1_985 {
+            let p = gp(termPlazaD, sideSign * 26)
+            _ = addBox(parent: world, name: "park-term-plaza", size: SIMD3<Float>(20, 0.07, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.85, green: 0.78, blue: 0.70, alpha: 1), roughness: 0.95), orientation: yawAt(termPlazaD))
+            termPlazaD += 15
+        }
+        // Rotary with a grass island, a tree and a waiting
+        // shuttle bus; two cars parked at the plaza edge.
+        let rotaryP = gp(1_885, sideSign * 27)
+        let rotaryDisc = zooPart(FallbackCylinderMesh.make(height: 0.07, radius: 10.5), Self.pbr(UIColor(red: 0.32, green: 0.32, blue: 0.34, alpha: 1), roughness: 0.95), SIMD3<Float>(rotaryP.x, rotaryP.y + 0.06, rotaryP.z), name: "park-term-rotary")
+        world.addChild(rotaryDisc)
+        let islandDisc = zooPart(FallbackCylinderMesh.make(height: 0.16, radius: 3.2), Self.texturedPBR(.white, roughness: 1, textureName: "scenery_grass"), SIMD3<Float>(rotaryP.x, rotaryP.y + 0.1, rotaryP.z), name: "park-term-rotary-island")
+        world.addChild(islandDisc)
+        buildZooTree(at: SIMD3<Float>(rotaryP.x, rotaryP.y + 0.18, rotaryP.z), seed: 39)
+        let busP = gp(1_848, sideSign * 31)
+        addBus(name: "park-term-bus", position: SIMD3<Float>(busP.x, busP.y + 0.11, busP.z), orientation: yawAt(1_848), bodyMaterial: Self.pbr(UIColor(red: 0.15, green: 0.50, blue: 0.55, alpha: 1), metallic: 0.2, roughness: 0.4))
+        for (termCarIndex, termCarD) in [1_905.0, 1_945.0].enumerated() {
+            let p = gp(termCarD, sideSign * 33)
+            addParkedCar(name: "park-term-car-\(termCarIndex)", center: p, groundY: p.y + 0.06, yaw: -sample(at: termCarD).heading + Float.pi / 2, seed: termCarIndex * 5 + 21)
+        }
+        // The park's main gate beside the station: two
+        // towers, a beam and a sign across the plaza path.
+        for (gateTowerIndex, gateTowerLat) in [Float(19.5), Float(34.5)].enumerated() {
+            let tp = gp(1_820, sideSign * gateTowerLat)
+            _ = addBox(parent: world, name: "park-term-gate-tower-\(gateTowerIndex)", size: SIMD3<Float>(2.4, 9.5, 2.4), position: SIMD3<Float>(tp.x, tp.y + 4.75, tp.z), material: Self.pbr(pastels[0], roughness: 0.8), orientation: yawAt(1_820))
+            let gtroof = addBox(parent: world, name: "park-term-gate-roof-\(gateTowerIndex)", size: SIMD3<Float>(2.0, 2.0, 2.9), position: SIMD3<Float>(tp.x, tp.y + 9.5, tp.z), material: Self.pbr(UIColor(red: 0.30, green: 0.42, blue: 0.78, alpha: 1), roughness: 0.7), orientation: yawAt(1_820))
+            gtroof.orientation = gtroof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+        }
+        let gateBeamP = gp(1_820, sideSign * 27)
+        _ = addBox(parent: world, name: "park-term-gate-beam", size: SIMD3<Float>(16.5, 1.1, 0.5), position: SIMD3<Float>(gateBeamP.x, gateBeamP.y + 8.4, gateBeamP.z), material: Self.pbr(pastels[0], roughness: 0.8), orientation: yawAt(1_820))
+        _ = addBox(parent: world, name: "park-term-gate-sign", size: SIMD3<Float>(7.5, 1.5, 0.12), position: SIMD3<Float>(gateBeamP.x, gateBeamP.y + 6.9, gateBeamP.z), material: Self.pbr(UIColor(red: 0.98, green: 0.95, blue: 0.80, alpha: 1), roughness: 0.6), orientation: yawAt(1_820))
+        // Visitors walking the plaza between the station
+        // and the gate, and banner poles along its edge.
+        let termStation = profileStation(at: 1_900, trackLateral: 0)
+        let termTangent = -simd_cross(termStation.xAxis, termStation.yAxis)
+        for v in 0..<5 {
+            let vd = 1_845.0 + Double(v) * 22
+            let home = gp(vd, sideSign * (20 + Float(v % 3) * 2.5))
+            addPerson(position: SIMD3<Float>(home.x, home.y, home.z), yaw: atan2(termTangent.x, -termTangent.z), role: 3, mode: 1, routeDistanceM: vd, walkAxis: termTangent, range: 13, seedKey: "parktermvis-\(v)")
+        }
+        for (termFlagIndex, termFlagD) in [1_800.0, 1_875.0, 1_950.0].enumerated() {
+            let fp = gp(termFlagD, sideSign * 16.8)
+            let pole = zooPart(FallbackCylinderMesh.make(height: 7.2, radius: 0.06), postMat, SIMD3<Float>(fp.x, fp.y + 3.6, fp.z), name: "park-term-flag-pole-\(termFlagIndex)")
+            world.addChild(pole)
+            _ = addBox(parent: world, name: "park-term-flag-\(termFlagIndex)", size: SIMD3<Float>(0.05, 3.0, 0.95), position: SIMD3<Float>(fp.x, fp.y + 5.4, fp.z) + termTangent * 0.55, material: Self.pbr(pastels[(termFlagIndex + 1) % pastels.count], roughness: 0.85), orientation: yawAt(termFlagD))
+        }
+        // Car park on the far side of the terminus: pads,
+        // two rows of cars and a parking sign.
+        var termParkD = 1_790.0
+        while termParkD <= 1_970 {
+            let p = gp(termParkD, -sideSign * 22)
+            _ = addBox(parent: world, name: "park-term-parking", size: SIMD3<Float>(20, 0.07, 15.4), position: SIMD3<Float>(p.x, p.y + 0.02, p.z), material: Self.pbr(UIColor(red: 0.32, green: 0.32, blue: 0.34, alpha: 1), roughness: 0.95), orientation: yawAt(termParkD))
+            termParkD += 15
+        }
+        for carRow in 0..<2 {
+            for carCol in 0..<5 {
+                let carD = 1_800.0 + Double(carCol) * 38
+                let p = gp(carD, -sideSign * (17 + Float(carRow) * 9.5))
+                addParkedCar(name: "park-term-park-car-\(carRow)-\(carCol)", center: p, groundY: p.y + 0.06, yaw: -sample(at: carD).heading + Float.pi / 2, seed: carRow * 13 + carCol * 3 + 31)
+            }
+        }
+        let parkSignP = gp(1_775, -sideSign * 13.5)
+        _ = addBox(parent: world, name: "park-term-parking-post", size: SIMD3<Float>(0.14, 2.6, 0.14), position: SIMD3<Float>(parkSignP.x, parkSignP.y + 1.3, parkSignP.z), material: postMat, orientation: yawAt(1_775))
+        _ = addBox(parent: world, name: "park-term-parking-sign", size: SIMD3<Float>(1.1, 1.1, 0.08), position: SIMD3<Float>(parkSignP.x, parkSignP.y + 2.9, parkSignP.z), material: Self.pbr(UIColor(red: 0.20, green: 0.35, blue: 0.75, alpha: 1), roughness: 0.5), orientation: yawAt(1_775))
+        // Park skyline straight past the buffer stop: a
+        // castle and two hotels on a green pad, so the last
+        // photo of the tour faces the park, not the horizon.
+        let skyBase = routeOffsetPoint(endSample, lateral: sideSign * 8)
+        let skyPos = SIMD3<Float>(skyBase.x, skyBase.y, skyBase.z) + forward * 74
+        _ = addBox(parent: world, name: "park-end-pad", size: SIMD3<Float>(95, 0.06, 42), position: SIMD3<Float>(skyPos.x, skyPos.y + 0.02, skyPos.z), material: Self.pbr(UIColor(red: 0.42, green: 0.55, blue: 0.33, alpha: 1), roughness: 1), orientation: yawAt(2_000))
+        _ = addBox(parent: world, name: "park-end-castle", size: SIMD3<Float>(14, 26, 14), position: SIMD3<Float>(skyPos.x, skyPos.y + 13, skyPos.z), material: Self.pbr(pastels[1], roughness: 0.8), orientation: yawAt(2_000))
+        let skyRoof = addBox(parent: world, name: "park-end-castle-roof", size: SIMD3<Float>(10.9, 10.9, 14.4), position: SIMD3<Float>(skyPos.x, skyPos.y + 26, skyPos.z), material: Self.pbr(UIColor(red: 0.30, green: 0.42, blue: 0.78, alpha: 1), roughness: 0.7), orientation: yawAt(2_000))
+        skyRoof.orientation = skyRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
+        for (skyHotelIndex, skyHotelLat) in [Float(-26), Float(30)].enumerated() {
+            let hb = routeOffsetPoint(endSample, lateral: skyHotelLat)
+            let hp = SIMD3<Float>(hb.x, hb.y, hb.z) + forward * (88 + Float(skyHotelIndex) * 8)
+            let hh: Float = skyHotelIndex == 0 ? 30 : 24
+            _ = addBox(parent: world, name: "park-end-hotel-\(skyHotelIndex)", size: SIMD3<Float>(17, hh, 15), position: SIMD3<Float>(hp.x, hp.y + hh / 2, hp.z), material: Self.texturedPBR(pastels[(skyHotelIndex + 1) % pastels.count], roughness: 0.85, textureName: "scenery_office_facade_3"), orientation: yawAt(2_000))
+        }
+        for treeSide: Float in [-7, 7] {
+            let tp = routeOffsetPoint(endSample, lateral: trackLat + treeSide)
+            let treePos = SIMD3<Float>(tp.x, tp.y, tp.z) + forward * 14
+            buildZooTree(at: treePos, seed: treeSide > 0 ? 41 : 43)
+        }
+
+        // batch99 (2026-11-16, user: テーマパーク線の背景が
+        // 更地同然): everything above fills the first ~100 m.
+        // Beyond it the line ran over the flat far-ground
+        // sheet straight to the 300 m forest board — no
+        // standing form in the middle distance, and nothing
+        // behind the park's own skyline row (the wheel, the
+        // castle and four hotels at 78-92 m), so the resort
+        // read as one row of toys on an empty field. This
+        // pass gives the line the main line's background
+        // language at short-line scale: photo-textured tree
+        // clumps in the 64-145 m band, foliage hill mounds
+        // at 168-215 m, and a second, taller hotel row
+        // behind the grounds, so the park gains depth.
+        // Tree clumps, both sides. The park side's band
+        // steps out behind the grounds / hotel row between
+        // 950 and 1,760 m; the far side's band clears the
+        // field rows (out to ~57 m), the origin houses
+        // (25 m) and the terminus parking (to ~32 m).
+        var bgSite = 0
+        var bgD = 90.0
+        while bgD <= 1_970 {
+            defer { bgD += 40; bgSite += 1 }
+            for side: Float in [-1, 1] {
+                let onParkSide = side == sideSign
+                if stableIndex("parkbg-treeok-\(bgSite)-\(side > 0 ? 1 : 0)", count: 3) == 0 { continue }
+                let hash = stableIndex("parkbg-tree-\(bgSite)-\(side > 0 ? 1 : 0)", count: 1_000)
+                let baseLat: Float
+                let latJitter: Float
+                if onParkSide && bgD >= 950 && bgD <= 1_760 {
+                    baseLat = 114 + Float(hash % 20)
+                    latJitter = Float((hash / 7) % 9) - 4
+                } else if onParkSide {
+                    baseLat = 72 + Float(hash % 30)
+                    latJitter = Float((hash / 7) % 13) - 6
+                } else {
+                    baseLat = 70 + Float(hash % 32)
+                    latJitter = Float((hash / 7) % 13) - 6
+                }
+                let treesHere = 1 + (hash / 3) % 3
+                for t in 0..<treesHere {
+                    let th = stableIndex("parkbg-treeh-\(bgSite)-\(side > 0 ? 1 : 0)-\(t)", count: 1_000)
+                    let along = bgD + Double((th % 29) - 14)
+                    let p = gp(along, side * (baseLat + latJitter + Float((th / 11) % 7) - 3))
+                    addTree(parent: world, name: "parkbg-tree-\(bgSite)-\(Int(side))-\(t)", x: p.x, z: p.z,
+                            height: 4.5 + Float(th % 40) / 10,
+                            material: foliageMaterials[(bgSite + t) % foliageMaterials.count], groundY: p.y, censusTexture: "scenery_foliage")
+                }
+            }
+        }
+        // Hill mounds at 168-215 m, both sides — the same
+        // squashed-sphere idiom as buildTreeLinesAndHills'
+        // distant hills. A mound's outer edge stays inside
+        // 250 m, so it can never reach the 300 m forest
+        // board even where a tight curve pulls the board
+        // in toward 0.9 R.
+        var hillSite = 0
+        var hillD = 240.0
+        while hillD <= 1_900 {
+            defer { hillD += 260; hillSite += 1 }
+            for side: Float in [-1, 1] {
+                let hash = stableIndex("parkbg-hill-\(hillSite)-\(side > 0 ? 1 : 0)", count: 1_000)
+                if hash % 3 == 0 { continue }
+                let p = gp(hillD + Double((hash / 5) % 41) - 20, side * Float(168 + hash % 48))
+                let hill = ModelEntity(mesh: MeshResource.generateSphere(radius: 1), materials: [foliageMaterials[1 + hillSite % 2]])
+                hill.name = "parkbg-hill-\(hillSite)-\(Int(side))"
+                hill.scale = SIMD3<Float>(55 + Float(hash % 16), 7 + Float((hash / 7) % 4), 26 + Float((hash / 3) % 10))
+                hill.position = SIMD3<Float>(p.x, p.y - 1.5, p.z)
+                hill.orientation = yawAt(hillD)
+                world.addChild(hill)
+            }
+        }
+        // Resort backdrop row: three taller towers behind
+        // the grounds' hotel row, at 152 m, in the same
+        // office-facade photo textures and pastel tints as
+        // the front row — the skyline gains a back layer
+        // instead of ending at the wheel.
+        let backdropFacades: [String] = ["scenery_office_facade_3", "scenery_office_facade_2", "scenery_office_facade_3"]
+        for (towerIndex, towerSpot) in [(1_060.0, 42.0), (1_310.0, 48.0), (1_580.0, 38.0)].enumerated() {
+            let towerH = Float(towerSpot.1)
+            let tb = gp(towerSpot.0, sideSign * 152)
+            _ = addBox(parent: world, name: "parkbg-tower-\(towerIndex)", size: SIMD3<Float>(17, towerH, 15), position: SIMD3<Float>(tb.x, tb.y + towerH / 2, tb.z), material: Self.texturedPBR(pastels[towerIndex % pastels.count], roughness: 0.85, textureName: backdropFacades[towerIndex]), orientation: yawAt(towerSpot.0))
+            _ = addBox(parent: world, name: "parkbg-tower-roof-\(towerIndex)", size: SIMD3<Float>(18, 0.5, 16), position: SIMD3<Float>(tb.x, tb.y + towerH + 0.25, tb.z), material: Self.pbr(UIColor(red: 0.40, green: 0.38, blue: 0.42, alpha: 1), roughness: 0.8), orientation: yawAt(towerSpot.0))
+        }
     }
 
-    // MARK: - People (quality41 final)
+    // MARK: - People (batch14 photo billboards)
 
-    /// One articulated human figure (legs, torso, arms, head, hair)
-    /// at real proportions. role: 0 passenger, 1 station staff
-    /// (uniform + cap + red armband), 2 child, 3 visitor.
-    private func makePersonFigure(role: Int, seedKey: String) -> (root: Entity, legL: Entity, legR: Entity, armL: Entity, armR: Entity) {
+    /// One photo-billboard person: a thin card textured with an
+    /// AI-generated full-body cutout (512x1024 canvas, feet on the
+    /// bottom edge, the figure filling 92% of the height). role:
+    /// 0 passenger, 1 station staff, 2 child placement (the
+    /// parent-and-child pair card, placed at adult scale),
+    /// 3 visitor.
+    ///
+    /// Orientation (user correction 2026-11-12 23:04): people
+    /// waiting on a platform face the track, so the approaching
+    /// driver sees their profile, not their front. A `profile`
+    /// card therefore carries a side-view photo on a card aligned
+    /// with the figure's sagittal plane (its broad faces look
+    /// along the track, its plane contains the facing direction),
+    /// while `profile == false` is reserved for figures facing
+    /// along the track axis and carries a front-view photo on a
+    /// card whose broad faces look where the person looks. The
+    /// card orientation is fixed at build time from the figure's
+    /// own facing; nothing yaws it toward the camera per frame.
+    private func makePersonFigure(role: Int, seedKey: String, profile: Bool, mirrored: Bool) -> Entity {
         let hash = stableIndex(seedKey, count: 1_000)
-        let s: Float = role == 2 ? 0.68 : (0.94 + Float(hash % 11) * 0.012)
-        let jackets: [UIColor] = [
-            UIColor(red: 0.20, green: 0.32, blue: 0.52, alpha: 1),
-            UIColor(red: 0.55, green: 0.28, blue: 0.24, alpha: 1),
-            UIColor(red: 0.30, green: 0.44, blue: 0.32, alpha: 1),
-            UIColor(red: 0.45, green: 0.46, blue: 0.48, alpha: 1),
-            UIColor(red: 0.72, green: 0.66, blue: 0.55, alpha: 1),
-            UIColor(red: 0.16, green: 0.16, blue: 0.18, alpha: 1),
-            UIColor(red: 0.55, green: 0.68, blue: 0.78, alpha: 1),
-            UIColor(red: 0.78, green: 0.55, blue: 0.62, alpha: 1),
-        ]
-        let trousersPalette: [UIColor] = [
-            UIColor(red: 0.16, green: 0.19, blue: 0.27, alpha: 1),
-            UIColor(red: 0.32, green: 0.32, blue: 0.34, alpha: 1),
-            UIColor(red: 0.36, green: 0.28, blue: 0.20, alpha: 1),
-            UIColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1),
-        ]
-        let skins: [UIColor] = [
-            UIColor(red: 0.87, green: 0.66, blue: 0.52, alpha: 1),
-            UIColor(red: 0.76, green: 0.55, blue: 0.42, alpha: 1),
-            UIColor(red: 0.62, green: 0.44, blue: 0.33, alpha: 1),
-        ]
-        let hairs: [UIColor] = [
-            UIColor(red: 0.08, green: 0.07, blue: 0.07, alpha: 1),
-            UIColor(red: 0.25, green: 0.16, blue: 0.10, alpha: 1),
-            UIColor(red: 0.55, green: 0.55, blue: 0.55, alpha: 1),
-        ]
-        let jacketMat = Self.pbr(role == 1 ? UIColor(red: 0.13, green: 0.20, blue: 0.38, alpha: 1) : jackets[hash % jackets.count], roughness: 0.92)
-        let trousersMat = Self.pbr(role == 1 ? UIColor(red: 0.10, green: 0.14, blue: 0.26, alpha: 1) : trousersPalette[hash / 7 % trousersPalette.count], roughness: 0.92)
-        let skinMat = Self.pbr(skins[hash / 13 % skins.count], roughness: 0.75)
-        let hairMat = Self.pbr(hairs[hash / 17 % hairs.count], roughness: 0.95)
+        let scaleHash = stableIndex(seedKey + "h", count: 1_000)
+        // batch15 (2026-11-13, user verdict "小さすぎ"): the old
+        // range centred figures at ~1.63 m with a 0.94 floor, and
+        // at tour distance they read as small children next to
+        // the platform furniture. Centre the range on ~1.73 m
+        // (1.63 at s == 1.00, up to ~1.83) so adults read as
+        // adults beside benches and signs.
+        let s: Float = 1.00 + Float(scaleHash % 13) * 0.01
+        let base: String
+        if role == 1 {
+            base = hash % 2 == 0 ? "staff_man" : "staff_woman"
+        } else if role == 2 {
+            base = "parent_child"
+        } else {
+            let pool = ["commuter_man_suit", "commuter_woman_coat", "commuter_man_casual", "commuter_woman_backpack",
+                        "student_uniform", "elderly_man", "elderly_woman", "man_phone", "woman_shopping",
+                        "visitor_hat", "visitor_man"]
+            base = pool[hash % pool.count]
+        }
+        let textureName = (profile ? "people_profile_" : "people_") + base
+        var material = Self.texturedPBR(.white, roughness: 0.9, textureName: textureName)
+        material.blending = .transparent(opacity: .init(floatLiteral: 1))
+        // 2026-11-13 (Mac photo verdict): faceCulling .none let the
+        // mirrored back-face photo bleed through the transparent
+        // parts of the front face, so a stander showed a ghost
+        // double image (S17 right platform, elderly man). .back
+        // culls the far face, so only the near face renders and
+        // the ghost is gone; the card stays visible from both
+        // sides because each side renders its own outward face.
+        material.faceCulling = .back
 
-        let legLen: Float = 0.84 * s
-        let torsoH: Float = 0.60 * s
-        let armLen: Float = 0.60 * s
+        // The photographed figure stands 1.63 m tall at s == 1
+        // and fills 92% of the canvas height, so the card is a
+        // little taller than the figure; the width follows the
+        // 512:1024 canvas. Feet sit on the card's bottom edge,
+        // which is the root's ground plane.
+        let cardH: Float = 1.63 * s / 0.92
+        let cardW: Float = cardH * 0.5
         let root = Entity()
         root.name = "person-\(role)"
-        var legs: [Entity] = []
-        for side: Float in [-1, 1] {
-            let hip = Entity()
-            hip.position = SIMD3<Float>(side * 0.105 * s, legLen, 0)
-            let mesh = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.145 * s, legLen, 0.175 * s), cornerRadius: 0.03 * s), trousersMat, SIMD3<Float>(0, -legLen / 2 + 0.01, 0), name: "person-leg")
-            hip.addChild(mesh)
-            root.addChild(hip)
-            legs.append(hip)
+        // batch31 (2026-11-14): the card is rebuilt as two
+        // back-to-back planes with a DERIVED orientation —
+        // no more sign flips guessed from photo verdicts
+        // (the box + mirror construction was flipped twice,
+        // 2026-11-13, and platform standers still faced away
+        // from the track in the wave-2 photos).
+        // Ground truth, verified by reading the textures
+        // directly: every people_profile_* image faces
+        // image-LEFT (suit man, coat woman, parent-and-child
+        // checked). The root's local -Z is the figure's
+        // facing direction (the codebase yaw convention:
+        // root.orientation = quat(-yaw), yaw = atan2(d.x,
+        // -d.z)). A plane's front shows its texture
+        // unmirrored, image-right toward the plane's +X.
+        // Profile planes: A at -90 deg about Y has its front
+        // toward -X and maps texture u to root z = +u*w/2,
+        // so the nose (u < 0) lands at -Z: the depicted
+        // person faces the figure's facing. B at +90 deg
+        // maps u to z = -u*w/2, which would face the person
+        // +Z, so B also gets scale.x = -1, mapping u back
+        // to +u*w/2 — both broad sides show a profile
+        // facing the figure's own facing direction (for a
+        // platform stander, the track). `mirrored` must NOT
+        // touch profile cards any more.
+        // Front planes: A at 180 deg shows the front photo
+        // toward -Z (the facing); B unrotated shows the
+        // same photo from behind (the long-standing cheat).
+        // There `mirrored` only swaps which side a bag
+        // hangs on — cosmetic variety, no facing change.
+        let mesh = MeshResource.generatePlane(width: cardW, height: cardH)
+        func personPlane(rotationY: Float, offset: SIMD3<Float>, flip: Bool) -> ModelEntity {
+            let plane = ModelEntity(mesh: mesh, materials: [material])
+            plane.name = "person-card"
+            plane.position = SIMD3<Float>(offset.x, cardH / 2, offset.z)
+            plane.orientation = simd_quatf(angle: rotationY, axis: SIMD3<Float>(0, 1, 0))
+            if flip { plane.scale = SIMD3<Float>(-1, 1, 1) }
+            return plane
         }
-        let torso = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.41 * s, torsoH, 0.24 * s), cornerRadius: 0.05 * s), jacketMat, SIMD3<Float>(0, legLen + torsoH / 2 - 0.03 * s, 0), name: "person-torso")
-        root.addChild(torso)
-        var arms: [Entity] = []
-        for side: Float in [-1, 1] {
-            let shoulder = Entity()
-            shoulder.position = SIMD3<Float>(side * 0.255 * s, legLen + torsoH - 0.09 * s, 0)
-            let mesh = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.095 * s, armLen, 0.11 * s), cornerRadius: 0.03 * s), jacketMat, SIMD3<Float>(0, -armLen / 2, 0), name: "person-arm")
-            shoulder.addChild(mesh)
-            root.addChild(shoulder)
-            arms.append(shoulder)
-        }
-        let head = zooPart(MeshResource.generateSphere(radius: 0.115 * s), skinMat, SIMD3<Float>(0, legLen + torsoH + 0.075 * s, 0), name: "person-head")
-        root.addChild(head)
-        if role == 1 {
-            let cap = zooPart(FallbackCylinderMesh.make(height: 0.05 * s, radius: 0.128 * s), Self.pbr(UIColor(red: 0.13, green: 0.20, blue: 0.38, alpha: 1), roughness: 0.8), SIMD3<Float>(0, legLen + torsoH + 0.165 * s, 0), name: "staff-cap")
-            root.addChild(cap)
-            let band = zooPart(FallbackCylinderMesh.make(height: 0.028 * s, radius: 0.130 * s), Self.pbr(.white, roughness: 0.8), SIMD3<Float>(0, legLen + torsoH + 0.132 * s, 0), name: "staff-cap-band")
-            root.addChild(band)
-            let armband = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.115 * s, 0.07 * s, 0.13 * s), cornerRadius: 0.01), Self.pbr(UIColor(red: 0.80, green: 0.16, blue: 0.14, alpha: 1), roughness: 0.8), SIMD3<Float>(0, -0.20 * s, 0), name: "staff-armband")
-            arms[0].addChild(armband)
+        if profile {
+            root.addChild(personPlane(rotationY: -Float.pi / 2, offset: SIMD3<Float>(-0.008, 0, 0), flip: false))
+            root.addChild(personPlane(rotationY: Float.pi / 2, offset: SIMD3<Float>(0.008, 0, 0), flip: true))
         } else {
-            let hair = zooPart(MeshResource.generateSphere(radius: 0.120 * s), hairMat, SIMD3<Float>(0, legLen + torsoH + 0.103 * s, 0.010 * s), name: "person-hair")
-            hair.scale = SIMD3<Float>(1, 0.78, 1)
-            root.addChild(hair)
+            root.addChild(personPlane(rotationY: Float.pi, offset: SIMD3<Float>(0, 0, -0.008), flip: mirrored))
+            root.addChild(personPlane(rotationY: 0, offset: SIMD3<Float>(0, 0, 0.008), flip: !mirrored))
         }
-        if hash % 4 == 1 && role != 1 {
-            let bag = zooPart(MeshResource.generateBox(size: SIMD3<Float>(0.13 * s, 0.34 * s, 0.30 * s), cornerRadius: 0.02), Self.pbr(UIColor(red: 0.30, green: 0.22, blue: 0.16, alpha: 1), roughness: 0.85), SIMD3<Float>(0.31 * s, legLen + 0.16 * s, 0.02), name: "person-bag")
-            root.addChild(bag)
-        }
-        return (root, legs[0], legs[1], arms[0], arms[1])
+        return root
     }
 
     private func addPerson(position: SIMD3<Float>, yaw: Float, role: Int, mode: Int, routeDistanceM: Double, walkAxis: SIMD3<Float>, range: Float, seedKey: String) {
-        let figure = makePersonFigure(role: role, seedKey: seedKey)
-        figure.root.position = position
-        figure.root.orientation = simd_quatf(angle: -yaw, axis: SIMD3<Float>(0, 1, 0))
-        var rig = PersonRig(root: figure.root, legL: figure.legL, legR: figure.legR, armL: figure.armL, armR: figure.armR,
-                            mode: mode, routeDistanceM: routeDistanceM, home: position, walkAxis: walkAxis, range: range,
-                            speed: 0.45 + Float(stableIndex(seedKey + "spd", count: 40)) * 0.01,
-                            phase: Float(stableIndex(seedKey + "ph", count: 628)) / 100)
-        if mode == 0 && stableIndex(seedKey + "phone", count: 5) == 2 && role != 1 {
-            rig.armBaseR = -0.95
-            rig.armR.orientation = simd_quatf(angle: -0.95, axis: SIMD3<Float>(1, 0, 0))
+        // Card style (user correction 2026-11-12 23:04): walkers
+        // and anyone not facing along the track axis get the
+        // profile card; a stander whose facing runs along the
+        // track (|facing . trackAxis| > 0.7, e.g. terminal staff
+        // facing the arriving train) gets the front card. The
+        // placement yaw and the route heading share one
+        // convention, so the dot product is cos(yaw - heading).
+        let profile: Bool
+        if mode == 1 {
+            // batch60 (2026-11-15, real-device verdict): walkers
+            // use the profile card too. batch15 forced the front
+            // card so an approaching driver would not see a thin
+            // sliver, but on the device the platforms read as
+            // everyone facing along the platform or straight at
+            // the camera instead of the track — the user's
+            // standing complaint. A walker in profile, nose
+            // along the walk direction, is how a person crossing
+            // the driver's view actually looks.
+            profile = true
+        } else {
+            let heading = self.sample(at: routeDistanceM).heading
+            profile = abs(cos(yaw - heading)) <= 0.7
         }
-        world.addChild(figure.root)
+        // batch31: `mirrored` is cosmetic only (front-card
+        // bag side). Profile facing is derived inside
+        // makePersonFigure from the textures and must not
+        // be flipped here — the sin() sign rules that used
+        // to live in this block were guessed from photo
+        // verdicts twice (2026-11-13) and stayed wrong.
+        let mirrored: Bool
+        if mode == 0 && profile {
+            mirrored = false
+        } else {
+            mirrored = mode == 0 && stableIndex(seedKey + "flip", count: 2) == 0
+        }
+        let root = makePersonFigure(role: role, seedKey: seedKey, profile: profile, mirrored: mirrored)
+        root.position = position
+        root.orientation = simd_quatf(angle: -yaw, axis: SIMD3<Float>(0, 1, 0))
+        let rig = PersonRig(root: root,
+                            mode: mode, routeDistanceM: routeDistanceM, home: position, walkAxis: walkAxis, range: range,
+                            speed: 0.45 + Float(stableIndex(seedKey + "spd", count: 40)) * 0.01)
+        world.addChild(root)
         personRigs.append(rig)
     }
 
     /// Waiting and walking figures for one platform side: a mix of
     /// standers facing the track and walkers pacing the platform,
     /// plus one uniformed staff member at the larger stations.
-    private func addPlatformPeople(stationID: String, archetype: String, start: Double, end: Double, trackLateral: Float, sideSign: Float) {
+    private func addPlatformPeople(stationID: String, archetype: String, start: Double, end: Double, trackLateral: Float, sideSign: Float, islandStand: Bool = false) {
         let topV: Float = 0.3065 + 1.10
         let major = archetype.contains("terminal") || archetype.contains("major") || archetype.contains("junction")
-        let count = major ? 9 : (archetype.contains("branch") ? 3 : 5)
+        // batch15 (2026-11-13, user verdict): 5 figures spread
+        // over a 210 m platform read as almost nobody there.
+        // Roughly double the counts and cluster them in the
+        // middle 60% of the platform, where passengers actually
+        // wait for the stopping cars.
+        let count = major ? 14 : (archetype.contains("branch") ? 5 : 8)
         let span = end - start
         guard span > 34 else { return }
         for i in 0..<count {
             let key = "people-\(stationID)-\(Int(trackLateral * 10))-\(Int(sideSign))-\(i)"
-            let frac = 0.08 + Double(stableIndex(key, count: 84)) / 100
+            let frac = 0.18 + Double(stableIndex(key, count: 64)) / 100
             let c = start + span * frac
             let station = profileStation(at: c, trackLateral: trackLateral)
             let isStaff = major && i == 0
-            let u = sideSign * (isStaff ? 2.25 : 2.35 + Float(stableIndex(key + "u", count: 13)) * 0.12)
+            // batch36: on an island platform the waiting row
+            // stands just behind the face's white line — the
+            // standard 2.35...3.79 m stand-off would put half
+            // the figures over the far track. batch42: on the
+            // widened 4.96 m island (tracks at ±4.0) the row
+            // stands 2.30...2.66 m from the served track's
+            // centre — 0.6...1.0 m behind the white line,
+            // 1.34...1.70 m from the route centre on their
+            // face's half, clear of both vehicle gauges
+            // (inner edges at 2.525 m) by at least 0.82 m and
+            // clear of the centre furniture row.
+            let u: Float
+            if islandStand {
+                u = sideSign * (2.30 + Float(stableIndex(key + "u", count: 5)) * 0.09)
+            } else {
+                u = sideSign * (isStaff ? 2.25 : 2.35 + Float(stableIndex(key + "u", count: 13)) * 0.12)
+            }
             let pos = station.center + station.xAxis * u + station.yAxis * topV
             let h = sample(at: c).heading
             let xAxis = SIMD3<Float>(cos(h), 0, sin(h))
@@ -4873,9 +11687,25 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
-    /// Per-frame people animation: walkers pace their platform or
-    /// path with swinging legs and arms, standers sway almost
-    /// imperceptibly, and everyone beyond 320 m of the train rests.
+    /// batch92: per-frame wind-rotor update — a slow turn
+    /// (0.45–0.75 rad/s, roughly 4–7 rpm, varied per turbine
+    /// at build) about each rotor's hub axis, on simulation
+    /// time like the people. The angle wraps at 2π so the
+    /// Float orientation stays precise on long sessions.
+    private func updateWindRotors(time: Double) {
+        guard !windRotors.isEmpty else { return }
+        for rotor in windRotors {
+            let angle = Float((time * Double(rotor.speed)).truncatingRemainder(dividingBy: 2 * Double.pi))
+            rotor.entity.orientation = simd_quatf(angle: angle, axis: rotor.axis)
+        }
+    }
+
+    /// Per-frame people update: walkers pace their platform or
+    /// path (position and travel facing only — the billboard
+    /// cards have no limbs to swing), standers are fully static,
+    /// and everyone beyond 320 m of the train rests. Cards are
+    /// never yawed toward the camera: each card's orientation was
+    /// fixed at build time from the figure's own facing.
     private func updatePeople(trainPositionM: Double, time: Double) {
         guard !personRigs.isEmpty else { return }
         let dt = min(max(time - peopleLastTime, 0.001), 0.1)
@@ -4889,19 +11719,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 rig.offset += rig.dirSign * rig.speed * Float(dt)
                 if rig.offset > rig.range { rig.offset = rig.range; rig.dirSign = -1 }
                 if rig.offset < -rig.range { rig.offset = -rig.range; rig.dirSign = 1 }
-                rig.phase += Float(dt) * 6.2 * rig.speed
                 rig.root.position = rig.home + rig.walkAxis * rig.offset
                 let dir = rig.walkAxis * rig.dirSign
                 rig.root.orientation = simd_quatf(angle: -atan2(dir.x, -dir.z), axis: SIMD3<Float>(0, 1, 0))
-                let swing = sin(rig.phase) * 0.48
-                rig.legL.orientation = simd_quatf(angle: swing, axis: SIMD3<Float>(1, 0, 0))
-                rig.legR.orientation = simd_quatf(angle: -swing, axis: SIMD3<Float>(1, 0, 0))
-                rig.armL.orientation = simd_quatf(angle: -swing * 0.55, axis: SIMD3<Float>(1, 0, 0))
-                rig.armR.orientation = simd_quatf(angle: swing * 0.55 + rig.armBaseR, axis: SIMD3<Float>(1, 0, 0))
-            } else {
-                let sway = sin(Float(time) * 0.85 + rig.phase) * 0.045
-                rig.armL.orientation = simd_quatf(angle: sway, axis: SIMD3<Float>(1, 0, 0))
-                rig.armR.orientation = simd_quatf(angle: -sway + rig.armBaseR, axis: SIMD3<Float>(1, 0, 0))
             }
             personRigs[index] = rig
         }
@@ -4948,10 +11768,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // yellow, green (top to bottom). Aspects: 進行 = green,
         // 減速 = lower yellow + green (YG), 注意 = top yellow,
         // 警戒 = both yellows (YY), 停止 = red.
-        lamps[0].model?.materials = [aspect == .yellow || aspect == .doubleYellow ? signalYellowMaterial : signalDarkLampMaterial]
-        lamps[1].model?.materials = [aspect == .red ? signalRedMaterial : signalDarkLampMaterial]
-        lamps[2].model?.materials = [aspect == .doubleYellow || aspect == .yellowGreen ? signalYellowMaterial : signalDarkLampMaterial]
-        lamps[3].model?.materials = [aspect == .green || aspect == .yellowGreen ? signalGreenMaterial : signalDarkLampMaterial]
+        // batch76: the off state is each position's own tinted
+        // dark glass (signalDarkLampMaterials), not the shared
+        // near-black — which lamp lights for which aspect is
+        // unchanged.
+        // batch86: the same per-lamp lit flags also drive each
+        // lamp's glow disc (the lamp entity's only child, see
+        // placeSignal), so a lit lamp shows its halo inside
+        // the bezel while an unlit one stays plain dark glass.
+        // The aspect-to-lamp wiring is exactly as before.
+        let litFlags = [
+            aspect == .yellow || aspect == .doubleYellow,
+            aspect == .red,
+            aspect == .doubleYellow || aspect == .yellowGreen,
+            aspect == .green || aspect == .yellowGreen
+        ]
+        let litMaterials = [signalYellowMaterial, signalRedMaterial, signalYellowMaterial, signalGreenMaterial]
+        for (index, lamp) in lamps.enumerated() {
+            lamp.model?.materials = [litFlags[index] ? litMaterials[index] : signalDarkLampMaterials[index]]
+            lamp.children.first?.isEnabled = litFlags[index]
+        }
     }
 
     /// Lights the placed signal nearest the model's current reading
@@ -5159,6 +11995,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // and the deck cable trough (3.85 m), and just inside
             // the deck edge (4.2 m) where the line is on viaduct;
             // at ground level they stand inside the ±4.9 m trough.
+            // batch42: supports are filtered out of station zones
+            // (±125 m) but NOT out of the 200 m spread ramps
+            // beyond them, where an unshifted mast at ±4.0 would
+            // stand inside the sweeping track — so the masts step
+            // out with the spread and the beam lengthens to span
+            // them (at the station-zone edge the spread is
+            // already ≈1.85, giving ±5.85 masts and a 12.3 m
+            // beam).
             let lift = sample.elevationM - groundLevelM(at: sample)
             let mastBase = lift >= 2 ? sample.elevationM - 0.49 : sample.elevationM - 0.10
             // Crossbeam at rail head +6.45 m; the messenger rides at
@@ -5166,12 +12010,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // the wires hang just under the beam.
             let beamY = sample.elevationM + 0.3065 + 6.45
             let mastHeight = beamY + 0.1 - mastBase
-            for lateral in [Float(-4), Float(4)] {
+            let mastSpread = islandTrackSpread(at: distance)
+            for lateral in [-(Float(4) + mastSpread), Float(4) + mastSpread] {
                 let x = sample.x + lateral * cos(heading)
                 let z = sample.z + lateral * sin(heading)
                 supportBatch.addBox(center: SIMD3<Float>(x, mastBase + mastHeight / 2, z), size: SIMD3<Float>(0.18, mastHeight, 0.2), yaw: -heading)
             }
-            supportBatch.addBox(center: SIMD3<Float>(sample.x, beamY, sample.z), size: SIMD3<Float>(8.6, 0.12, 0.16), yaw: -heading)
+            supportBatch.addBox(center: SIMD3<Float>(sample.x, beamY, sample.z), size: SIMD3<Float>(8.6 + 2 * mastSpread, 0.12, 0.16), yaw: -heading)
             // Wires reach back to the previous support. Stagger
             // alternates ±0.25 m support by support, interpolated
             // linearly between them — the classic zig-zag.
@@ -5198,8 +12043,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         // at mid-span.
                         let du = 2 * u - 1
                         let systemHeight = Float(0.6 + 0.7 * du * du)
-                        let contact = wirePoint(at: d, trackLateral: trackLateral, stagger: stagger, heightAboveRail: 5)
-                        let messenger = wirePoint(at: d, trackLateral: trackLateral, stagger: stagger, heightAboveRail: 5 + systemHeight)
+                        // batch42: the wires hang over their
+                        // track wherever the island spread has
+                        // moved it, point by point along the span
+                        // (spans run straight through the station
+                        // zones the supports skip).
+                        let wireLateral = spreadTrackLateral(trackLateral, at: d)
+                        let contact = wirePoint(at: d, trackLateral: wireLateral, stagger: stagger, heightAboveRail: 5)
+                        let messenger = wirePoint(at: d, trackLateral: wireLateral, stagger: stagger, heightAboveRail: 5 + systemHeight)
                         if let cp = contactPrev, let mp = messengerPrev {
                             wireBatch.addSegment(from: cp, to: contact, thickness: 0.03)
                             wireBatch.addSegment(from: mp, to: messenger, thickness: 0.03)
@@ -5270,11 +12121,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // quality29: no station check used to exist here, so a
         // tower face could land inside a station platform (the
         // Matsubaracho apartment sliced by the platform back).
-        guard buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2),
-              buildingClearOfFans(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) else { return }
+        // batch72: the helpers take halfLength = ALONG-TRACK
+        // half (the box's depth) and halfDepth = LATERAL half
+        // (the box's width); this call site passed them swapped.
+        guard buildingClearOfPlatforms(chainage: distance, halfLength: Double(depth) / 2, lateral: lateral, halfDepth: width / 2) else { return }
+        // batch10: a tower inside a throat-fan span shifts out
+        // past the face line instead of vanishing (see
+        // fanShiftedLateral) — several fans sit in the downtown
+        // frontage, where the old drop cut visible holes.
+        let plotLateral = fanShiftedLateral(chainage: distance, halfLength: Double(depth) / 2, lateral: lateral, halfDepth: width / 2)
         let segments = max(1, Int((height / 15).rounded()))
         let segmentHeight = height / Float(segments)
-        let offset = side * lateral
+        let offset = side * plotLateral
         let x = sample.x + offset * cos(sample.heading)
         let z = sample.z + offset * sin(sample.heading)
         let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -5363,17 +12221,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let offset = side * lateral
         let x = sample.x + offset * cos(sample.heading)
         let z = sample.z + offset * sin(sample.heading)
-        let material = officeMaterials[abs(seed) % officeMaterials.count]
         let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
         // Stacked in up-to-30 m segments so the facade texture
         // repeats instead of stretching over the full height.
         let segments = max(1, Int((height / 30).rounded()))
         let segmentHeight = height / Float(segments)
         for segment in 0..<segments {
+            // batch19: one material for the whole tower made
+            // 60-120 m towers repeat the identical window grid
+            // two to four times (Mac loop-2 photos at Kaibukuro
+            // / Touou-Chihara). Shifting the skin per segment
+            // breaks the stacked-copy read; real towers also
+            // change expression between podium / shaft / crown.
+            let segmentMaterial = officeMaterials[(abs(seed) + segment) % officeMaterials.count]
             let body = addBox(parent: world, name: "distant-tower-\(seed)-\(segment)",
                               size: SIMD3<Float>(width, segmentHeight, depth),
                               position: SIMD3<Float>(x, groundY + segmentHeight * (Float(segment) + 0.5), z),
-                              material: material)
+                              material: segmentMaterial)
             body.orientation = orientation
         }
     }
@@ -5387,7 +12251,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let width: Float = 5.4 + Float((seed / 3) % 3) * 0.9
         let depth: Float = 5.8 + Float((seed / 5) % 3) * 0.8
         let height: Float = 3.8 + Float((seed / 7) % 4) * 0.6
-        guard buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) else { return }
+        guard buildingClearOfPlatforms(chainage: distance, halfLength: Double(depth) / 2, lateral: lateral, halfDepth: width / 2) else { return }
         let offset = side * lateral
         let x = sample.x + offset * cos(sample.heading)
         let z = sample.z + offset * sin(sample.heading)
@@ -5415,40 +12279,71 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         return Self.pbr(palette[abs(seed) % palette.count], roughness: 0.5)
     }
 
+    /// batch26 (2026-11-13): the industrial-station containers
+    /// used commercialAccent — a flat untextured colour — so in
+    /// the Mac loop-2 photos they read as blank coloured panels
+    /// (S23 波花： green + blue side by side; S26 館川： green),
+    /// exactly the "simplistic object" the quality bar forbids.
+    /// Same palette, but tinted over the steel texture so the
+    /// face carries panel variation instead of one flat tone.
+    private func containerMaterial(seed: Int) -> PhysicallyBasedMaterial {
+        let palette = [
+            UIColor(red: 0.95, green: 0.45, blue: 0.1, alpha: 1),
+            UIColor(red: 0.1, green: 0.55, blue: 0.3, alpha: 1),
+            UIColor(red: 0.1, green: 0.35, blue: 0.8, alpha: 1),
+        ]
+        return Self.texturedPBR(palette[abs(seed) % palette.count], metallic: 0.25, roughness: 0.62, textureName: "scenery_steel")
+    }
+
+    /// Darker shade of the same palette for the container ribs —
+    /// reads as corrugation shadow lines on the track-facing face.
+    private func containerRibMaterial(seed: Int) -> PhysicallyBasedMaterial {
+        let palette = [
+            UIColor(red: 0.52, green: 0.25, blue: 0.06, alpha: 1),
+            UIColor(red: 0.06, green: 0.30, blue: 0.17, alpha: 1),
+            UIColor(red: 0.06, green: 0.19, blue: 0.44, alpha: 1),
+        ]
+        return Self.pbr(palette[abs(seed) % palette.count], roughness: 0.6)
+    }
+
     /// quality40: a convenience store on a suburban plot — parking
     /// lot with stall stripes on the track side, then the store:
     /// concrete body, full-width glass storefront with a warm glow
     /// band, the coloured stripe under the roof, and a tall sign
     /// pole at the lot corner. Real konbini proportions (about
     /// 16 m frontage, 3.9 m eaves, sign pole about 6 m).
-    /// quality41: a parked car at real Japanese dimensions —
-    /// kei, compact and minivan shapes in the proportions
-    /// ChatGPT's review suggested (kei and compact dominant).
-    /// Four boxes: body, glass cabin, and one dark box per axle
-    /// that reads as wheels and shadow gap from the train.
+    /// batch15 (2026-11-13, user verdict 「車がショボすぎる
+    /// ちゃんと実写の写真使って」): the box cars are replaced by
+    /// photo cutouts, the same billboard treatment as the people
+    /// — AI-generated side profiles, background-removed, no
+    /// logos or readable plates (~/workspace/textures_photo/
+    /// car_cutouts/MANIFEST.md). The car fills 92% of the
+    /// 1024x512 canvas width with its wheels on the bottom
+    /// edge, so the card is sized from the REAL car length and
+    /// the height follows from the canvas aspect. The card is
+    /// rotated 90° against the caller's yaw so the image width
+    /// lies along the car's length axis, exactly as the old box
+    /// body's z-length did.
     private func addParkedCar(name: String, center: SIMD3<Float>, groundY: Float, yaw: Float, seed: Int) {
-        let orientation = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
-        let kind = abs(seed) % 5
-        let length: Float = kind < 2 ? 3.4 : (kind == 3 ? 4.75 : 4.05)
-        let width: Float = kind < 2 ? 1.48 : (kind == 3 ? 1.80 : 1.70)
-        let bodyH: Float = kind < 2 ? 0.62 : 0.58
-        let cabinH: Float = kind == 3 ? 0.66 : (kind < 2 ? 0.60 : 0.50)
-        let cabinLen: Float = kind == 3 ? 2.9 : 1.95
-        let palette: [(Float, Float, Float)] = [
-            (0.92, 0.92, 0.90), (0.72, 0.74, 0.76), (0.10, 0.10, 0.11),
-            (0.45, 0.58, 0.72), (0.60, 0.17, 0.15), (0.78, 0.72, 0.60),
-        ]
-        let c = palette[abs(seed * 3 + 1) % palette.count]
-        let bodyMaterial = Self.pbr(UIColor(red: CGFloat(c.0), green: CGFloat(c.1), blue: CGFloat(c.2), alpha: 1), metallic: 0.35, roughness: 0.42)
-        let wheelMaterial = Self.pbr(UIColor(red: 0.05, green: 0.05, blue: 0.06, alpha: 1), roughness: 0.9)
-        _ = addBox(parent: world, name: "\(name)-body", size: SIMD3<Float>(width, bodyH, length), position: SIMD3<Float>(center.x, groundY + 0.32 + bodyH / 2, center.z), material: bodyMaterial, orientation: orientation)
-        _ = addBox(parent: world, name: "\(name)-cabin", size: SIMD3<Float>(width - 0.18, cabinH, cabinLen), position: SIMD3<Float>(center.x, groundY + 0.32 + bodyH + cabinH / 2, center.z), material: glassMaterial, orientation: orientation)
-        for axle in [-1.0, 1.0] {
-            let a = Float(axle) * (length / 2 - 0.72)
-            let wx = center.x + a * sin(yaw)
-            let wz = center.z + a * cos(yaw)
-            _ = addBox(parent: world, name: "\(name)-axle-\(Int(axle))", size: SIMD3<Float>(width - 0.25, 0.52, 0.30), position: SIMD3<Float>(wx, groundY + 0.27, wz), material: wheelMaterial, orientation: orientation)
+        let spec: (texture: String, length: Float)
+        switch abs(seed) % 7 {
+        case 0, 1: spec = ("car_kei_white", 3.4)
+        case 2: spec = ("car_compact_red", 3.95)
+        case 3: spec = ("car_hatchback_silver", 4.2)
+        case 4: spec = ("car_suv_white", 4.6)
+        case 5: spec = ("car_sedan_black", 4.7)
+        default: spec = ("car_truck_lightblue", 3.4)
         }
+        let cardW = spec.length / 0.92
+        let cardH = cardW * 0.5
+        var material = Self.texturedPBR(.white, roughness: 0.85, textureName: spec.texture)
+        material.blending = .transparent(opacity: .init(floatLiteral: 1))
+        material.faceCulling = .back
+        let card = ModelEntity(mesh: MeshResource.generateBox(size: SIMD3<Float>(cardW, cardH, 0.04)), materials: [material])
+        card.name = name
+        card.position = SIMD3<Float>(center.x, groundY + cardH / 2, center.z)
+        card.orientation = simd_quatf(angle: yaw + Float.pi / 2, axis: SIMD3<Float>(0, 1, 0))
+        world.addChild(card)
     }
 
     private func buildConvenienceStore(at distance: Double, sample: RouteSample, sign: Float, groundY: Float, seed: Int) {
@@ -5518,15 +12413,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
     private func buildSuburb(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         let sceneryMaterials = buildingMaterials
+        // batch11: weathered grades of the shared body pool
+        // (clean / settled / weathered — see tintVariant),
+        // picked per house below so neighbouring plain houses
+        // stop sharing one identical tone (ChatGPT consult
+        // item 5: weathering and randomisation).
+        let bodyTintPools = sceneryMaterials.map { base -> [PhysicallyBasedMaterial] in
+            [base, tintVariant(base, multiply: (0.90, 0.88, 0.85)), tintVariant(base, multiply: (0.80, 0.81, 0.85))]
+        }
         let landmarks = fictionalCorridorLandmarks(for: route)
         var index = 0
         var urbanIndex = 0
         var foliageCount = 0
         var lastWoodlandBlock = -1
         let buildingLimit = max(1, renderQualitySettings.sceneryInstanceLimit * 3 / 4)
-        let buildingStep = max(45, (route.distanceM - 114) / Double(buildingLimit))
+        // batch29 (2026-11-13, front-view study): real suburban
+        // frontage is a near-continuous wall of houses every
+        // 10-15 m; the old 45 m floor with alternating sides
+        // left ~100 m gaps per side. Floor is now 26 m and the
+        // quality presets' scenery limits were raised with it.
+        let buildingStep = max(26, (route.distanceM - 114) / Double(buildingLimit))
         var distance = 34.0
         var commercialSites: [(chainage: Double, side: Float)] = []
+        // batch10: last facade / roof picks per side (index
+        // parity), for the neighbour anti-repeat rules below.
+        var lastFacadeBySide: [Int: Int] = [:]
+        var lastRoofBySide: [Int: Int] = [:]
         while distance < route.distanceM - 80 {
             let band = urbanBand(distanceM: distance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
             if band > 0 {
@@ -5601,13 +12513,22 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // quality29: houses keep clear of station platforms too
             // (a house face could reach 5.1 m from the centre, well
             // inside the 8.12 m platform back).
-            if !buildingClearOfPlatforms(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2)
-                || !buildingClearOfFans(chainage: distance, halfLength: Double(width) / 2, lateral: lateral, halfDepth: depth / 2) {
+            // batch72: halfLength/halfDepth corrected to the
+            // helpers' semantics (along-track = depth, lateral =
+            // width); this call site passed them swapped.
+            if !buildingClearOfPlatforms(chainage: distance, halfLength: Double(depth) / 2, lateral: lateral, halfDepth: width / 2) {
                 index += 1
                 distance += buildingStep
                 continue
             }
-            let offset = sign * lateral
+            // batch10: inside a throat-fan span the plot is no
+            // longer dropped — it shifts out past the fan's face
+            // line (see fanShiftedLateral). Commercial plots
+            // below keep the old drop via fanBlocked: a konbini
+            // forecourt and car park cannot shift sideways.
+            let fanBlocked = !buildingClearOfFans(chainage: distance, halfLength: Double(depth) / 2, lateral: lateral, halfDepth: width / 2)
+            let plotLateral = fanShiftedLateral(chainage: distance, halfLength: Double(depth) / 2, lateral: lateral, halfDepth: width / 2)
+            let offset = sign * plotLateral
             let x = sample.x + offset * cos(sample.heading)
             let z = sample.z + offset * sin(sample.heading)
             // quality38 (photoreal batch 2): break the metronome.
@@ -5634,14 +12555,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // roof band, tall sign, wide lot). They replace house
             // plots and keep 150 m from each other per side.
             let commercialNear = commercialSites.contains { $0.side == sign && abs($0.chainage - distance) < 150 }
-            if nearestStation <= 380, !commercialNear, index % 17 == 5 {
+            if nearestStation <= 380, !commercialNear, !fanBlocked, index % 17 == 5 {
                 commercialSites.append((chainage: distance, side: sign))
                 buildConvenienceStore(at: distance, sample: sample, sign: sign, groundY: groundY, seed: index)
                 index += 1
                 distance += buildingStep
                 continue
             }
-            if nearestStation <= 600, !commercialNear, index % 41 == 20 {
+            if nearestStation <= 600, !commercialNear, !fanBlocked, index % 41 == 20 {
                 commercialSites.append((chainage: distance, side: sign))
                 buildSupermarket(at: distance, sample: sample, sign: sign, groundY: groundY, seed: index)
                 index += 1
@@ -5654,13 +12575,48 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // quality41: the slabs wear the photoreal apartment
                 // elevations; every third is a wide danchi slab
                 // with open corridors.
+                // batch72: the slab used to inherit the HOUSE
+                // plot's clearance wholesale — but at up to
+                // 17.5 m wide its real face can sit ~5 m closer
+                // than the house it replaced, which put a wide
+                // slab's face inside the loop track at Kamogawa
+                // (face 5.75 m against the 12.29 m band edge).
+                // The slab is now checked and band-shifted with
+                // its OWN footprint; if it cannot clear the
+                // platforms the plot falls through to the
+                // ordinary house below instead of placing it.
                 let aptMaterials = [photoApartmentMaterial, photoApartmentMaterial2, danchiFacadeMaterial, photoApartmentMaterial3]
                 let aptKind = stableIndex("aptkind-\(index)", count: aptMaterials.count)
                 let aptHeight: Float = aptKind == 2 ? 12.5 : 9.5 + Float(index % 4) * 2.6
                 let aptWidth: Float = aptKind == 2 ? 17.5 : 11.5
-                let apt = addBox(parent: world, name: "station-apartment-\(index)", size: SIMD3<Float>(aptWidth, aptHeight, 7.6), position: SIMD3<Float>(x, groundY + aptHeight / 2, z), material: aptMaterials[aptKind])
-                apt.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
-                _ = addBox(parent: world, name: "station-apartment-roof-\(index)", size: SIMD3<Float>(aptWidth + 0.4, 0.3, 8.0), position: SIMD3<Float>(x, groundY + aptHeight + 0.15, z), material: roofMaterials[stableIndex("aptroof-\(index)", count: roofMaterials.count)], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                if buildingClearOfPlatforms(chainage: distance, halfLength: 3.8, lateral: plotLateral, halfDepth: aptWidth / 2) {
+                    let aptLateral = fanShiftedLateral(chainage: distance, halfLength: 3.8, lateral: plotLateral, halfDepth: aptWidth / 2)
+                    let aptOffset = sign * aptLateral
+                    let aptX = sample.x + aptOffset * cos(sample.heading)
+                    let aptZ = sample.z + aptOffset * sin(sample.heading)
+                    let apt = addBox(parent: world, name: "station-apartment-\(index)", size: SIMD3<Float>(aptWidth, aptHeight, 7.6), position: SIMD3<Float>(aptX, groundY + aptHeight / 2, aptZ), material: aptMaterials[aptKind])
+                    apt.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    _ = addBox(parent: world, name: "station-apartment-roof-\(index)", size: SIMD3<Float>(aptWidth + 0.4, 0.3, 8.0), position: SIMD3<Float>(aptX, groundY + aptHeight + 0.15, aptZ), material: roofMaterials[stableIndex("aptroof-\(index)", count: roofMaterials.count)], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                    index += 1
+                    distance += buildingStep
+                    continue
+                }
+            }
+            if fanBlocked, !shed, stableIndex("fanplot-\(index)", count: 4) == 0 {
+                // batch10: a quarter of fan plots read as land
+                // use rather than housing (ChatGPT consult
+                // 2026-11-12: fill the fan band with lots and
+                // yards, not only houses) — an asphalt pad with a
+                // sign and parked cars at the shifted offset,
+                // everything clear of the siding.
+                _ = addBox(parent: world, name: "fan-lot-\(index)", size: SIMD3<Float>(width + 3.4, 0.07, depth + 3.2), position: SIMD3<Float>(x, groundY + 0.035, z), material: roadMaterial, orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                let postPoint = groundOffsetPoint(sample, lateral: offset - sign * (width / 2))
+                _ = addBox(parent: world, name: "fan-lot-sign-\(index)", size: SIMD3<Float>(0.09, 1.7, 0.09), position: SIMD3<Float>(postPoint.x, postPoint.y + 0.85, postPoint.z), material: poleMaterial)
+                _ = addBox(parent: world, name: "fan-lot-board-\(index)", size: SIMD3<Float>(0.06, 0.5, 0.9), position: SIMD3<Float>(postPoint.x, postPoint.y + 1.55, postPoint.z), material: roofMaterials[2], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                for carSlot in 0..<2 where (index + carSlot) % 2 == 0 {
+                    let carPoint = groundOffsetPoint(self.sample(at: distance + Double(carSlot - 1) * 3.4), lateral: offset + sign * 1.2)
+                    addParkedCar(name: "fan-lot-car-\(index)-\(carSlot)", center: carPoint, groundY: groundY + 0.07, yaw: -sample.heading + Float.pi / 2, seed: index * 7 + carSlot)
+                }
                 index += 1
                 distance += buildingStep
                 continue
@@ -5677,6 +12633,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     for carSlot in 0..<3 where (index + carSlot) % 2 == 0 {
                         let carPoint = groundOffsetPoint(self.sample(at: distance + Double(carSlot - 1) * 3.4), lateral: offset + sign * 1.2)
                         addParkedCar(name: "lowuse-car-\(index)-\(carSlot)", center: carPoint, groundY: groundY + 0.07, yaw: -sample.heading + Float.pi / 2, seed: index * 5 + carSlot)
+                        // batch57 N4: a wheel stop at the stall's
+                        // far end, so the lot reads parked-in
+                        // instead of cars floating on asphalt.
+                        let stopPoint = groundOffsetPoint(self.sample(at: distance + Double(carSlot - 1) * 3.4 + 1.5), lateral: offset + sign * 1.2)
+                        _ = addBox(parent: world, name: "lowuse-stop-\(index)-\(carSlot)", size: SIMD3<Float>(0.6, 0.12, 0.15), position: SIMD3<Float>(stopPoint.x, groundY + 0.13, stopPoint.z), material: concreteMaterial, orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)), censusTexture: "scenery_concrete")
                     }
                 }
                 index += 1
@@ -5687,21 +12648,92 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // and door are painted in, so the separate boxes are skipped.
             let useFacadeTexture = !shed && index % 3 == 2
             let facadeVariants = [houseFacadeMaterial, houseFacadeMaterial2, houseFacadeMaterial3, houseFacadeMaterial4, houseFacadeMaterial5, houseFacadeMaterialGrimed, houseFacadeMaterial6, houseFacadeMaterial7]
+            // batch11: the same three weather grades for the
+            // photo facades (the grimed texture stays its own
+            // variant in the rotation; the grades deepen it
+            // further on the plots that pick them).
+            let facadeTintPools = facadeVariants.map { base -> [PhysicallyBasedMaterial] in
+                [base, tintVariant(base, multiply: (0.90, 0.88, 0.85)), tintVariant(base, multiply: (0.79, 0.80, 0.84))]
+            }
             // 2026-11-11 evening: hash picks instead of index cycles —
             // the old (index / 3) % n pattern repeated the same face
             // every few plots, which read as copy-paste from the cab.
-            let bodyMaterial = useFacadeTexture ? facadeVariants[stableIndex("housefacade-\(index)", count: facadeVariants.count)] : sceneryMaterials[stableIndex("housebody-\(index)", count: sceneryMaterials.count)]
+            // batch10: hash picks can still land the same facade
+            // on two neighbouring same-side houses — the loudest
+            // copy-paste tell from the cab (ChatGPT consult
+            // 2026-11-12: no facade repeat within the last few
+            // plots on a side). Bump the pick by one when it
+            // matches the previous facade house on this side.
+            var facadePick = stableIndex("housefacade-\(index)", count: facadeVariants.count)
+            if useFacadeTexture {
+                if lastFacadeBySide[index % 2] == facadePick { facadePick = (facadePick + 1) % facadeVariants.count }
+                lastFacadeBySide[index % 2] = facadePick
+            }
+            let tintPick = stableIndex("housetint-\(index)", count: 3)
+            let bodyMaterial = useFacadeTexture ? facadeTintPools[facadePick][tintPick] : bodyTintPools[stableIndex("housebody-\(index)", count: sceneryMaterials.count)][tintPick]
             let building = addBox(parent: world, name: shed ? "fictional-shed-\(index)" : "fictional-home-\(index)", size: SIMD3<Float>(width, height, depth), position: SIMD3<Float>(x, groundY + height / 2, z), material: bodyMaterial)
             building.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
 
             if !index.isMultiple(of: 3) {
-                let roof = addBox(parent: world, name: "roof-\(index)", size: SIMD3<Float>(width + 0.45, 0.24, depth + 0.35), position: SIMD3<Float>(x, groundY + height + 0.14, z), material: roofMaterials[stableIndex("houseroof-\(index)", count: roofMaterials.count)], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
-                roof.orientation = roof.orientation * simd_quatf(angle: Float(index.isMultiple(of: 2) ? 0.04 : -0.04), axis: SIMD3<Float>(0, 0, 1))
+                // batch10: the same anti-repeat for roof colours
+                // on a side (see the facade note above).
+                var roofPick = stableIndex("houseroof-\(index)", count: roofMaterials.count)
+                if lastRoofBySide[index % 2] == roofPick { roofPick = (roofPick + 1) % roofMaterials.count }
+                lastRoofBySide[index % 2] = roofPick
+                if !shed, !useFacadeTexture, stableIndex("gable-\(index)", count: 2) == 0 {
+                    // batch10: a gabled roof on half of the plain
+                    // houses (ChatGPT consult 2026-11-12: roof
+                    // shapes are the cheapest silhouette variety).
+                    // The shared unit prism's ridge runs along the
+                    // along-track axis and its rise follows a real
+                    // ~4.5-sun pitch. Photo-facade houses keep the
+                    // flat cap below — their roofs are painted in.
+                    let gable = ModelEntity(mesh: FallbackGableRoofMesh.shared, materials: [roofMaterials[roofPick]])
+                    gable.name = "gable-roof-\(index)"
+                    gable.position = SIMD3<Float>(x, groundY + height, z)
+                    gable.scale = SIMD3<Float>(width + 0.5, (width / 2) * 0.45, depth + 0.4)
+                    gable.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    world.addChild(gable)
+                } else {
+                    let roof = addBox(parent: world, name: "roof-\(index)", size: SIMD3<Float>(width + 0.45, 0.24, depth + 0.35), position: SIMD3<Float>(x, groundY + height + 0.14, z), material: roofMaterials[roofPick], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                    roof.orientation = roof.orientation * simd_quatf(angle: Float(index.isMultiple(of: 2) ? 0.04 : -0.04), axis: SIMD3<Float>(0, 0, 1))
+                }
             } else {
                 let balconySample = self.sample(at: distance - Double(depth * 0.52))
                 let balconyPoint = groundOffsetPoint(balconySample, lateral: offset)
                 let balcony = addBox(parent: world, name: "balcony-\(index)", size: SIMD3<Float>(width + 0.35, 0.12, 0.35), position: SIMD3<Float>(balconyPoint.x, balconyPoint.y + height * 0.56, balconyPoint.z), material: concreteMaterial)
                 balcony.orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+            }
+
+            if useFacadeTexture {
+                // batch11: physical relief on the photo-facade
+                // houses (ChatGPT consult item 3, deferred by
+                // batch10). The painted elevation alone reads as
+                // printed paper from the cab; an eaves strip
+                // under the roof line and, on a hash-chosen
+                // share, a balcony slab with a railing or a pair
+                // of window-frame strips on the track face give
+                // the wall shadow-casting depth. Everything sits
+                // on the track-facing wall (the face at
+                // offset - sign * width / 2), the same face the
+                // plain houses put their windows and AC on.
+                let eavePoint = groundOffsetPoint(sample, lateral: offset - sign * (width / 2 + 0.22))
+                _ = addBox(parent: world, name: "facade-eave-\(index)", size: SIMD3<Float>(0.62, 0.12, depth * 0.92), position: SIMD3<Float>(eavePoint.x, groundY + height - 0.02, eavePoint.z), material: roofMaterials[stableIndex("facadeeave-\(index)", count: roofMaterials.count)], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                let reliefPick = stableIndex("facaderelief-\(index)", count: 3)
+                if reliefPick == 0 {
+                    let slabPoint = groundOffsetPoint(sample, lateral: offset - sign * (width / 2 + 0.42))
+                    _ = addBox(parent: world, name: "facade-balcony-\(index)", size: SIMD3<Float>(0.85, 0.1, depth * 0.55), position: SIMD3<Float>(slabPoint.x, groundY + height * 0.55, slabPoint.z), material: concreteMaterial, orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                    let railPoint = groundOffsetPoint(sample, lateral: offset - sign * (width / 2 + 0.82))
+                    _ = addBox(parent: world, name: "facade-balcony-rail-\(index)", size: SIMD3<Float>(0.05, 0.45, depth * 0.55), position: SIMD3<Float>(railPoint.x, groundY + height * 0.55 + 0.28, railPoint.z), material: concreteMaterial, orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                } else if reliefPick == 1 {
+                    for frameSide in [-1.0, 1.0] {
+                        let frameSample = self.sample(at: distance + frameSide * Double(depth) * 0.21)
+                        let framePoint = groundOffsetPoint(frameSample, lateral: offset - sign * (width / 2 + 0.05))
+                        let frameY = groundY + min(height * 0.72, 2.45)
+                        _ = addBox(parent: world, name: "facade-frame-top-\(index)-\(Int(frameSide))", size: SIMD3<Float>(0.07, 0.09, 1.05), position: SIMD3<Float>(framePoint.x, frameY + 0.42, framePoint.z), material: concreteMaterial, orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                        _ = addBox(parent: world, name: "facade-frame-sill-\(index)-\(Int(frameSide))", size: SIMD3<Float>(0.09, 0.08, 1.05), position: SIMD3<Float>(framePoint.x, frameY - 0.42, framePoint.z), material: concreteMaterial, orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
+                    }
+                }
             }
 
             if !useFacadeTexture {
@@ -5739,6 +12771,40 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let stPoint = groundOffsetPoint(stSample, lateral: offset - sign * (width / 2 + 0.75))
                     _ = addBox(parent: world, name: "house-storage-\(index)", size: SIMD3<Float>(1.15, 1.45, 1.7), position: SIMD3<Float>(stPoint.x, groundY + 0.72, stPoint.z), material: roofMaterials[stableIndex("housestorage-\(index)", count: roofMaterials.count)], orientation: simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)))
                 }
+            }
+
+            // batch57 N10: house accessories — a carport on the
+            // plot's far side (away from the track, clear of the
+            // plot wall and the cable trough) on a third of the
+            // houses, and propane bottles against the track-side
+            // wall at the far end from the AC unit, so the service
+            // clutter a driver actually sees has one more layer.
+            if !shed, stableIndex("b57carport-\(index)", count: 3) == 0 {
+                let cpSample = self.sample(at: distance + Double(depth) * 0.3)
+                let cpLateral = offset + sign * (width / 2 + 2.9)
+                let cpPoint = groundOffsetPoint(cpSample, lateral: cpLateral)
+                let cpYaw = simd_quatf(angle: -cpSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                for (pi, postSide) in [-1.0, 1.0].enumerated() {
+                    for (pj, postAlong) in [-1.0, 1.0].enumerated() {
+                        let postSample = self.sample(at: distance + Double(depth) * 0.3 + Double(postAlong) * 2.3)
+                        let postPoint = groundOffsetPoint(postSample, lateral: cpLateral + sign * Float(postSide) * 1.15)
+                        _ = addBox(parent: world, name: "house-carport-post-\(index)-\(pi)-\(pj)", size: SIMD3<Float>(0.12, 2.2, 0.12), position: SIMD3<Float>(postPoint.x, groundY + 1.1, postPoint.z), material: poleMaterial, censusTexture: "scenery_steel")
+                    }
+                }
+                _ = addBox(parent: world, name: "house-carport-roof-\(index)", size: SIMD3<Float>(2.6, 0.12, 5.2), position: SIMD3<Float>(cpPoint.x, groundY + 2.25, cpPoint.z), material: roofMaterials[stableIndex("b57carportroof-\(index)", count: roofMaterials.count)], orientation: cpYaw, censusTexture: "scenery_steel")
+                if stableIndex("b57carportcar-\(index)", count: 2) == 0 {
+                    addParkedCar(name: "house-carport-car-\(index)", center: cpPoint, groundY: groundY + 0.07, yaw: -cpSample.heading + Float.pi / 2, seed: index * 11 + 3)
+                }
+            }
+            if !shed, stableIndex("b57propane-\(index)", count: 2) == 0 {
+                for bottle in 0..<2 {
+                    let bottleSample = self.sample(at: distance - Double(depth) * 0.3 + Double(bottle) * 0.4)
+                    let bottlePoint = groundOffsetPoint(bottleSample, lateral: offset - sign * (width / 2 + 0.32))
+                    _ = addBox(parent: world, name: "house-propane-\(index)-\(bottle)", size: SIMD3<Float>(0.3, 0.85, 0.3), position: SIMD3<Float>(bottlePoint.x, groundY + 0.43, bottlePoint.z), material: roofMaterials[stableIndex("b57propane-\(index)-\(bottle)", count: roofMaterials.count)], orientation: simd_quatf(angle: -bottleSample.heading, axis: SIMD3<Float>(0, 1, 0)), censusTexture: "scenery_steel")
+                }
+                let capSample = self.sample(at: distance - Double(depth) * 0.3 + 0.2)
+                let capPoint = groundOffsetPoint(capSample, lateral: offset - sign * (width / 2 + 0.32))
+                _ = addBox(parent: world, name: "house-propane-cap-\(index)", size: SIMD3<Float>(0.7, 0.08, 0.7), position: SIMD3<Float>(capPoint.x, groundY + 0.9, capPoint.z), material: concreteMaterial, orientation: simd_quatf(angle: -capSample.heading, axis: SIMD3<Float>(0, 1, 0)), censusTexture: "scenery_concrete")
             }
 
             // quality41: the foreground of a Japanese house plot
@@ -5860,6 +12926,60 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     farRoof.orientation = farOrientation
                 }
             }
+            // batch18 (2026-11-13, user question 「住宅街とか
+            // 作った？」): the house loop alternates sides every
+            // ~45 m, so around stations — where a real line is
+            // walled by detached houses on BOTH sides — one side
+            // always stood empty for ~90 m at a time. Within
+            // 550 m of a station, fill the opposite side with a
+            // compact facade house at the half-step, subject to
+            // the same platform / fan / crossing clearances.
+            // batch29: the fill now runs line-wide — away from
+            // stations it fires on about 2 of 3 plots, so the
+            // countryside keeps some open plots while the
+            // one-sided 50-100 m gaps disappear.
+            if nearestStation <= 550 || stableIndex("fillfar-\(index)", count: 3) != 0 {
+                let fillDistance = distance + buildingStep / 2
+                let fillSign = -sign
+                let fillSample = self.sample(at: fillDistance)
+                let fillGroundY = groundLevelM(at: fillSample)
+                let fillLateral: Float = 12.5 + Float(stableIndex("filllat-\(index)", count: 3)) * 1.3
+                let fillWidth: Float = 6.4 + Float(stableIndex("fillw-\(index)", count: 3)) * 0.8
+                let fillDepth: Float = 5.8 + Float(stableIndex("filld-\(index)", count: 3)) * 0.7
+                let fillHeight: Float = 5.6 + Float(stableIndex("fillh-\(index)", count: 4)) * 0.55
+                let fillOnSeaSide = isCoastal(distanceM: fillDistance, route: route, routeVariant: routeVariant, travelDirection: travelDirection)
+                    && fillSign == seaSideSign(travelDirection: travelDirection)
+                // batch72: the fan check used to DELETE fills
+                // anywhere near a fan station; the fill now
+                // shifts out past the effective band like the
+                // main plot (and the platform check takes the
+                // corrected half extents: along = fillDepth,
+                // lateral = fillWidth).
+                if !fillOnSeaSide,
+                   !(fillSign == -seaSideSign(travelDirection: travelDirection) && fillDistance > 27_540 && fillDistance < 27_860),
+                   !nearCrossing(fillDistance, margin: 9),
+                   buildingClearOfPlatforms(chainage: fillDistance, halfLength: Double(fillDepth) / 2, lateral: fillLateral, halfDepth: fillWidth / 2) {
+                    let fo = fillSign * fanShiftedLateral(chainage: fillDistance, halfLength: Double(fillDepth) / 2, lateral: fillLateral, halfDepth: fillWidth / 2)
+                    let fx = fillSample.x + fo * cos(fillSample.heading)
+                    let fz = fillSample.z + fo * sin(fillSample.heading)
+                    let fillYaw = simd_quatf(angle: -fillSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let fillFacade = facadeVariants[stableIndex("fillfacade-\(index)", count: facadeVariants.count)]
+                    let fillHouse = addBox(parent: world, name: "neighbor-fill-\(index)", size: SIMD3<Float>(fillWidth, fillHeight, fillDepth), position: SIMD3<Float>(fx, fillGroundY + fillHeight / 2, fz), material: fillFacade)
+                    fillHouse.orientation = fillYaw
+                    if stableIndex("fillgable-\(index)", count: 2) == 0 {
+                        let gable = ModelEntity(mesh: FallbackGableRoofMesh.shared, materials: [roofMaterials[stableIndex("fillroof-\(index)", count: roofMaterials.count)]])
+                        gable.name = "neighbor-fill-gable-\(index)"
+                        gable.position = SIMD3<Float>(fx, fillGroundY + fillHeight, fz)
+                        gable.scale = SIMD3<Float>(fillWidth + 0.5, (fillWidth / 2) * 0.45, fillDepth + 0.4)
+                        gable.orientation = fillYaw
+                        world.addChild(gable)
+                    } else {
+                        _ = addBox(parent: world, name: "neighbor-fill-roof-\(index)", size: SIMD3<Float>(fillWidth + 0.45, 0.24, fillDepth + 0.35), position: SIMD3<Float>(fx, fillGroundY + fillHeight + 0.14, fz), material: roofMaterials[stableIndex("fillroof-\(index)", count: roofMaterials.count)], orientation: fillYaw)
+                    }
+                    let hedgePoint = groundOffsetPoint(fillSample, lateral: fo - fillSign * (fillWidth / 2 + 0.75))
+                    _ = addBox(parent: world, name: "neighbor-fill-hedge-\(index)", size: SIMD3<Float>(0.55, 0.85, fillDepth * 0.85), position: SIMD3<Float>(hedgePoint.x, fillGroundY + 0.42, hedgePoint.z), material: foliageMaterials[index % foliageMaterials.count], orientation: fillYaw)
+                }
+            }
             index += 1
             distance += buildingStep
         }
@@ -5881,9 +13001,40 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     // indicator, speaker, name plate, emergency button box), two
     // barrier machines with striped arms lowered across the road,
     // and short fences tying the corners back into the lineside.
+    // batch88 (2026-11-16, the user's 2026-11-15 13:19 demand
+    // that crossings be photorealistic): the quality38 set was
+    // still flat-coloured boxes — an asphalt-slab deck, lamps
+    // stacked vertically in a tall box, a flat yellow arm with
+    // dark bands laid over it, slab fences. buildOneCrossing
+    // now builds the real composition: concrete deck panels
+    // with flangeway slots beside each rail, warning lamps
+    // side by side as seated bezel / visor / lens assemblies
+    // (the batch86 signal treatment), a speaker box, striped
+    // base collars, post-and-rail corner fences, and barrier
+    // machines with light-steel cabinets, pivot drums,
+    // counterweights and hazard-stripe-textured rods.
+    // Placement, count and the steady-burning lamp / lowered
+    // arm semantics are unchanged.
     private var crossingCenters: [Double] = []
 
     private func computeCrossingCenters(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        // batch76: no crossing inside a tunnel. The exclusion
+        // spans are derived from THIS route's own sections
+        // (tunnelResistanceMultiplier > 1), expanded by 50 m at
+        // each end, replacing the old hardcode that named only
+        // the 42.1k mainline tunnel — it left a crossing
+        // standing at 18,525 m, inside the 17.8-19.25k tunnel
+        // (user screenshot, 2026-11-15). The sections are in
+        // the route's own frame for every variant and travel
+        // direction (the factory builds them per route and
+        // reverses them with the route), the same frame the
+        // probe below walks and buildTunnels already trusts.
+        let tunnelSpans: [(start: Double, end: Double)] = route.sections
+            .filter { $0.tunnelResistanceMultiplier > 1 }
+            .map { (start: $0.startM - 50, end: $0.endM + 50) }
+        func insideTunnelSpan(_ chainage: Double) -> Bool {
+            tunnelSpans.contains { chainage >= $0.start && chainage <= $0.end }
+        }
         var centers: [Double] = []
         var cursor = 2_400.0
         while cursor < route.distanceM - 1_200 {
@@ -5896,7 +13047,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let liftB = sample(at: probe + 30).elevationM - groundLevelM(at: probe + 30)
                 if liftHere < 1.6, liftA < 2.0, liftB < 2.0,
                    !inStationZone(probe, extraMargin: 45), !nearThroatFan(probe),
-                   !(probe > 41_500 && probe < 44_300),
+                   !insideTunnelSpan(probe),
                    !isCoastal(distanceM: probe, route: route, routeVariant: routeVariant, travelDirection: travelDirection) {
                     placed = probe
                     break
@@ -5953,6 +13104,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // outer piece at field level. On truly flat ground all
         // three are coplanar and the joints vanish.
         let lift = s.elevationM - groundLevelM(at: center)
+        // batch42: if this crossing sits inside an island
+        // station's spread, the track-relative furniture (warning
+        // poles, stop lines, corner fences, waiting pedestrians)
+        // steps out with the tracks; the deck itself is 10.4 m
+        // wide and still covers the outer rail edge (4.72 m) at
+        // full spread, so it and the ramps keep their geometry.
+        let crossSpread = islandTrackSpread(at: center)
         var roadBatch = MeshBatchBuilder()
         roadBatch.addBoxAxes(center: pt(0, -0.005, 0), size: SIMD3<Float>(26, 0.07, 5.6), ax: ax, ay: ay, az: az)
         let run: Float = 18
@@ -5970,23 +13128,51 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // the road edge facing the track (quality41 final: people).
         if index % 3 == 0 {
             for sideSign: Float in [-1, 1] {
-                let stand = groundOffsetPoint(sample(at: center + 3.6), lateral: sideSign * 5.4)
+                let stand = groundOffsetPoint(sample(at: center + 3.6), lateral: sideSign * (5.4 + crossSpread))
                 let face = -ax * sideSign
                 addPerson(position: stand, yaw: atan2(face.x, -face.z), role: sideSign < 0 ? 0 : 2, mode: 0,
                           routeDistanceM: center, walkAxis: ax, range: 0, seedKey: "crossing-\(index)-\(Int(sideSign))")
             }
         }
-        // Deck panels flush with the rail head over the tracks, and
-        // two terrace steps each side so the road climbs from apron
-        // level to deck level.
-        addBox(parent: world, name: "crossing-deck-\(index)", size: SIMD3<Float>(10.4, 0.1, 5.6), position: pt(0, 0.237, 0), material: roadMaterial, orientation: roadYaw)
+        // batch88: the deck is a set of concrete panels, not one
+        // asphalt slab: a dark underlay, a recessed flangeway
+        // slot beside every rail, and panel boxes between the
+        // slots with hairline seams, all topping out at the old
+        // deck height (flush with the rail head). Two terrace
+        // steps each side so the road climbs from apron level
+        // to deck level.
+        var deckBatch = MeshBatchBuilder()
+        var blackBatch = MeshBatchBuilder()
+        blackBatch.addBoxAxes(center: pt(0, 0.20, 0), size: SIMD3<Float>(10.4, 0.06, 5.6), ax: ax, ay: ay, az: az)
+        let trackCenter = 2.1 + crossSpread
+        let railLaterals: [Float] = [-(trackCenter + 0.72), -(trackCenter - 0.72), trackCenter - 0.72, trackCenter + 0.72]
+        let slotHalf: Float = 0.15
+        for railLat in railLaterals {
+            blackBatch.addBoxAxes(center: pt(railLat, 0.2475, 0), size: SIMD3<Float>(slotHalf * 2, 0.05, 5.6), ax: ax, ay: ay, az: az)
+        }
+        var deckEdges: [Float] = [-5.2, 5.2]
+        for railLat in railLaterals {
+            deckEdges.append(railLat - slotHalf)
+            deckEdges.append(railLat + slotHalf)
+        }
+        deckEdges.sort()
+        for edgeIndex in 0..<(deckEdges.count - 1) {
+            let spanStart = deckEdges[edgeIndex]
+            let spanEnd = deckEdges[edgeIndex + 1]
+            let spanMid = (spanStart + spanEnd) / 2
+            let inSlot = railLaterals.contains { abs(spanMid - $0) < slotHalf }
+            if inSlot || spanEnd - spanStart < 0.05 { continue }
+            deckBatch.addBoxAxes(center: pt(spanMid, 0.2585, 0), size: SIMD3<Float>(spanEnd - spanStart - 0.024, 0.057, 5.6), ax: ax, ay: ay, az: az)
+        }
         for sideSign: Float in [-1, 1] {
             addBox(parent: world, name: "crossing-ramp1-\(index)-\(Int(sideSign))", size: SIMD3<Float>(3.2, 0.09, 5.6), position: pt(sideSign * 6.8, 0.145, 0), material: roadMaterial, orientation: roadYaw)
             addBox(parent: world, name: "crossing-ramp2-\(index)-\(Int(sideSign))", size: SIMD3<Float>(3.2, 0.09, 5.6), position: pt(sideSign * 10.0, 0.055, 0), material: roadMaterial, orientation: roadYaw)
         }
 
         var darkBatch = MeshBatchBuilder()
+        var stripeBatch = MeshBatchBuilder()
         var yellowBatch = MeshBatchBuilder()
+        var cabinetBatch = MeshBatchBuilder()
         var whiteBatch = MeshBatchBuilder()
         var redBatch = MeshBatchBuilder()
 
@@ -5994,63 +13180,141 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // half, plus short centre dashes leading into the crossing.
         for latSign: Float in [-1, 1] {
             for alongSign: Float in [-1, 1] {
-                whiteBatch.addBoxAxes(center: pt(latSign * 4.83, 0.045, alongSign * 1.4), size: SIMD3<Float>(0.35, 0.02, 2.7), ax: ax, ay: ay, az: az)
+                whiteBatch.addBoxAxes(center: pt(latSign * (4.83 + crossSpread), 0.045, alongSign * 1.4), size: SIMD3<Float>(0.35, 0.02, 2.7), ax: ax, ay: ay, az: az)
             }
             whiteBatch.addBoxAxes(center: pt(latSign * 9.75, 0.042, 0), size: SIMD3<Float>(6.5, 0.015, 0.14), ax: ax, ay: ay, az: az)
         }
 
         let bladeCos = Float(cos(0.73))
         let bladeSin = Float(sin(0.73))
+        // batch88: same visor tilt as the signal lamps
+        // (batch86): rotation about X by -pi/2, which maps
+        // the tube meshes' Y axis onto the facing direction
+        // and their open half up.
+        let hoodTilt = simd_quatf(angle: -Float.pi / 2, axis: SIMD3<Float>(1, 0, 0))
         for latSign: Float in [-1, 1] {
             for alongSign: Float in [-1, 1] {
-                let poleLat = latSign * 4.35
+                let poleLat = latSign * (4.35 + crossSpread)
                 let poleAlong = alongSign * 3.55
                 // Warning pole unit (spec: 3.6 m pole at the road
                 // corners, about 4 m from the track centre).
-                darkBatch.addBoxAxes(center: pt(poleLat, 1.8, poleAlong), size: SIMD3<Float>(0.16, 3.6, 0.16), ax: ax, ay: ay, az: az)
-                darkBatch.addBoxAxes(center: pt(poleLat, 3.48, poleAlong), size: SIMD3<Float>(0.3, 0.16, 0.3), ax: ax, ay: ay, az: az)
+                // batch88: the pole stands on a concrete plinth
+                // with a hazard-striped base collar, the band
+                // real warning poles wear at the foot.
+                deckBatch.addBoxAxes(center: pt(poleLat, 0.07, poleAlong), size: SIMD3<Float>(0.52, 0.14, 0.52), ax: ax, ay: ay, az: az)
+                stripeBatch.addBoxAxes(center: pt(poleLat, 0.39, poleAlong), size: SIMD3<Float>(0.34, 0.5, 0.34), ax: ax, ay: ay, az: az)
+                darkBatch.addBoxAxes(center: pt(poleLat, 1.89, poleAlong), size: SIMD3<Float>(0.15, 3.5, 0.15), ax: ax, ay: ay, az: az)
+                darkBatch.addBoxAxes(center: pt(poleLat, 3.56, poleAlong), size: SIMD3<Float>(0.3, 0.14, 0.3), ax: ax, ay: ay, az: az)
                 // Crossbuck: two blades crossed at about 42 degrees,
-                // facing the road traffic.
+                // facing the road traffic. batch88: each blade is
+                // a dark backing plate with the yellow face
+                // standing proud of it, so the sign reads as a
+                // bordered plate instead of a flat yellow bar.
                 for flip: Float in [1, -1] {
                     let bladeUp = ay * bladeCos + az * (bladeSin * flip)
                     let bladeAlong = ay * (-bladeSin * flip) + az * bladeCos
-                    yellowBatch.addBoxAxes(center: pt(poleLat + latSign * 0.06, 3.02, poleAlong), size: SIMD3<Float>(0.04, 1.25, 0.24), ax: ax, ay: bladeUp, az: bladeAlong)
+                    darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.05, 3.05, poleAlong), size: SIMD3<Float>(0.045, 1.34, 0.28), ax: ax, ay: bladeUp, az: bladeAlong)
+                    yellowBatch.addBoxAxes(center: pt(poleLat + latSign * 0.085, 3.05, poleAlong), size: SIMD3<Float>(0.04, 1.26, 0.22), ax: ax, ay: bladeUp, az: bladeAlong)
                 }
-                // Twin red warning lamps in a housing with a back
-                // disc, and the direction indicator beside them.
-                darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.1, 2.32, poleAlong), size: SIMD3<Float>(0.18, 0.66, 0.36), ax: ax, ay: ay, az: az)
-                darkBatch.addBoxAxes(center: pt(poleLat - latSign * 0.02, 2.32, poleAlong), size: SIMD3<Float>(0.03, 0.42, 0.42), ax: ax, ay: ay, az: az)
-                for lampDy: Float in [0.16, -0.16] {
-                    redBatch.addBoxAxes(center: pt(poleLat + latSign * 0.21, 2.32 + lampDy, poleAlong), size: SIMD3<Float>(0.06, 0.19, 0.19), ax: ax, ay: ay, az: az)
+                // Twin red warning lamps, side by side in a wide
+                // housing with a backboard (batch88: the old unit
+                // stacked the lamps vertically in a tall box,
+                // which no real warning machine does).
+                darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.05, 2.35, poleAlong), size: SIMD3<Float>(0.17, 0.36, 0.64), ax: ax, ay: ay, az: az)
+                darkBatch.addBoxAxes(center: pt(poleLat - latSign * 0.02, 2.35, poleAlong), size: SIMD3<Float>(0.03, 0.46, 0.74), ax: ax, ay: ay, az: az)
+                // batch88: each lamp is a seated assembly in the
+                // batch86 signal treatment — a galvanized bezel
+                // ring proud of the housing face, a half-tube
+                // visor above, and a squashed-sphere lens in the
+                // lit red material. The entity names carry the
+                // merge-forbidden "lamp" fragment, so the chunk
+                // merge can never bake them into a static mesh.
+                let faceTurn = simd_quatf(angle: latSign * Float.pi / 2, axis: SIMD3<Float>(0, 1, 0))
+                for lampIndex in 0..<2 {
+                    let lampDz: Float = lampIndex == 0 ? -0.155 : 0.155
+                    let lampAlong = poleAlong + lampDz
+                    let bezel = ModelEntity(mesh: crossingBezelMesh, materials: [signalBezelMaterial])
+                    bezel.name = "crossing-lampbezel-\(index)-\(Int(latSign))-\(Int(alongSign))-\(lampIndex)"
+                    bezel.position = pt(poleLat + latSign * 0.15, 2.35, lampAlong)
+                    bezel.orientation = roadYaw * faceTurn * hoodTilt
+                    world.addChild(bezel)
+                    let visor = ModelEntity(mesh: crossingVisorMesh, materials: [signalVisorMaterial])
+                    visor.name = "crossing-lampvisor-\(index)-\(Int(latSign))-\(Int(alongSign))-\(lampIndex)"
+                    visor.position = pt(poleLat + latSign * 0.19, 2.35, lampAlong)
+                    visor.orientation = roadYaw * faceTurn * hoodTilt
+                    world.addChild(visor)
+                    let lens = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.10), materials: [signalRedMaterial])
+                    lens.name = "crossing-lamp-\(index)-\(Int(latSign))-\(Int(alongSign))-\(lampIndex)"
+                    lens.scale = SIMD3<Float>(1, 1, 0.45)
+                    lens.position = pt(poleLat + latSign * 0.145, 2.35, lampAlong)
+                    lens.orientation = roadYaw * faceTurn
+                    world.addChild(lens)
                 }
-                darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.08, 2.32, poleAlong + alongSign * 0.34), size: SIMD3<Float>(0.1, 0.55, 0.2), ax: ax, ay: ay, az: az)
-                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.14, 2.32, poleAlong + alongSign * 0.34), size: SIMD3<Float>(0.03, 0.3, 0.1), ax: ax, ay: ay, az: az)
+                // Speaker box under the housing, its grille to
+                // the road (batch88: the electronic bell housing
+                // the old unit did not have at all).
+                darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.05, 2.02, poleAlong), size: SIMD3<Float>(0.13, 0.2, 0.3), ax: ax, ay: ay, az: az)
+                blackBatch.addBoxAxes(center: pt(poleLat + latSign * 0.125, 2.02, poleAlong), size: SIMD3<Float>(0.02, 0.14, 0.24), ax: ax, ay: ay, az: az)
+                // Direction indicator beside the housing.
+                darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.08, 2.35, poleAlong + alongSign * 0.44), size: SIMD3<Float>(0.1, 0.32, 0.16), ax: ax, ay: ay, az: az)
+                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.145, 2.35, poleAlong + alongSign * 0.44), size: SIMD3<Float>(0.03, 0.2, 0.09), ax: ax, ay: ay, az: az)
                 // Name plate and emergency button box on the pole's
-                // road face at eye height.
-                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.1, 1.72, poleAlong), size: SIMD3<Float>(0.03, 0.48, 0.68), ax: ax, ay: ay, az: az)
-                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.13, 1.22, poleAlong), size: SIMD3<Float>(0.15, 0.4, 0.3), ax: ax, ay: ay, az: az)
-                redBatch.addBoxAxes(center: pt(poleLat + latSign * 0.22, 1.3, poleAlong), size: SIMD3<Float>(0.04, 0.1, 0.1), ax: ax, ay: ay, az: az)
-                // Corner fence running back along the line.
-                darkBatch.addBoxAxes(center: pt(latSign * 4.8, 0.55, poleAlong + alongSign * 8.6), size: SIMD3<Float>(0.05, 1.1, 10), ax: ax, ay: ay, az: az)
+                // road face at eye height (batch88: the button box
+                // is yellow with a white label, as on real units).
+                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.09, 1.66, poleAlong), size: SIMD3<Float>(0.03, 0.44, 0.62), ax: ax, ay: ay, az: az)
+                yellowBatch.addBoxAxes(center: pt(poleLat + latSign * 0.14, 1.18, poleAlong), size: SIMD3<Float>(0.16, 0.38, 0.28), ax: ax, ay: ay, az: az)
+                whiteBatch.addBoxAxes(center: pt(poleLat + latSign * 0.225, 1.31, poleAlong), size: SIMD3<Float>(0.02, 0.08, 0.2), ax: ax, ay: ay, az: az)
+                redBatch.addBoxAxes(center: pt(poleLat + latSign * 0.235, 1.18, poleAlong), size: SIMD3<Float>(0.04, 0.09, 0.09), ax: ax, ay: ay, az: az)
+                // Corner fence running back along the line —
+                // batch88: posts and two rails instead of the
+                // flat slab the old builder laid down.
+                let fenceLat = latSign * (4.8 + crossSpread)
+                for postIndex in 0..<5 {
+                    darkBatch.addBoxAxes(center: pt(fenceLat, 0.55, poleAlong + alongSign * (3.9 + Float(postIndex) * 2.3)), size: SIMD3<Float>(0.06, 1.1, 0.06), ax: ax, ay: ay, az: az)
+                }
+                for railUp: Float in [0.55, 1.02] {
+                    darkBatch.addBoxAxes(center: pt(fenceLat, railUp, poleAlong + alongSign * 8.5), size: SIMD3<Float>(0.045, 0.07, 9.6), ax: ax, ay: ay, az: az)
+                }
 
-                // Barrier machines on the two diagonal corners;
-                // the arm lies across the road at 1 m, striped.
+                // Barrier machines on the two diagonal corners.
+                // batch88: concrete plinth, light-steel cabinet
+                // with a door panel, handle and lid, a pivot
+                // drum, a counterweight on the short arm behind
+                // the pivot, and the rod itself in the hazard-
+                // stripe texture — eight segments, so the
+                // texture's bands repeat at real scale along
+                // the same 5.2 m span as before — with the red
+                // rod lamp at its middle.
                 if latSign == alongSign {
-                    darkBatch.addBoxAxes(center: pt(poleLat, 0.11, poleAlong), size: SIMD3<Float>(0.5, 0.22, 0.56), ax: ax, ay: ay, az: az)
-                    yellowBatch.addBoxAxes(center: pt(poleLat, 0.72, poleAlong), size: SIMD3<Float>(0.42, 1.0, 0.48), ax: ax, ay: ay, az: az)
-                    darkBatch.addBoxAxes(center: pt(poleLat, 1.26, poleAlong), size: SIMD3<Float>(0.46, 0.08, 0.52), ax: ax, ay: ay, az: az)
-                    let armCenter = poleAlong - alongSign * 2.3
-                    yellowBatch.addBoxAxes(center: pt(poleLat, 1.0, armCenter), size: SIMD3<Float>(0.09, 0.2, 5.2), ax: ax, ay: ay, az: az)
-                    for bandIndex in 0..<4 {
-                        let bandAlong = poleAlong - alongSign * (0.9 + Float(bandIndex) * 1.15)
-                        darkBatch.addBoxAxes(center: pt(poleLat, 1.0, bandAlong), size: SIMD3<Float>(0.11, 0.22, 0.5), ax: ax, ay: ay, az: az)
+                    deckBatch.addBoxAxes(center: pt(poleLat, 0.11, poleAlong), size: SIMD3<Float>(0.6, 0.22, 0.66), ax: ax, ay: ay, az: az)
+                    cabinetBatch.addBoxAxes(center: pt(poleLat, 0.695, poleAlong), size: SIMD3<Float>(0.46, 0.95, 0.52), ax: ax, ay: ay, az: az)
+                    darkBatch.addBoxAxes(center: pt(poleLat + latSign * 0.24, 0.70, poleAlong), size: SIMD3<Float>(0.02, 0.8, 0.38), ax: ax, ay: ay, az: az)
+                    blackBatch.addBoxAxes(center: pt(poleLat + latSign * 0.26, 0.70, poleAlong - alongSign * 0.12), size: SIMD3<Float>(0.04, 0.04, 0.12), ax: ax, ay: ay, az: az)
+                    darkBatch.addBoxAxes(center: pt(poleLat, 1.205, poleAlong), size: SIMD3<Float>(0.5, 0.07, 0.56), ax: ax, ay: ay, az: az)
+                    darkBatch.addBoxAxes(center: pt(poleLat, 1.24, poleAlong - alongSign * 0.10), size: SIMD3<Float>(0.24, 0.24, 0.24), ax: ax, ay: ay, az: az)
+                    darkBatch.addBoxAxes(center: pt(poleLat, 1.24, poleAlong + alongSign * 0.45), size: SIMD3<Float>(0.06, 0.12, 0.55), ax: ax, ay: ay, az: az)
+                    blackBatch.addBoxAxes(center: pt(poleLat, 1.16, poleAlong + alongSign * 0.80), size: SIMD3<Float>(0.18, 0.34, 0.3), ax: ax, ay: ay, az: az)
+                    for segmentIndex in 0..<8 {
+                        let segmentAlong = poleAlong - alongSign * (0.625 + Float(segmentIndex) * 0.65)
+                        stripeBatch.addBoxAxes(center: pt(poleLat, 1.24, segmentAlong), size: SIMD3<Float>(0.07, 0.22, 0.65), ax: ax, ay: ay, az: az)
+                    }
+                    // Red rod lamp at the middle of the rod,
+                    // facing both ways across the road.
+                    let lampAlong = poleAlong - alongSign * 2.9
+                    blackBatch.addBoxAxes(center: pt(poleLat, 1.42, lampAlong), size: SIMD3<Float>(0.12, 0.12, 0.12), ax: ax, ay: ay, az: az)
+                    for faceSign: Float in [-1, 1] {
+                        redBatch.addBoxAxes(center: pt(poleLat + faceSign * 0.045, 1.42, lampAlong), size: SIMD3<Float>(0.03, 0.09, 0.09), ax: ax, ay: ay, az: az)
                     }
                 }
             }
         }
 
+        if let deck = deckBatch.build(name: "crossing-deck-\(index)", material: concreteMaterial) { world.addChild(deck) }
+        if let black = blackBatch.build(name: "crossing-black-\(index)", material: crossingBlackMaterial) { world.addChild(black) }
         if let dark = darkBatch.build(name: "crossing-dark-\(index)", material: poleMaterial) { world.addChild(dark) }
+        if let stripe = stripeBatch.build(name: "crossing-stripe-\(index)", material: crossingStripeMaterial) { world.addChild(stripe) }
         if let yellow = yellowBatch.build(name: "crossing-yellow-\(index)", material: Self.pbr(UIColor(red: 0.93, green: 0.72, blue: 0.1, alpha: 1), roughness: 0.55)) { world.addChild(yellow) }
+        if let cabinet = cabinetBatch.build(name: "crossing-cabinet-\(index)", material: crossingCabinetMaterial) { world.addChild(cabinet) }
         if let white = whiteBatch.build(name: "crossing-white-\(index)", material: roofMaterials[2]) { world.addChild(white) }
         var lensMaterial = PhysicallyBasedMaterial()
         lensMaterial.baseColor = .init(tint: UIColor(red: 0.4, green: 0.04, blue: 0.04, alpha: 1))
@@ -6132,7 +13396,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 if d >= range.from, !corridorReserved(at: d, landmarks: landmarks), !inStationZone(d) {
                     for side in sides where !poleNear(d, side: side) {
                         let s = sample(at: d)
-                        let ground = groundOffsetPoint(s, lateral: side * 10.7)
+                        // batch77: the front band used to sit at a
+                        // fixed +/-10.7 m with NO clearance check —
+                        // inside S01's out-fan the loop line sweeps
+                        // to 9.64 m (ballast shoulder 12.29 m), so a
+                        // photo-facade front stood on the siding
+                        // (device photo, IPA #8). Route the band
+                        // through the same shift every other
+                        // builder uses; the widest part is the
+                        // 6.0 m plinth (halfDepth 3.0, halfLength
+                        // 3.75), and all dressing hangs off the
+                        // shifted centre, so it follows.
+                        let plotLateral = fanShiftedLateral(chainage: d, halfLength: 3.75, lateral: 10.7, halfDepth: 3.0)
+                        let ground = groundOffsetPoint(s, lateral: side * plotLateral)
                         if clearOfTowers(ground.x, ground.z, 9.5) {
                             let height = 4.5 + Float((frontSerial * 53) % 45) * 0.1
                             let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
@@ -6205,7 +13481,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // zone too (they used to grow beside the platform).
                 if !frontNear(d, side: side, within: 5.5), !inStationZone(d) {
                     let s = sample(at: d)
-                    let point = groundOffsetPoint(s, lateral: side * 10.5)
+                    // batch77: same fixed-lateral hole as the
+                    // front band — a trunk at 10.5 m stands on
+                    // the fan's ballast shoulder (12.29 m).
+                    // Shift out with the crown's reach (1.5 m)
+                    // as the half depth.
+                    let plotLateral = fanShiftedLateral(chainage: d, halfLength: 1.5, lateral: 10.5, halfDepth: 1.5)
+                    let point = groundOffsetPoint(s, lateral: side * plotLateral)
                     if clearOfTowers(point.x, point.z, 8) {
                         let height = 5 + Float((treeSerial * 29) % 31) * 0.1
                         addTree(parent: world, name: "showcase-tree-\(treeSerial)", x: point.x, z: point.z, height: height, material: foliageMaterials[treeSerial % foliageMaterials.count], groundY: point.y)
@@ -6232,8 +13514,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             while d < 1_852 {
                 if !frontNear(d, side: side, within: 6.5), !inStationZone(d) {
                     let s = sample(at: d)
-                    let lateral = side * (11.4 + Float(shrubSerial % 3) * 0.3)
-                    let point = groundOffsetPoint(s, lateral: lateral)
+                    // batch77: same fixed-lateral hole — the
+                    // hedge at 11.4-12.0 m also lands inside
+                    // the fan's ballast shoulder. Blob radii
+                    // reach ~0.8 m laterally, ~2.6 m along.
+                    let baseLateral: Float = 11.4 + Float(shrubSerial % 3) * 0.3
+                    let plotLateral = fanShiftedLateral(chainage: d, halfLength: 2.6, lateral: baseLateral, halfDepth: 0.8)
+                    let point = groundOffsetPoint(s, lateral: side * plotLateral)
                     if clearOfTowers(point.x, point.z, 7.5) {
                         let tangent = SIMD3<Float>(sin(s.heading), 0, -cos(s.heading))
                         for k in -1...1 {
@@ -6447,6 +13734,44 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
+    /// batch73: station-front streets. The parallel road
+    /// breaks at every station zone (its inner edge would clip
+    /// the platform backs), which left each station front with
+    /// no road at all — only the rotary disc floating in the
+    /// forecourt band. A short front street now runs past every
+    /// station on both sides at +/-13.4 m: inside the forecourt
+    /// band (platform backs reach at most 9.62 m from the
+    /// centre; the frontage rows' faces start at about 16.5 m),
+    /// overlapping the rotary band (the disc reaches in to
+    /// about 10.8 m) so forecourt and street read as one
+    /// connected front, and pointing along the line toward
+    /// where the parallel road resumes past the station zone.
+    private func buildStationFrontStreets(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, routeLengthM: Double) {
+        guard samples.count > 1 else { return }
+        for placement in stationModelPlacements {
+            // batch75: the street spans the canonical station
+            // centre ± 60 — batch73 laid it around
+            // placement.chainageM, which batch74 had already
+            // moved to the stop target (95 m inside the
+            // platform's travel end), so the street sat one
+            // platform-half off the station it fronts.
+            let center = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: routeLengthM).map { ($0.start + $0.end) / 2 } ?? placement.chainageM
+            guard let first = samples.firstIndex(where: { $0.distanceM >= center - 60 }),
+                  let last = samples.lastIndex(where: { $0.distanceM <= center + 60 }),
+                  last > first else { continue }
+            for side: Float in [-1, 1] {
+                var yOffsets = [Float](repeating: 0, count: samples.count)
+                for i in first...last {
+                    yOffsets[i] = groundLevelM(at: samples[i]) - samples[i].elevationM + 0.04
+                }
+                let offsets = [Float](repeating: side * 13.4, count: samples.count)
+                if let ribbon = ribbonEntity(name: "station-front-road-\(placement.stationId)-\(Int(side))", width: 5.6, y: 0, tileLength: 30, offsets: offsets, material: roadMaterial, range: first..<(last + 1), yOffsets: yOffsets) {
+                    world.addChild(ribbon)
+                }
+            }
+        }
+    }
+
     private func buildRoadTraffic(
         route: RailwayRouteProfile,
         scenario: TrafficScenario?,
@@ -6486,28 +13811,52 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 probe += 50
             }
             guard coveredMax > coveredMin else { continue }
-            let lateral = Float(road.lateralOffsetM)
-            let offsets = [Float](repeating: lateral, count: samples.count)
+            // batch73: the DRAWN road moves out to the public
+            // side of the fence. The scenario keeps the traffic
+            // lanes at +/-7 m (the traffic package poses the road
+            // vehicles there), but the old ribbon was drawn
+            // centred on that same 7 m at 7.2 m wide, so it
+            // spanned 3.4-10.6 m: its inner half lay on the
+            // formation shoulder, inside the fence line at 5.3 m,
+            // and it ran through the house plots whose faces
+            // stood from 4.3 m — from the cab it read as paving
+            // on the railway land, not as a road (user report,
+            // 2026-11-15: 「道路もないし」). The ribbon is now
+            // 5.6 m wide centred at +/-8.3 m (5.5-11.1 m): the
+            // fence at 5.3 m stands just inside its inner edge,
+            // the traffic vehicles at +/-7 m still run on its
+            // inner lane, and it gains white edge lines and a
+            // gravel ditch strip on its outer side at 12.3 m,
+            // inside the new 13.2 m building line.
+            let roadSideSign: Float = road.lateralOffsetM >= 0 ? 1 : -1
+            let drawnLateral: Float = roadSideSign * 8.3
+            let offsets = [Float](repeating: drawnLateral, count: samples.count)
             let yOffsets = samples.map { groundLevelM(at: $0) - $0.elevationM + 0.04 }
+            let ditchYOffsets = samples.map { groundLevelM(at: $0) - $0.elevationM + 0.03 }
+            let edgeLineMaterial = Self.pbr(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.8)
+            let ditchMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_ballast")
             var markBatch = MeshBatchBuilder()
             var runStart: Int? = nil
-            var runIndex = 0
+            var runs: [Range<Int>] = []
             var lastMarkChainage = -1_000.0
             func flushRun(endIndex: Int) {
                 guard let start = runStart else { return }
-                if endIndex - start > 1,
-                   let ribbon = ribbonEntity(name: "parallel-road-\(road.id)-\(runIndex)", width: 7.2, y: 0, tileLength: 30, offsets: offsets, material: roadMaterial, range: start..<endIndex, yOffsets: yOffsets) {
-                    world.addChild(ribbon)
-                    runIndex += 1
+                if endIndex - start > 1 {
+                    runs.append(start..<endIndex)
                 }
                 runStart = nil
             }
             for index in samples.indices {
                 let sample = samples[index]
                 let chainage = sample.distanceM
+                // batch73: the road also breaks at level
+                // crossings now, so the crossing road meets it
+                // in a clean T instead of the ribbon running
+                // under the crossing deck.
                 let active = chainage >= coveredMin && chainage <= coveredMax
                     && !inStationZone(chainage)
                     && !nearThroatFan(chainage)
+                    && !nearCrossing(chainage, margin: 6)
                     && !corridorReserved(at: chainage, landmarks: landmarks)
                 if active {
                     if runStart == nil { runStart = index }
@@ -6515,8 +13864,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // way the ribbon does.
                     if chainage - lastMarkChainage >= 15 {
                         lastMarkChainage = chainage
-                        let center = routeOffsetPoint(sample, lateral: lateral)
-                        markBatch.addBox(center: SIMD3<Float>(center.x, groundLevelM(at: sample) + 0.10, center.z),
+                        let center = routeOffsetPoint(sample, lateral: drawnLateral)
+                        markBatch.addBox(center: SIMD3<Float>(center.x, groundLevelM(at: sample) + 0.065, center.z),
                                          size: SIMD3<Float>(0.14, 0.02, 5.0), yaw: -sample.heading)
                     }
                 } else {
@@ -6527,6 +13876,45 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             if let marks = markBatch.build(name: "road-lane-marks-\(road.id)", material: roofMaterials[2]) {
                 world.addChild(marks)
             }
+            for (runIndex, run) in runs.enumerated() {
+                if let ribbon = ribbonEntity(name: "parallel-road-\(road.id)-\(runIndex)", width: 5.6, y: 0, tileLength: 30, offsets: offsets, material: roadMaterial, range: run, yOffsets: yOffsets) {
+                    world.addChild(ribbon)
+                }
+                for edgeSign: Float in [-1, 1] {
+                    let edgeOffsets = [Float](repeating: drawnLateral + edgeSign * 2.55, count: samples.count)
+                    if let edge = ribbonEntity(name: "parallel-road-edge-\(road.id)-\(runIndex)-\(Int(edgeSign))", width: 0.15, y: 0.015, tileLength: 30, offsets: edgeOffsets, material: edgeLineMaterial, range: run, yOffsets: yOffsets) {
+                        world.addChild(edge)
+                    }
+                }
+                let ditchOffsets = [Float](repeating: roadSideSign * 12.3, count: samples.count)
+                if let ditch = ribbonEntity(name: "parallel-road-ditch-\(road.id)-\(runIndex)", width: 1.2, y: 0, tileLength: 8, offsets: ditchOffsets, material: ditchMaterial, range: run, yOffsets: ditchYOffsets) {
+                    world.addChild(ditch)
+                }
+            }
+        }
+    }
+
+    /// Cab-view lead exterior (2026-11-13, Mac photo verdict):
+    /// the cab eye sits 2.45 m behind the nose, inside the lead
+    /// car. The GLB lead exterior's opaque dark glazing fills the
+    /// frame, so the cab camera photographed only uniform dark
+    /// grey (20-cab-running / 21-cab-station, pixel sd < 3). Hide
+    /// the lead exterior while the cab camera is active; the
+    /// procedural E231-early cab interior stays visible and the
+    /// world shows through the windscreen. The forward/chase
+    /// views restore it every frame, so switching views never
+    /// leaves the train headless.
+    private func updateLeadExteriorVisibilityForCab(cameraViewMode: CameraViewMode) {
+        let cabActive = cameraViewMode == .cab
+        if let root = generatedLeadVehicleRoot {
+            // High-quality path: the generated lead is an exterior
+            // shell plus the detailed cab interior child; hide only
+            // the shell so the cab interior keeps rendering.
+            for child in root.children where child.name == "generated-original-commuter-exterior" {
+                child.isEnabled = !cabActive
+            }
+        } else if let lead = glbCarRoots.first {
+            lead.isEnabled = !cabActive
         }
     }
 
@@ -6562,8 +13950,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 generatedLead.addChild(exterior)
                 if let detailedCab = try? RailwayGeneratedAssetLoader.loadModel(for: .driverCabInteriorDetailed) {
                     detailedCab.name = "generated-original-driver-cab-detailed"
-                    detailedCab.position = SIMD3<Float>(0, 0.24, -7.6)
-                    detailedCab.orientation = simd_quatf(angle: Float.pi / 2, axis: SIMD3<Float>(0, 1, 0)) *
+                    // batch18 (2026-11-13 diagnosis): the cab GLB
+                    // was mounted front-to-back. Measured from
+                    // the asset itself: its front wall / cab
+                    // front glazing sits at GLB x -2.5..-2.27 and
+                    // the desk at x -1.98..-0.52, so with the old
+                    // +90° yaw everything landed BEHIND the eye
+                    // (front wall at root z -5.10, the seat back
+                    // in front of the camera). With the yaw
+                    // flipped and the root at z -7.33 the front
+                    // wall meets the nose (-9.75), the desk sits
+                    // ahead of the eye (-7.95) and the seat back
+                    // falls behind it (-6.98) — a cab the driver
+                    // can actually sit in on the high path. (The
+                    // screenshot tour runs medium, so this path
+                    // is verified by geometry, not photos.)
+                    detailedCab.position = SIMD3<Float>(0, 0.24, -7.33)
+                    detailedCab.orientation = simd_quatf(angle: -Float.pi / 2, axis: SIMD3<Float>(0, 1, 0)) *
                         simd_quatf(angle: -Float.pi / 2, axis: SIMD3<Float>(1, 0, 0))
                     generatedLead.addChild(detailedCab)
                 } else if let cab = try? RailwayGeneratedAssetLoader.loadModel(for: .driverCabInterior) {
@@ -6680,26 +14083,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
-    private func buildGenerated3DAssets(route: RailwayRouteProfile) {
-        let length = max(route.distanceM, 1)
-        addGeneratedStaticAsset(.trackPanel20m, name: "generated-track-panel", chainageM: min(200, length * 0.10), verticalOffsetM: 0.18)
-        addGeneratedStaticAsset(.railwayEquipmentModule, name: "generated-railway-equipment", chainageM: min(470, length * 0.24))
-        addGeneratedStaticAsset(.suburbanCorridorModules, name: "generated-suburban-corridor", chainageM: min(760, length * 0.38))
-    }
-
-    private func addGeneratedStaticAsset(
-        _ asset: RailwayGenerated3DAsset,
-        name: String,
-        chainageM: Double,
-        verticalOffsetM: Float = 0
-    ) {
-        guard let entity = try? RailwayGeneratedAssetLoader.loadModel(for: asset) else { return }
-        entity.name = name
-        setGeneratedAssetPose(entity, chainageM: chainageM, verticalOffsetM: verticalOffsetM)
-        world.addChild(entity)
-        generatedStaticAssetRoots.append(entity)
-    }
-
+    // batch76: buildGenerated3DAssets / addGeneratedStaticAsset
+    // were removed with their three static placements (see the
+    // note at the old call site in buildHeavySceneryGroup). The
+    // batch56 CensusSink.recordChainage calls that lived in
+    // addGeneratedStaticAsset are gone with it — the census
+    // loses those three records per route build.
     private func updateGeneratedStationModel(positionM: Double) {
         guard let placement = stationModelPlacements.min(by: {
             abs($0.chainageM - positionM) < abs($1.chainageM - positionM)
@@ -6742,7 +14131,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
         }
         if let entity = importedStationEntity {
-            setGeneratedAssetPose(entity, chainageM: placement.chainageM)
+            // batch75: the GLB core is authored around its
+            // station centre (see buildStationPlatforms), so
+            // pose it on the canonical centre, not the stop
+            // target. The selection above still keys off the
+            // placement — it only picks WHICH station is near.
+            setGeneratedAssetPose(entity, chainageM: canonicalStationCenter(stationId: placement.stationId, fallback: placement.chainageM))
         }
     }
 
@@ -6808,6 +14202,21 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 child.position.y += 1.85
             } else if name.hasPrefix("canopy_column_") {
                 child.scale.y *= 1.566
+            } else if name.hasPrefix("footbridge_stair_") {
+                // batch19 (2026-11-13): the generated stairs
+                // span local Y 2.70-5.70 in every station GLB —
+                // they were modelled as an upper flight only, so
+                // they hovered ~1.3 m above the raised platform
+                // as blank concrete slabs (the "grey cylinders"
+                // of the Mac loop-2 photos at Katsunuma /
+                // Kisaragawa; enlarged crops show a flat panel,
+                // not a cylinder). Stretch them about the node
+                // origin so the flight grounds on the platform
+                // top (local 1.415) and still meets the deck
+                // underside (5.84): scale = (5.84-1.415)/3.0 =
+                // 1.475, shift = 1.415 - 2.70*1.475 = -2.57.
+                child.scale.y *= 1.475
+                child.position.y -= 2.57
             }
             adjustGeneratedStationHeights(child)
         }
@@ -6869,6 +14278,150 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         cabLampOverlays["CabLampLit_emergency"]?.isEnabled = indicator.emergencyBrakeActive || controls.emergencyBrake
     }
 
+    /// batch56: appends the queued CENSUS table and any pending
+    /// one-chain diagnostic lines to the demo-drive log
+    /// (Documents/demo-drive-log.txt, or demo-drive-log-cab.txt
+    /// for the cab launch — whichever the model has started;
+    /// SimulatorModel.swift:1580-1602 owns and writes that file).
+    /// The CI deletes the file before each launch and the model
+    /// creates/truncates it at its first demo tick, so "the file
+    /// exists" proves the model's copy is the live one and an
+    /// append cannot be wiped by its startup.
+    private func flushPulledLogIfNeeded() {
+        var lines: [String] = []
+        if !queuedLogFlushed { lines.append(contentsOf: queuedLogLines) }
+        if !trafficDiagFlushed, let trafficDiagText { lines.append(trafficDiagText) }
+        // batch58: GLB load diagnostics (GLB_LOAD / GLB_TEX_FAIL /
+        // GLB_MAT_FALLBACK / GLB_LOAD_FAIL) are drained on EVERY
+        // flush — traffic-actor GLBs load lazily inside
+        // updateTrafficActors, after the one-shot lines above
+        // have already gone out, so the batch56 early return
+        // would have stranded them. The model's writers now seek
+        // to the end before every write (SimulatorModel,
+        // batch58), so appends through this handle are no longer
+        // overwritten.
+        lines.append(contentsOf: RailwayGeneratedAssetLoader.drainDiagnostics())
+        // batch62: PERF_WINDOW lines ride the same every-flush
+        // drain — pendingPerfLogLines gains one entry per 5 s
+        // window and is empty otherwise, so this adds no
+        // per-frame file I/O.
+        lines.append(contentsOf: pendingPerfLogLines)
+        pendingPerfLogLines.removeAll()
+        guard !lines.isEmpty else { return }
+        guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let fileManager = FileManager.default
+        let target = ["demo-drive-log.txt", "demo-drive-log-cab.txt"]
+            .map { documents.appendingPathComponent($0) }
+            .first { fileManager.fileExists(atPath: $0.path) }
+        guard let target, let handle = try? FileHandle(forWritingTo: target) else { return }
+        handle.seekToEndOfFile()
+        let text = lines.joined(separator: "\n") + "\n"
+        if let data = text.data(using: .utf8) { handle.write(data) }
+        try? handle.close()
+        if !queuedLogFlushed { queuedLogFlushed = true }
+        if trafficDiagText != nil { trafficDiagFlushed = true }
+    }
+
+    /// batch56: the per-segment scenery census. Counting rule
+    /// (follow it exactly — it defines the metric): every
+    /// individual placement the scenery builders make inside
+    /// the census window counts 1 — each box added to a
+    /// MeshBatchBuilder (except batches tagged censusExcluded:
+    /// the depot yard's trackbed/rail/sleeper batches), each
+    /// addBox/addSurfaceBox placement (except the running
+    /// line's decorative sleepers, excluded by their
+    /// "sleeper-" names), each addTree, each stabled depot car,
+    /// each generated static asset, and each background ribbon
+    /// panel (1 per panel). The running line's own trackbed,
+    /// rails and sleepers never pass a hooked channel (they are
+    /// ribbon geometry and painted texture), so they are
+    /// excluded by construction. Positions are mapped to the
+    /// nearest sample's chainage; segments are the consecutive
+    /// station centres on the route-distance axis (branch
+    /// centres 62,000/64,000/66,000/68,000 = the route JSON's
+    /// branch-local 2,000/4,000/6,000/8,000 plus the 60,000
+    /// mainline length). Emits only for the full-network world.
+    private func computeCensusLines() -> [String] {
+        guard let firstSample = samples.first, let lastSample = samples.last,
+              firstSample.distanceM <= 0.5, lastSample.distanceM >= 67_999 else { return [] }
+        let centres: [Double] = Self.mainlineStationChainagesM + [62_000, 64_000, 66_000, 68_000]
+        let names: [String] = (1...28).map { String(format: "S%02d", $0) } + ["B01", "B02", "B03", "B04"]
+        var counts = [Int](repeating: 0, count: centres.count - 1)
+        func segmentIndex(forChainage chainageM: Double) -> Int {
+            var segment = 0
+            for i in counts.indices where chainageM >= centres[i + 1] { segment = i + 1 }
+            if segment >= counts.count { segment = counts.count - 1 }
+            return segment
+        }
+        func assign(_ chainageM: Double) { counts[segmentIndex(forChainage: chainageM)] += 1 }
+        for chainage in CensusSink.chainages { assign(chainage) }
+        // Nearest sample by (x, z) on a 100 m grid over the
+        // samples; scenery sits within ~150 m of the
+        // centreline, so a ±2-cell search always reaches it.
+        var grid: [Int: [Int]] = [:]
+        func cellKey(_ cx: Int, _ cz: Int) -> Int { cx * 100_003 + cz }
+        for (index, sample) in samples.enumerated() {
+            let cx = Int((sample.x / 100).rounded(.down))
+            let cz = Int((sample.z / 100).rounded(.down))
+            grid[cellKey(cx, cz), default: []].append(index)
+        }
+        func segmentIndex(forPosition position: SIMD3<Float>) -> Int? {
+            let cx = Int((position.x / 100).rounded(.down))
+            let cz = Int((position.z / 100).rounded(.down))
+            var bestIndex: Int? = nil
+            var bestDistanceSq: Float = .greatestFiniteMagnitude
+            for gx in (cx - 2)...(cx + 2) {
+                for gz in (cz - 2)...(cz + 2) {
+                    guard let indices = grid[cellKey(gx, gz)] else { continue }
+                    for index in indices {
+                        let dx: Float = samples[index].x - position.x
+                        let dz: Float = samples[index].z - position.z
+                        let distanceSq: Float = dx * dx + dz * dz
+                        if distanceSq < bestDistanceSq {
+                            bestDistanceSq = distanceSq
+                            bestIndex = index
+                        }
+                    }
+                }
+            }
+            guard let bestIndex else { return nil }
+            return segmentIndex(forChainage: samples[bestIndex].distanceM)
+        }
+        var unmapped = 0
+        for position in CensusSink.positions {
+            if let segment = segmentIndex(forPosition: position) {
+                counts[segment] += 1
+            } else {
+                unmapped += 1
+            }
+        }
+        // batch58: distinct photo textures per segment, from
+        // the textured placements recorded alongside the plain
+        // ones (CensusSink.texturedPositions). A segment whose
+        // scenery is all flat colour reads distinct=0 — the
+        // number the placement count alone could never show.
+        var texturesBySegment = [Set<String>](repeating: [], count: counts.count)
+        var allTextures = Set<String>()
+        for entry in CensusSink.texturedPositions {
+            allTextures.insert(entry.texture)
+            if let segment = segmentIndex(forPosition: entry.position) {
+                texturesBySegment[segment].insert(entry.texture)
+            }
+        }
+        var lines: [String] = ["CENSUS BASIS placements=batchbox+addbox+surfacebox+tree+depotcar+staticasset+backdrop; excluded=running-line and depot trackbed/rails/sleepers"]
+        var total = 0
+        for i in counts.indices {
+            lines.append("CENSUS seg=\(names[i])-\(names[i + 1]) len=\(Int(centres[i + 1] - centres[i])) count=\(counts[i])")
+            total += counts[i]
+        }
+        lines.append("CENSUS TOTAL count=\(total) placed=\(CensusSink.positions.count + CensusSink.chainages.count) unmapped=\(unmapped)")
+        for i in counts.indices {
+            lines.append("CENSUS tex seg=\(names[i])-\(names[i + 1]) distinct=\(texturesBySegment[i].count)")
+        }
+        lines.append("CENSUS tex TOTAL distinct=\(allTextures.count) textured=\(CensusSink.texturedPositions.count)")
+        return lines
+    }
+
     private func updateTrafficActors(
         route: RailwayRouteProfile,
         scenario: TrafficScenario?,
@@ -6877,6 +14430,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         travelDirection: RegionalTravelDirection,
         simulationTime: Double
     ) {
+        // batch62: frame-cost accounting (see recordTrafficPerf).
+        let perfTrafficStart = ProcessInfo.processInfo.systemUptime
+        defer { recordTrafficPerf(milliseconds: (ProcessInfo.processInfo.systemUptime - perfTrafficStart) * 1_000) }
         guard let scenario, let snapshot, let trafficSceneRoute else {
             previousTrafficSnapshot = nil
             trafficActorAdapter.update(poses: [])
@@ -6885,25 +14441,65 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let previous = previousTrafficSnapshot?.scenarioID == snapshot.scenarioID
             ? previousTrafficSnapshot
             : nil
-        let frame = (try? TrafficActorPoseSampler.sample(
-            scenario: scenario,
-            previous: previous,
-            current: snapshot,
-            simulationTimeSeconds: simulationTime
-        )) ?? (try? TrafficActorPoseSampler.sample(scenario: scenario, snapshot: snapshot))
+        // batch62: the scenario lookup tables are cached per
+        // scenario (see trafficLookup(for:)) instead of being
+        // rebuilt from ~800 plans on every frame.
+        let scenarioLookup = trafficLookup(for: scenario)
+        // batch64: sample with a focus on the player train —
+        // only actors active at this instant and within 2 km
+        // (network distance) of the player are posed at all.
+        // The unfocused sample posed every one of the ~800
+        // plans on every frame (the batch64 measurements put
+        // it at ~90% of the whole update cost, even with zero
+        // AI trains running). The focus comes from the
+        // snapshot's own player state; when the snapshot does
+        // not carry one (or its track is unknown), the
+        // original unfocused sample runs instead. Poses the
+        // focus does include are computed identically either
+        // way, and an actor that leaves the window simply
+        // stops being posed — the adapter disables absent
+        // IDs, so nothing lingers.
+        let poseFocus: TrafficActorPoseFocus? = snapshot.playerTrain.flatMap { player in
+            guard let track = scenarioLookup.tracksByID[player.trackID] else { return nil }
+            return TrafficActorPoseFocus(
+                routePathID: track.routePathID,
+                positionM: player.positionM,
+                radiusM: 2_000
+            )
+        }
+        let frame: TrafficActorPoseFrame?
+        if let poseFocus {
+            frame = (try? TrafficActorPoseSampler.sample(
+                scenario: scenario,
+                previous: previous,
+                current: snapshot,
+                simulationTimeSeconds: simulationTime,
+                focus: poseFocus
+            )) ?? (try? TrafficActorPoseSampler.sample(scenario: scenario, snapshot: snapshot, focus: poseFocus))
+        } else {
+            frame = (try? TrafficActorPoseSampler.sample(
+                scenario: scenario,
+                previous: previous,
+                current: snapshot,
+                simulationTimeSeconds: simulationTime
+            )) ?? (try? TrafficActorPoseSampler.sample(scenario: scenario, snapshot: snapshot))
+        }
         previousTrafficSnapshot = snapshot
         guard let frame else {
             trafficActorAdapter.update(poses: [])
             return
         }
 
-        let posesBySourceID = Dictionary(frame.poses.map { ($0.sourceID, $0) }, uniquingKeysWith: { first, _ in first })
-        let trainsByID = Dictionary(scenario.trains.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let tracksByID = Dictionary(scenario.tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let roadsByID = Dictionary(scenario.roads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let roadPlansByID = Dictionary(scenario.roadVehicles.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let platformsByID = Dictionary(scenario.platforms.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let tripsByID = Dictionary(scenario.passengerTrips.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // batch64: the sampler builds the sourceID index
+        // alongside the poses; the view no longer pays a
+        // second dictionary pass over the frame.
+        let posesBySourceID = frame.posesBySourceID
+        let trainsByID = scenarioLookup.trainsByID
+        let tracksByID = scenarioLookup.tracksByID
+        let roadsByID = scenarioLookup.roadsByID
+        let roadPlansByID = scenarioLookup.roadPlansByID
+        let platformsByID = scenarioLookup.platformsByID
+        let tripsByID = scenarioLookup.tripsByID
         let serviceDirection: RailwayServiceDirection = travelDirection == .up ? .up : .down
         var inputs: [SceneTrafficActorInput] = []
         inputs.reserveCapacity(frame.poses.count)
@@ -6914,9 +14510,54 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                   let track = tracksByID[actor.trackID],
                   let chainage = projectedChainage(actor.routePathID, positionM: pose.positionM, routeVariant: routeVariant, direction: travelDirection),
                   chainage >= 0, chainage <= route.distanceM else { continue }
+            var lateralOffsetM = track.lateralOffsetM
+            // batch49 (2026-11-14): EVERY train on this adapter
+            // path takes the composed lateral the legacy path
+            // below used. The adapter otherwise fed the RAW
+            // track lateral (+-2.1), while at island stations
+            // the drawn rails spread to +-4.0 (batch42) and the
+            // island platform reaches +-2.48 — so in normal play
+            // every AI train stood 1.9 m inside the island
+            // platform and off its own rails there, and a train
+            // routed onto a siding missed the throat fan to the
+            // loop line (batch46). batch48 first applied this to
+            // the batch47 tour-meet train alone (which already
+            // renders as the real E231 GLB through the adapter);
+            // this generalises it and absorbs that special case,
+            // so the composition is applied exactly once. The
+            // keying is the track's data lateral alone, identical
+            // to the legacy path: running tracks (|2.1|) pick up
+            // the island spread at the actor's own chainage,
+            // siding tracks (|9.64| — the two mainline sidings
+            // are the only ones in the scenario) follow the fan
+            // where a fan station owns the chainage and keep
+            // their data lateral away from every fan, and any
+            // other lateral passes through untouched. It cannot
+            // leak onto the other lines: islandTrackSpread reads
+            // zones computed for the CURRENT world only —
+            // branch-shuttle and depot sessions compute an empty
+            // zone list (no passing track), a through working's
+            // branch section holds no zone (up workings zone the
+            // mainline below 60,000 while branch actors project
+            // at 60,000+; down workings zone mainline placements
+            // at display chainages >= 8,000 while branch actors
+            // project below 8,000, and the branch island B02 is
+            // excluded as a single-track section), and the zoo /
+            // park variants never reach this loop at all
+            // (projectedChainage returns nil for them). Only the
+            // lateral handed to the projector changes — position
+            // along the line, speed and spacing are untouched.
+            let base = Float(track.lateralOffsetM)
+            if abs(track.lateralOffsetM) == 2.1 {
+                lateralOffsetM = Double(spreadTrackLateral(base, at: chainage))
+            } else if abs(track.lateralOffsetM) == 9.64 {
+                if let siding = sidingTrackLateral(base, at: chainage) {
+                    lateralOffsetM = Double(siding)
+                }
+            }
             inputs.append(SceneTrafficActorInput(
                 id: pose.id, kind: .train, routePathID: pose.routePathID,
-                chainageM: chainage, lateralOffsetM: track.lateralOffsetM,
+                chainageM: chainage, lateralOffsetM: lateralOffsetM,
                 headingRadians: actor.serviceDirection == serviceDirection ? 0 : .pi,
                 speedMps: pose.speedMps, lengthM: plan.lengthM, isVisible: pose.isVisible,
                 wheelRotationRadians: pose.wheelRotationRadians,
@@ -6959,9 +14600,34 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let scenePoses = SceneTrafficActorProjector.project(
             inputs,
             on: trafficSceneRoute,
-            supportedRoutePathIDs: Set(scenario.routePaths.map(\.id))
+            supportedRoutePathIDs: scenarioLookup.supportedRoutePathIDs
         )
         trafficActorAdapter.update(poses: scenePoses)
+        // batch56-diag: remove after proof — diagnosis §1.5:
+        // one numeric line proving the projector's lateral sign
+        // against the world's own offset helper, for the parked
+        // tour-meet local (composed input lateral +4.0 at the
+        // S14 island). After the fix, delta must read ~0.
+        // batch58: the line also carries the pose basis —
+        // fwd/right unit vectors and crossErr, the length of
+        // (right × up − forward). A right-handed pose reads
+        // crossErr ~0; batch56's reflected basis read ~2.
+        if trafficDiagText == nil,
+           let meetInput = inputs.first(where: { $0.id.hasSuffix("tour-meet-local-up-tsudaike") }),
+           let meetPose = scenePoses.first(where: { $0.id == meetInput.id }) {
+            let expected = routeOffsetPoint(sample(at: 28_451), lateral: 4.0)
+            let dx: Float = Float(meetPose.position.x) - expected.x
+            let dy: Float = Float(meetPose.position.y) - expected.y
+            let dz: Float = Float(meetPose.position.z) - expected.z
+            let delta: Float = (dx * dx + dy * dy + dz * dz).squareRoot()
+            let crossResidual = meetPose.right.cross(meetPose.up) - meetPose.forward
+            trafficDiagText = String(format: "TRAFFIC_DIAG id=tour-meet-local-up-tsudaike inputLateral=%.2f proj=(%.1f,%.1f,%.1f) expect=(%.1f,%.1f,%.1f) delta=%.2f fwd=(%.3f,%.3f,%.3f) right=(%.3f,%.3f,%.3f) crossErr=%.3f",
+                                     meetInput.lateralOffsetM, meetPose.position.x, meetPose.position.y, meetPose.position.z,
+                                     Double(expected.x), Double(expected.y), Double(expected.z), Double(delta),
+                                     meetPose.forward.x, meetPose.forward.y, meetPose.forward.z,
+                                     meetPose.right.x, meetPose.right.y, meetPose.right.z,
+                                     crossResidual.length)
+        }
     }
 
     private func updateLegacyTrafficActors(
@@ -6993,7 +14659,24 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 world.addChild(entity)
             }
             let sample = sample(at: chainage)
-            let lateral = Float(track.lateralOffsetM)
+            var lateral = Float(track.lateralOffsetM)
+            // batch42: AI trains on a running track (|offset|
+            // 2.1) follow the island-station spread at their own
+            // chainage, so an opposing train threads the widened
+            // station on its rails instead of on the old
+            // centreline; yard tracks keep their data lateral
+            // untouched.
+            if abs(track.lateralOffsetM) == 2.1 {
+                lateral = spreadTrackLateral(lateral, at: chainage)
+            }
+            // batch46: a waiting AI train on a siding follows
+            // the fan to the station's loop target, so at the
+            // widened island stations it stands on the moved
+            // loop line beside the restored 4.5 m platform
+            // instead of floating 1.9 m inside it.
+            if abs(track.lateralOffsetM) == 9.64, let siding = sidingTrackLateral(lateral, at: chainage) {
+                lateral = siding
+            }
             entity.position = SIMD3<Float>(
                 sample.x + lateral * cos(sample.heading), sample.elevationM,
                 sample.z + lateral * sin(sample.heading)
@@ -7048,18 +14731,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             let sample = sample(at: chainage)
             let lateral = Float(platform.lateralOffsetM + actor.lateralOffsetM)
-            entity.position = SIMD3<Float>(sample.x + lateral * cos(sample.heading), sample.elevationM + 0.48, sample.z + lateral * sin(sample.heading))
+            // batch92: the passengers used to stand at
+            // elevationM + 0.48 — a leftover datum that is
+            // neither the ground (rail datum) nor the drawn
+            // platform top (rail head 0.3065 + platform
+            // 1.10 = 1.4065), so they stood sunk ~0.93 m
+            // into the platform surface. Place them in the
+            // same canted profile frame every placed
+            // platform person uses (addPlatformPeople's
+            // topV), at the same platform-top height.
+            let station = profileStation(at: chainage, trackLateral: lateral)
+            entity.position = station.center + station.yAxis * (0.3065 + 1.10)
             entity.orientation = simd_quatf(angle: -(sample.heading + Float(actor.headingRadians)), axis: SIMD3<Float>(0, 1, 0))
-            if let legs = platformPeopleLegs[actor.id] {
-                if actor.phase == .walking {
-                    let swing: Float = sin(Float(currentSimulationTime) * 7 + Float(stableIndex(actor.id, count: 628)) / 100) * 0.45
-                    legs.0.orientation = simd_quatf(angle: swing, axis: SIMD3<Float>(1, 0, 0))
-                    legs.1.orientation = simd_quatf(angle: -swing, axis: SIMD3<Float>(1, 0, 0))
-                } else {
-                    legs.0.orientation = simd_quatf(angle: 0, axis: SIMD3<Float>(1, 0, 0))
-                    legs.1.orientation = simd_quatf(angle: 0, axis: SIMD3<Float>(1, 0, 0))
-                }
-            }
         }
     }
 
@@ -7144,34 +14827,39 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     }
 
     private func makeRoadCar(id: String) -> Entity {
+        // batch15: moving traffic uses the same photo cutouts
+        // as the parked cars (see addParkedCar). The card is
+        // turned 90° inside the actor root so the image width
+        // lies along the car's travel axis (local z).
         let car = Entity()
         car.name = "traffic-road-vehicle-\(id)"
-        let palette = [
-            Self.pbr(UIColor(red: 0.67, green: 0.31, blue: 0.25, alpha: 1), metallic: 0.08, roughness: 0.48),
-            Self.pbr(UIColor(red: 0.25, green: 0.43, blue: 0.56, alpha: 1), metallic: 0.10, roughness: 0.48),
-            Self.pbr(UIColor(red: 0.68, green: 0.64, blue: 0.49, alpha: 1), metallic: 0.05, roughness: 0.55)
+        let specs: [(String, Float)] = [
+            ("car_kei_white", 3.4), ("car_hatchback_silver", 4.2),
+            ("car_sedan_black", 4.7), ("car_suv_white", 4.6),
+            ("car_compact_red", 3.95), ("car_truck_lightblue", 3.4),
         ]
-        let paint = palette[stableIndex(id, count: palette.count)]
-        addBox(parent: car, name: "car-body", size: SIMD3<Float>(1.75, 0.58, 3.8), position: SIMD3<Float>(0, 0.55, 0), material: paint)
-        addBox(parent: car, name: "car-cabin", size: SIMD3<Float>(1.46, 0.52, 1.95), position: SIMD3<Float>(0, 1.04, 0.10), material: glassMaterial)
-        for side in [-1.0, 1.0] {
-            for end in [-1.0, 1.0] {
-                let wheel = ModelEntity(mesh: .generateSphere(radius: 0.23), materials: [sleeperMaterial])
-                wheel.position = SIMD3<Float>(Float(side) * 0.78, 0.24, Float(end) * 1.20)
-                car.addChild(wheel)
-            }
-        }
+        let spec = specs[stableIndex(id, count: specs.count)]
+        let cardW = spec.1 / 0.92
+        let cardH = cardW * 0.5
+        var material = Self.texturedPBR(.white, roughness: 0.85, textureName: spec.0)
+        material.blending = .transparent(opacity: .init(floatLiteral: 1))
+        material.faceCulling = .back
+        let card = ModelEntity(mesh: MeshResource.generateBox(size: SIMD3<Float>(cardW, cardH, 0.04)), materials: [material])
+        card.name = "car-photo"
+        card.position = SIMD3<Float>(0, cardH / 2, 0)
+        card.orientation = simd_quatf(angle: Float.pi / 2, axis: SIMD3<Float>(0, 1, 0))
+        car.addChild(card)
         return car
     }
 
     private func makePlatformPerson(id: String) -> Entity {
-        // quality41 final: the traffic passengers use the same
-        // articulated figure as the placed people (the old two-box
-        // dummy with a concrete head is gone). Legs are registered
-        // so updateTrafficActors can swing them while walking.
-        let figure = makePersonFigure(role: stableIndex(id + "role", count: 9) == 0 ? 2 : 0, seedKey: id)
-        platformPeopleLegs[id] = (figure.legL, figure.legR)
-        return figure.root
+        // batch14: the traffic passengers use the same photo
+        // billboard as the placed people — a profile card, since
+        // platform passengers wait facing the track and walk
+        // along it. The actor root carries the simulation
+        // heading, and nothing registers limbs: a billboard has
+        // none to swing.
+        return makePersonFigure(role: stableIndex(id + "role", count: 9) == 0 ? 2 : 0, seedKey: id, profile: true, mirrored: false)
     }
 
     /// Uses package-provided cosmetic blend hints to select procedural material variants.
@@ -7277,7 +14965,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         return try? MeshResource.generate(from: [descriptor])
     }
 
-    private func addTree(parent: Entity, name: String, x: Float, z: Float, height: Float, material: PhysicallyBasedMaterial, groundY: Float = 0) {
+    private func addTree(parent: Entity, name: String, x: Float, z: Float, height: Float, material: PhysicallyBasedMaterial, groundY: Float = 0, censusTexture: String? = nil) {
+        // batch56: one placement for the scenery census (the
+        // trunk and crown are direct entities, counted once
+        // here, not per part).
+        CensusSink.recordPosition(SIMD3<Float>(x, groundY, z))
+        // batch58: the crown's photo texture, when the caller
+        // names one, joins the texture census too.
+        if let censusTexture { CensusSink.recordTexturedPosition(SIMD3<Float>(x, groundY, z), texture: censusTexture) }
         // quality25 (C): real street-tree proportions — a trunk of
         // believable girth (Ø ≈ 0.09 × height + 0.08 m, capped) up
         // to about half the height, then a crown of four jittered
@@ -7302,11 +14997,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // cached mesh is exactly what its key promises.
             let meshHeight = (trunkHeight / 0.01).rounded() * 0.01
             let meshRadius = (trunkRadius / 0.01).rounded() * 0.01
-            if #available(iOS 18.0, *) {
-                trunkMesh = .generateCylinder(height: meshHeight, radius: meshRadius)
-            } else {
-                trunkMesh = FallbackCylinderMesh.make(height: meshHeight, radius: meshRadius)
-            }
+            trunkMesh = FallbackCylinderMesh.make(height: meshHeight, radius: meshRadius)
             sharedTrunkMeshes[trunkKey] = trunkMesh
         }
         let trunk = ModelEntity(mesh: trunkMesh, materials: [sleeperMaterial])
@@ -7354,7 +15045,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         size: SIMD3<Float>,
         position: SIMD3<Float>,
         material: PhysicallyBasedMaterial,
-        orientation: simd_quatf? = nil
+        orientation: simd_quatf? = nil,
+        censusTexture: String? = nil
     ) -> ModelEntity {
         // quality26: one shared MeshResource per size quantized to
         // a 0.02 m grid (at most 1 cm of size error, and at least
@@ -7377,6 +15069,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let entity = ModelEntity(mesh: boxMesh, materials: [material])
         entity.name = name
         entity.position = position
+        // batch56: one placement for the scenery census — the
+        // running line's decorative sleepers (placed through
+        // addSurfaceBox under "sleeper-" names) are the only
+        // track structure on this channel and stay excluded.
+        // batch58: a caller that knows the placement's photo
+        // texture passes censusTexture and the placement also
+        // joins the texture census.
+        if !name.hasPrefix("sleeper-") {
+            CensusSink.recordPosition(position)
+            if let censusTexture { CensusSink.recordTexturedPosition(position, texture: censusTexture) }
+        }
         if let orientation { entity.orientation = orientation }
         parent.addChild(entity)
         return entity
@@ -7441,6 +15144,95 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
     }
 
+    /// The layout manifest's station data, keyed by station ID —
+    /// the canonical station chainages the placements themselves
+    /// do NOT carry (a placement's chainageM is the stop-scoring
+    /// target, see canonicalPlatformBounds below). Loaded once;
+    /// the same manifest ContentView builds the placements from.
+    private static let generatedLayoutsByID: [String: RailwayGeneratedStationLayout] = {
+        guard let manifest = try? RailwayGeneratedAssetCatalog.stationLayoutManifest() else { return [:] }
+        return Dictionary(manifest.stations.map { ($0.stationId, $0) }, uniquingKeysWith: { first, _ in first })
+    }()
+
+    /// batch74 follow-up (2026-11-15): the canonical platform
+    /// bounds of a station in ROUTE coordinates, taken from the
+    /// station data itself (the layout manifest's line-local
+    /// chainage) — never from placement.chainageM. That value is
+    /// the stop-scoring TARGET: platform centre + half the
+    /// scoring consist under batch34, and the front-aligned
+    /// margin line (platformEnd − 5 m) since batch74, so any
+    /// scene anchor recovered from it drifts with the adapter's
+    /// semantics (batch74 moved it +17 m for an 8-car scoring
+    /// consist and silently shifted every anchor that treated
+    /// it as the station centre).
+    ///
+    /// Canonical platforms are uniformly 200 m (RouteData):
+    /// station chainage ± 100 at intermediate stations, and
+    /// shifted fully inside the line at the terminals, so the
+    /// head-end platforms are [0, 200] (S01), [59 800, 60 000]
+    /// (S28) and [7 800, 8 000] (B04) — the buffer side is the
+    /// outer end and the platform centre is NOT the station
+    /// chainage there. The line-local bounds
+    /// are mapped into the route frame with the same rules
+    /// RegionalRouteFactory / StopScoringRouteAdapter use
+    /// (branch stations sit past the main line on a through
+    /// service; on the shuttle the junction's main-line
+    /// platform is projected onto the branch origin, exactly
+    /// as the adapter's bounds(forStop:) does). Returns nil
+    /// for variants whose signs are not built (zoo / park /
+    /// depot) or when the manifest has no such station.
+    private func canonicalPlatformBounds(stationId: String, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, routeLengthM: Double) -> (start: Double, end: Double)? {
+        guard let layout = Self.generatedLayoutsByID[stationId] else { return nil }
+        let isBranchStation = layout.lineId == "BRANCH"
+        let lineLengthM = isBranchStation ? 8_000.0 : 60_000.0
+        // 200 m platform: chainage ± 100, shifted fully inside
+        // the line at the terminals (see the doc above).
+        let localStart = min(max(0, layout.chainageM - 100), lineLengthM - 200)
+        let localEnd = localStart + 200
+        let baseStart: Double
+        let baseEnd: Double
+        switch routeVariant {
+        case .mainline:
+            baseStart = localStart
+            baseEnd = localEnd
+        case .throughBranch:
+            baseStart = isBranchStation ? 60_000 + localStart : localStart
+            baseEnd = isBranchStation ? 60_000 + localEnd : localEnd
+        case .branchShuttle:
+            if isBranchStation {
+                baseStart = localStart
+                baseEnd = localEnd
+            } else {
+                baseStart = 0
+                baseEnd = 200
+            }
+        default:
+            return nil
+        }
+        if travelDirection == .up {
+            return (start: baseStart, end: baseEnd)
+        }
+        return (start: routeLengthM - baseEnd, end: routeLengthM - baseStart)
+    }
+
+    /// batch75: canonical bounds in the current build's route
+    /// frame, for the helpers that run without a route in scope
+    /// (clearance predicates, fan specs, the generated station
+    /// model). Uses the build context rebuild() stored; while a
+    /// build is in flight these are exactly the values the
+    /// route builders pass explicitly.
+    private func canonicalPlatformBounds(stationId: String) -> (start: Double, end: Double)? {
+        canonicalPlatformBounds(stationId: stationId, routeVariant: buildRouteVariant, travelDirection: buildTravelDirection, routeLengthM: buildRouteLengthM)
+    }
+
+    /// batch75: the canonical station centre in the current
+    /// build's route frame, or the fallback (the placement —
+    /// the pre-batch75 anchor) when the manifest has no
+    /// canonical bounds for the station on this variant.
+    private func canonicalStationCenter(stationId: String, fallback: Double) -> Double {
+        canonicalPlatformBounds(stationId: stationId).map { ($0.start + $0.end) / 2 } ?? fallback
+    }
+
     /// Corrected platform-length standard (quality25, A). The layout
     /// manifest (station_layouts_32.json) now carries the same
     /// values; the scene derives lengths from the rule because the
@@ -7479,30 +15271,158 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private func buildingClearOfPlatforms(chainage: Double, halfLength: Double, lateral: Float, halfDepth: Float) -> Bool {
         if abs(lateral) - halfDepth >= 10 { return true }
         for placement in stationModelPlacements {
-            let platformHalf = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2 + 10
-            if abs(chainage - placement.chainageM) < platformHalf + halfLength { return false }
+            // batch75: the checked span is the canonical
+            // platform (the drawn span since this batch) plus
+            // the same 10 m, not a platformLengthM window
+            // around the stop target — since batch74 the
+            // target sits 95 m inside the span's travel end,
+            // so the old window guarded the wrong 210 m.
+            if let bounds = canonicalPlatformBounds(stationId: placement.stationId) {
+                if chainage + halfLength > bounds.start - 10 && chainage - halfLength < bounds.end + 10 { return false }
+            } else {
+                let platformHalf = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2 + 10
+                if abs(chainage - placement.chainageM) < platformHalf + halfLength { return false }
+            }
         }
         return true
     }
 
-    /// quality40: the throat fans widen the formation to a 17 m
-    /// deck, but building placement only ever cleared the normal
-    /// track width — at Touou-Chihara a tower face landed inside
-    /// the fan deck and the siding ran into the building (user
-    /// report on the quality38 photos). Inside a fan span a
-    /// building's face must stay 11 m or more from the centre.
+    /// batch72: the minimum distance a building's inner face
+    /// must keep from the route centre at a chainage — the
+    /// EFFECTIVE track band, not the plain double-track width.
+    /// The old fan clear line (loop target + 1.36 m) sat INSIDE
+    /// the formation it was meant to protect: the loop track's
+    /// own ballast shoulder reaches target + 2.65 m and a train
+    /// on the loop sweeps to target + 1.45 m, so a face parked
+    /// at the old line stood on the siding's ballast and clipped
+    /// its loading gauge (user report at Kaibukuro, 2026-11-15:
+    /// houses standing on the track out of the terminal). The
+    /// requirement is the outermost track centre at the
+    /// chainage plus the 2.65 m shoulder plus 0.5 m of air:
+    ///   - plain double track: batch73 raised the frontage line
+    ///     from the old 4.9 m (the bare formation edge, 4.75 m)
+    ///     to 13.2 m. The corridor cross-section is now fence at
+    ///     5.3 m, the parallel road at 5.5-11.1 m and its ditch
+    ///     out to 12.9 m, so a building face must clear 13.2 m
+    ///     to stand behind the road with a margin — the old line
+    ///     parked house faces as close as 4.3 m from the centre,
+    ///     0.75 m from a passing train's side, with the road
+    ///     ribbon running through the plots (user report,
+    ///     2026-11-15: 「すぐ横に家はおかしい」). Every placement
+    ///     that goes through fanShiftedLateral (towers, suburb
+    ///     houses, station apartments, fill houses) inherits
+    ///     the new line automatically;
+    ///   - island stations: the running lines themselves swing
+    ///     out by islandTrackSpread (ramps included);
+    ///   - fan / loop stations: the loop runs at its target
+    ///     through the platform span and sweeps to it across
+    ///     both 340 m fans, so the whole centre ± (half + 340 m)
+    ///     window takes the target line;
+    ///   - the terminal crossovers (buildTerminalThroats): the
+    ///     S-curve bed reaches 4.4 m and the switch stands
+    ///     4.98 m, so the approach span takes 5.6 m.
+    private func trackBandFaceRequirement(at chainage: Double) -> Float {
+        var requirement: Float = 13.2
+        requirement = max(requirement, 2.1 + islandTrackSpread(at: chainage) + 3.15)
+        for spec in throatFanSpecs() where abs(chainage - spec.center) <= spec.half + 340 {
+            requirement = max(requirement, loopTarget(atStationCenter: spec.center) + 3.15)
+        }
+        // batch75 note: the terminal-crossover block below is
+        // arithmetically inert — batch73 raised the base
+        // requirement to 13.2 m, above this block's 5.6 m, so
+        // its max() can never bind — and its route-end test on
+        // placement.chainageM went stale in batch74 (that
+        // value is the stop target now, not the station
+        // position). Left untouched: reviving or deleting it
+        // belongs with a pass that threads variant/direction
+        // into this chainage-only predicate.
+        let routeEnd = samples.last?.distanceM ?? 0
+        for placement in stationModelPlacements {
+            guard placement.archetype == "terminal_3platform" || placement.archetype == "junction_3platform",
+                  placement.stationId.hasPrefix("S") else { continue }
+            let c = placement.chainageM
+            let atLowEnd = c <= 0.5
+            let atHighEnd = c >= routeEnd - 0.5
+            guard atLowEnd || atHighEnd else { continue }
+            let endSign: Double = atLowEnd ? -1 : 1
+            let a = c - endSign * 615
+            let b = c - endSign * 455
+            if chainage >= min(a, b) && chainage <= max(a, b) {
+                requirement = max(requirement, 5.6)
+            }
+        }
+        return requirement
+    }
+
+    /// quality40: the throat fans widen the formation, but
+    /// building placement only ever cleared the normal track
+    /// width — at Touou-Chihara a tower face landed inside the
+    /// fan deck and the siding ran into the building (user
+    /// report on the quality38 photos).
+    /// batch72: the checked window is now the whole fan
+    /// station — both 340 m fans AND the platform span between
+    /// them (the loop runs at its target there, and the old
+    /// span list left the span itself to the platform check,
+    /// whose 10 m line is inside the loop's 12.29 m shoulder
+    /// edge) — and the clear line is the loop target + 3.15 m
+    /// (shoulder 2.65 m + 0.5 m), the same line
+    /// trackBandFaceRequirement enforces for shifted plots.
     private func buildingClearOfFans(chainage: Double, halfLength: Double, lateral: Float, halfDepth: Float) -> Bool {
-        if abs(lateral) - halfDepth >= 11 { return true }
-        for span in throatFanSpans() {
-            if chainage + halfLength > span.start - 10 && chainage - halfLength < span.end + 10 { return false }
+        let face = abs(lateral) - halfDepth
+        if face >= 14.7 { return true }
+        for spec in throatFanSpecs() {
+            if face >= loopTarget(atStationCenter: spec.center) + 3.15 { continue }
+            if chainage + halfLength > spec.center - spec.half - 340 - 10 && chainage - halfLength < spec.center + spec.half + 340 + 10 { return false }
         }
         return true
+    }
+
+    /// batch10 (2026-11-12): the fan rule used to DELETE every
+    /// building whose face came within 11 m of the centre inside
+    /// a fan span — and with 15 passing stations (two 340 m spans
+    /// each) that erased the lineside across roughly 10 km of
+    /// station approaches, the blank surroundings in the #413
+    /// photos. The rule now MOVES the building out instead: same
+    /// chainage, inner face parked just past the clear line,
+    /// behind the siding. `lateral` is a magnitude here (callers
+    /// apply their own side sign); returns it unchanged when the
+    /// building is already clear.
+    /// batch72: the shift now enforces the full effective band
+    /// (trackBandFaceRequirement — fan/loop windows, island
+    /// spread, terminal crossovers), not only the fan spans, and
+    /// the clear line is the corrected target + 3.15 m. It also
+    /// relies on `halfDepth` being the footprint's true LATERAL
+    /// half extent: the box call sites used to pass the two
+    /// halves swapped (along-track for lateral), so a wide,
+    /// shallow tower could be parked with its real face up to
+    /// ~1.6 m inside the line this function believed it had set.
+    private func fanShiftedLateral(chainage: Double, halfLength: Double, lateral: Float, halfDepth: Float) -> Float {
+        let requirement = trackBandFaceRequirement(at: chainage)
+        if abs(lateral) - halfDepth >= requirement {
+            return lateral
+        }
+        // Park the face 0.4 m past the requirement, with the
+        // same deterministic jitter as before (face at
+        // requirement + 0.4 / + 1.1 / + 1.8 m) so the shifted
+        // row does not read as a ruler-straight wall.
+        return halfDepth + requirement + 0.4 + Float(stableIndex("fanshift-\(Int(chainage))", count: 3)) * 0.7
     }
 
     private func inStationZone(_ chainage: Double, extraMargin: Double = 0) -> Bool {
         for placement in stationModelPlacements {
-            let half = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2 + 20 + extraMargin
-            if abs(chainage - placement.chainageM) <= half { return true }
+            // batch75: the zone is the canonical platform span
+            // plus 20 m at each end (the quality25 rule as
+            // written), not a window around the stop target —
+            // the target's batch74 move left the span's first
+            // ~70 m outside the old window, so walls, fences
+            // and roads could lawfully start inside the
+            // platform's approach end.
+            if let bounds = canonicalPlatformBounds(stationId: placement.stationId) {
+                if chainage >= bounds.start - 20 - extraMargin && chainage <= bounds.end + 20 + extraMargin { return true }
+            } else {
+                let half = platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2 + 20 + extraMargin
+                if abs(chainage - placement.chainageM) <= half { return true }
+            }
         }
         return false
     }
@@ -7525,19 +15445,138 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private func buildStationPlatforms(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         guard !stationModelPlacements.isEmpty else { return }
         let whiteLineMaterial = Self.pbr(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.85)
+        // batch15: stations whose throats carry loop tracks (the
+        // fan specs) have a platform face serving the loop on
+        // each side; their platform width is capped at 4.5 m so
+        // the outer face keeps the standard 1.52 m clearance to
+        // the loop centre at 9.64 m (a 6.0 m platform would end
+        // exactly on the loop centreline).
+        let fanCenters = Set(throatFanSpecs().map { $0.center })
         for placement in stationModelPlacements {
             let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
-            let start = placement.chainageM - length / 2
-            let end = placement.chainageM + length / 2
+            // batch75: the drawn platform IS the canonical
+            // platform (canonicalPlatformBounds — the same
+            // bounds the stop target and the stop boards key
+            // off), so a consist's front on the margin line
+            // stands 5 m inside the drawn end instead of at
+            // the middle of a target-centred slab (the user's
+            // 「停止位置が駅の真ん中」 on IPA #6: the slab was
+            // centred on the target, so the front stopped at
+            // its exact middle). The drawn length is the
+            // canonical 200 m, not platformLengthM: the end
+            // ramps live INSIDE the span (6 m each end), and
+            // at 210 m centred the front would stand 10 m
+            // inside the drawn end while the span overhung
+            // the canonical ends the scoring and the boards
+            // use. The target-centred span survives only as
+            // the fallback for variants the manifest has no
+            // canonical bounds for (zoo / park / depot).
+            let bounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: buildRouteLengthM)
+            let start = bounds?.start ?? (placement.chainageM - length / 2)
+            let end = bounds?.end ?? (placement.chainageM + length / 2)
+            let stationCenter = bounds.map { ($0.start + $0.end) / 2 } ?? placement.chainageM
             let wide = placement.archetype.contains("terminal") || placement.archetype.contains("major") || placement.archetype == "junction_3platform"
-            let width: Float = wide ? 6.0 : 4.5
             // Track laterals at the station, the same rule the
             // trackbed uses: both tracks on double-track sections,
             // the single running track elsewhere.
-            let midSample = sample(at: placement.chainageM)
+            let midSample = sample(at: stationCenter)
             let isMainlineSection = travelDirection == .up ? midSample.distanceM < 60_000 : midSample.distanceM >= 8_000
             let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
+            let servesLoop = hasPassingTrack && fanCenters.contains(stationCenter)
+            let width: Float = (wide && !servesLoop) ? 6.0 : 4.5
             let trackLaterals: [Float] = hasPassingTrack ? [-2.1, 2.1] : [travelDirection == .up ? -2.1 : 2.1]
+            // batch36 (2026-11-14, user choice): the layout
+            // data gives twelve stations an island platform —
+            // one slab between the two running tracks — but
+            // the loop below only builds side platforms, so
+            // those stations rendered as two side slabs and
+            // data and picture disagreed (the user caught it
+            // at Ishigamiike). On double track an island
+            // station gets the island instead: one slab built
+            // from the -2.1 track's frame with the far face
+            // served too (serveOuterTrack), so both faces
+            // carry the white line and the tactile band. The
+            // slab is 1.16 m wide — the 4.2 m track spacing
+            // minus the standard 1.52 m edge offset on both
+            // sides — so every point of it stays clear of the
+            // 1.475 m vehicle gauge. Furniture stands once at
+            // the island centre and people wait on both
+            // faces. At island stations with a passing loop,
+            // the loop keeps its own outer platform on the
+            // same 3.62...8.12 footprint today's side
+            // platform gives it, so the loop face stays
+            // served exactly as in batch15. Single-track
+            // sections have no between-tracks space, so the
+            // branch island station (B02) keeps its two side
+            // platforms — recorded in the batch36 report.
+            // batch42: the 1.16 m slab was rejected by the
+            // user, so the tracks themselves spread at island
+            // stations (islandTrackSpread): the slab is built
+            // from the spread -4.0 track's frame and is
+            // 2×(4.0−1.52) = 4.96 m wide, the furniture row
+            // stands at the island centre (u = 4.0 from the
+            // frame track), and the loop platform narrows to
+            // 2.60 m — its loop-side edge keeps the standard
+            // 1.52 m from the loop centre (8.12 m from the
+            // route centre) and its back keeps the same
+            // 1.52 m from the spread mainline centre
+            // (4.0 + 1.52 = 5.52 m), so neither face's trains
+            // can touch it. batch46: the user rejected the
+            // 2.60 m narrowing too, so at these stations the
+            // loop line moves out to 11.54 m and the loop
+            // platform is 4.5 m wide again (see servesLoop).
+            let isIsland = placement.archetype == "island_platform" && placement.platformCount == 1
+            if isIsland && hasPassingTrack {
+                let islandHalfSpacing: Float = 2.1 + islandTrackSpread(at: stationCenter)
+                let islandWidth: Float = 2 * (islandHalfSpacing - 1.52)
+                buildOneStationPlatform(
+                    name: "platform-\(placement.stationId)-island",
+                    start: start, end: end,
+                    trackLateral: -islandHalfSpacing, sideSign: 1, width: islandWidth,
+                    whiteLineMaterial: whiteLineMaterial,
+                    serveOuterTrack: true
+                )
+                buildStationFurniture(
+                    name: "furniture-\(placement.stationId)-island",
+                    centerChainage: stationCenter,
+                    start: start, end: end,
+                    trackLateral: -islandHalfSpacing, sideSign: 1, furnitureU: islandHalfSpacing
+                )
+                addPlatformPeople(stationID: placement.stationId, archetype: placement.archetype, start: start, end: end, trackLateral: -islandHalfSpacing, sideSign: 1, islandStand: true)
+                addPlatformPeople(stationID: placement.stationId, archetype: placement.archetype, start: start, end: end, trackLateral: islandHalfSpacing, sideSign: -1, islandStand: true)
+                if servesLoop {
+                    // batch46 (2026-11-14, user: 「左側のホームが
+                    // 小さくなってんじゃん」): batch42's spread
+                    // narrowed this platform to 2.60 m, so the
+                    // loop itself swings out to the station's
+                    // loop target (11.54 m) and the platform is
+                    // 4.5 m wide again — back at target − 1.52 −
+                    // width = 5.52 m (1.52 m from the spread main
+                    // centre), face at the standard 1.52 m from
+                    // the loop centre. Loop furniture stands
+                    // 0.67 m inside the platform's back, the
+                    // same inset the standard furniture row keeps.
+                    let loopTargetHere = loopTarget(atStationCenter: stationCenter)
+                    let loopPlatformWidth: Float = loopTargetHere - islandHalfSpacing - 3.04
+                    let loopFurnitureU: Float = loopTargetHere - (islandHalfSpacing + 1.52) - 0.67
+                    for side: Float in [-1.0, 1.0] {
+                        buildOneStationPlatform(
+                            name: "platform-\(placement.stationId)-loop-\(Int(side))",
+                            start: start, end: end,
+                            trackLateral: side * loopTargetHere, sideSign: -side, width: loopPlatformWidth,
+                            whiteLineMaterial: whiteLineMaterial
+                        )
+                        buildStationFurniture(
+                            name: "furniture-loop-\(placement.stationId)-\(side)",
+                            centerChainage: stationCenter,
+                            start: start, end: end,
+                            trackLateral: side * loopTargetHere, sideSign: -side, furnitureU: loopFurnitureU
+                        )
+                        addPlatformPeople(stationID: placement.stationId, archetype: placement.archetype, start: start, end: end, trackLateral: side * loopTargetHere, sideSign: -side)
+                    }
+                }
+                continue
+            }
             for trackLateral in trackLaterals {
                 // Double track: a platform outside each track.
                 // Single track: platforms on both sides (the branch
@@ -7548,21 +15587,138 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                         name: "platform-\(placement.stationId)-\(trackLateral)-\(sideSign)",
                         start: start, end: end,
                         trackLateral: trackLateral, sideSign: sideSign, width: width,
-                        whiteLineMaterial: whiteLineMaterial
+                        whiteLineMaterial: whiteLineMaterial,
+                        serveOuterTrack: servesLoop
                     )
                     buildStationFurniture(
                         name: "furniture-\(placement.stationId)-\(trackLateral)-\(sideSign)",
-                        centerChainage: placement.chainageM,
+                        centerChainage: stationCenter,
                         start: start, end: end,
                         trackLateral: trackLateral, sideSign: sideSign
                     )
                     addPlatformPeople(stationID: placement.stationId, archetype: placement.archetype, start: start, end: end, trackLateral: trackLateral, sideSign: sideSign)
+                    if servesLoop {
+                        // batch15: passengers and furniture on the
+                        // loop face too, measured from the loop
+                        // track (lateral ±9.64) back toward the
+                        // platform — a served face, not a wall.
+                        buildStationFurniture(
+                            name: "furniture-loop-\(placement.stationId)-\(sideSign)",
+                            centerChainage: stationCenter,
+                            start: start, end: end,
+                            trackLateral: sideSign * loopTarget(atStationCenter: stationCenter), sideSign: -sideSign
+                        )
+                        addPlatformPeople(stationID: placement.stationId, archetype: placement.archetype, start: start, end: end, trackLateral: sideSign * loopTarget(atStationCenter: stationCenter), sideSign: -sideSign)
+                    }
                 }
+            }
+            if placement.stationId == "S01" && servesLoop {
+                // batch15: the layout data gives the Kaibukuro
+                // terminal 3 platforms; the two loop islands make
+                // two, so a third side platform stands outside
+                // the sea-side loop and serves its outer face —
+                // 3 slabs / 4 tracks, as the data says.
+                let seaSign = seaSideSign(travelDirection: travelDirection)
+                buildOneStationPlatform(
+                    name: "platform-S01-outer",
+                    start: start, end: end,
+                    trackLateral: seaSign * loopTarget(atStationCenter: stationCenter), sideSign: seaSign, width: 3.2,
+                    whiteLineMaterial: whiteLineMaterial
+                )
+                buildStationFurniture(
+                    name: "furniture-S01-outer",
+                    centerChainage: stationCenter,
+                    start: start, end: end,
+                    trackLateral: seaSign * loopTarget(atStationCenter: stationCenter), sideSign: seaSign
+                )
+                addPlatformPeople(stationID: placement.stationId, archetype: placement.archetype, start: start, end: end, trackLateral: seaSign * loopTarget(atStationCenter: stationCenter), sideSign: seaSign)
             }
         }
     }
 
-    private func buildOneStationPlatform(name: String, start: Double, end: Double, trackLateral: Float, sideSign: Float, width: Float, whiteLineMaterial: PhysicallyBasedMaterial) {
+    /// batch15 (2026-11-13, user verdict "全部同じに見える"):
+    /// the per-station landmarks exist, but they sit behind the
+    /// station or 30–80 m off-axis, so the driving view — the
+    /// only view the player gets — registers every station as
+    /// the same platform. These signatures stand at the FAR end
+    /// of the platform, 11–16 m off the centreline on the sea
+    /// side, inside the approach view of every tour photo and
+    /// every real approach: palms for the coastal stations, a
+    /// port crane silhouette for Kisaragawa, a lighthouse for
+    /// the Kamogawa terminus.
+    private func buildPlatformEndSignatures(travelDirection: RegionalTravelDirection) {
+        let seaSign = seaSideSign(travelDirection: travelDirection)
+        let palmGreen = Self.pbr(UIColor(red: 0.25, green: 0.55, blue: 0.30, alpha: 1), roughness: 1)
+        let trunkMat = Self.pbr(UIColor(red: 0.45, green: 0.36, blue: 0.26, alpha: 1), roughness: 0.95)
+        func palm(at d: Double, lateral: Float, height: Float, tag: String) {
+            let p = groundOffsetPoint(sample(at: d), lateral: lateral)
+            let trunk = ModelEntity(mesh: FallbackCylinderMesh.make(height: height, radius: 0.15), materials: [trunkMat])
+            trunk.name = "signature-palm-trunk-\(tag)"
+            trunk.position = SIMD3<Float>(p.x, p.y + height / 2, p.z)
+            trunk.orientation = simd_quatf(angle: 0.10, axis: SIMD3<Float>(0, 0, 1)) * simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0))
+            world.addChild(trunk)
+            for f in 0..<6 {
+                let frond = ModelEntity(mesh: MeshResource.generateBox(size: SIMD3<Float>(0.16, 0.04, 2.3)), materials: [palmGreen])
+                frond.name = "signature-palm-frond-\(tag)-\(f)"
+                let yaw = Float(f) / 6 * Float.pi * 2
+                frond.position = SIMD3<Float>(p.x + sin(yaw) * 0.9, p.y + height + 0.15, p.z - cos(yaw) * 0.9)
+                frond.orientation = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0)) * simd_quatf(angle: 0.5, axis: SIMD3<Float>(1, 0, 0))
+                world.addChild(frond)
+            }
+        }
+        for placement in stationModelPlacements {
+            // batch75: end signatures centre on the canonical
+            // station centre, not the stop target.
+            let c = canonicalStationCenter(stationId: placement.stationId, fallback: placement.chainageM)
+            switch placement.stationId {
+            case "S19", "S21", "S25", "S26", "S27":
+                // batch46: at a widened island station (S19)
+                // the loop line runs at 11.54 m on the sea side
+                // too, and a palm trunk at 12.5 m would stand
+                // inside its vehicle gauge (outer edge
+                // 13.02 m) — the row steps out to target +
+                // 2.2 m at such a station, unchanged elsewhere.
+                var palmBase: Float = 12.5
+                if loopTarget(atStationCenter: c) > 9.64 {
+                    palmBase = loopTarget(atStationCenter: c) + 2.2
+                }
+                for i in 0..<3 {
+                    palm(at: c + 55 + Double(i) * 17, lateral: seaSign * (palmBase + Float(i % 2) * 2.5), height: 5.4 + Float(i) * 0.5, tag: "\(placement.stationId)-\(i)")
+                }
+            case "S22":
+                for i in 0..<2 {
+                    palm(at: c + 52 + Double(i) * 19, lateral: seaSign * (12.5 + Float(i) * 2.0), height: 5.6, tag: "S22-\(i)")
+                }
+                // Port crane silhouette at the platform end:
+                // two legs, a top beam and a short boom, 13 m
+                // tall — the port of Kisarazu in one glance.
+                let craneMat = Self.pbr(UIColor(red: 0.30, green: 0.36, blue: 0.42, alpha: 1), metallic: 0.5, roughness: 0.5)
+                for legAlong: Double in [-4.5, 4.5] {
+                    let lp = groundOffsetPoint(sample(at: c + 78 + legAlong), lateral: seaSign * 14)
+                    _ = addBox(parent: world, name: "signature-crane-leg", size: SIMD3<Float>(0.8, 13, 0.8), position: SIMD3<Float>(lp.x, lp.y + 6.5, lp.z), material: craneMat, orientation: simd_quatf(angle: -sample(at: c + 78).heading, axis: SIMD3<Float>(0, 1, 0)))
+                }
+                let topP = groundOffsetPoint(sample(at: c + 78), lateral: seaSign * 14)
+                _ = addBox(parent: world, name: "signature-crane-top", size: SIMD3<Float>(1.4, 1.4, 11), position: SIMD3<Float>(topP.x, topP.y + 13, topP.z), material: craneMat, orientation: simd_quatf(angle: -sample(at: c + 78).heading, axis: SIMD3<Float>(0, 1, 0)))
+                _ = addBox(parent: world, name: "signature-crane-boom", size: SIMD3<Float>(16, 1.0, 1.8), position: SIMD3<Float>(topP.x, topP.y + 13.4, topP.z), material: craneMat, orientation: simd_quatf(angle: -sample(at: c + 78).heading, axis: SIMD3<Float>(0, 1, 0)))
+            case "S28":
+                for i in 0..<3 {
+                    palm(at: c + 50 + Double(i) * 16, lateral: seaSign * (12.5 + Float(i % 2) * 2.5), height: 5.8, tag: "S28-\(i)")
+                }
+                // Lighthouse just past the platform end.
+                let lp = groundOffsetPoint(sample(at: c + 95), lateral: seaSign * 15)
+                let light = ModelEntity(mesh: FallbackCylinderMesh.make(height: 9.5, radius: 1.35), materials: [Self.pbr(.white, roughness: 0.7)])
+                light.name = "signature-lighthouse"
+                light.position = SIMD3<Float>(lp.x, lp.y + 4.75, lp.z)
+                world.addChild(light)
+                _ = addBox(parent: world, name: "signature-lighthouse-band", size: SIMD3<Float>(2.78, 1.1, 2.78), position: SIMD3<Float>(lp.x, lp.y + 6.4, lp.z), material: Self.pbr(UIColor(red: 0.75, green: 0.20, blue: 0.16, alpha: 1), roughness: 0.6), orientation: simd_quatf(angle: -sample(at: c + 95).heading, axis: SIMD3<Float>(0, 1, 0)))
+                _ = addBox(parent: world, name: "signature-lighthouse-lamp", size: SIMD3<Float>(1.5, 1.2, 1.5), position: SIMD3<Float>(lp.x, lp.y + 9.9, lp.z), material: Self.pbr(UIColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1), roughness: 0.4), orientation: simd_quatf(angle: -sample(at: c + 95).heading, axis: SIMD3<Float>(0, 1, 0)))
+            default:
+                break
+            }
+        }
+    }
+
+    private func buildOneStationPlatform(name: String, start: Double, end: Double, trackLateral: Float, sideSign: Float, width: Float, whiteLineMaterial: PhysicallyBasedMaterial, serveOuterTrack: Bool = false) {
         let edgeOffset: Float = 1.52
         let topFull: Float = 0.3065 + 1.10
         let rampLength = 6.0
@@ -7671,6 +15827,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         topStrip(name: "\(name)-tactile", innerU: tactileInner, outerU: tactileInner + 0.30, lift: 0.012, material: tactileMaterial)
         topStrip(name: "\(name)-whiteline", innerU: edgeOffset + 0.08, outerU: edgeOffset + 0.18, lift: 0.006, material: whiteLineMaterial)
+        if serveOuterTrack {
+            // batch15: this platform's outer face serves the
+            // loop track 1.52 m beyond it, so it gets the same
+            // safety line and tactile band on that edge — the
+            // visible difference between a platform that serves
+            // the outer track and a wall that merely hides it.
+            topStrip(name: "\(name)-tactile-outer", innerU: edgeOffset + width - 0.60, outerU: edgeOffset + width - 0.30, lift: 0.012, material: tactileMaterial)
+            topStrip(name: "\(name)-whiteline-outer", innerU: edgeOffset + width - 0.18, outerU: edgeOffset + width - 0.08, lift: 0.006, material: whiteLineMaterial)
+        }
     }
 
     // MARK: quality29 procedural station furniture
@@ -7767,7 +15932,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// station core stays clear: footbridge stairs land within
     /// +/-2.5 m of the centre and the GLB station building spans
     /// local X -19...-9 on one side, so no bench goes at -17 m.
-    private func buildStationFurniture(name: String, centerChainage: Double, start: Double, end: Double, trackLateral: Float, sideSign: Float) {
+    /// The furniture row stands at u = furnitureU from the
+    /// served track's centre (the bench), with the vending
+    /// machine and bin 0.10 further out and the departure
+    /// board 0.15 further out. The default 5.35 is the back of
+    /// a standard side platform; island platforms pass the
+    /// spread half-spacing (batch42: 4.0, the island centre
+    /// measured from the spread -4.0 track), so the row
+    /// stands mid-island facing that face. The loop platforms
+    /// at island stations pass 3.45 (batch42), keeping the
+    /// row 0.67 m inside their narrowed back.
+    private func buildStationFurniture(name: String, centerChainage: Double, start: Double, end: Double, trackLateral: Float, sideSign: Float, furnitureU: Float = 5.35) {
         let topV: Float = 0.3065 + 1.10
         func topPoint(at chainage: Double, u: Float, v: Float) -> SIMD3<Float> {
             let station = profileStation(at: chainage, trackLateral: trackLateral)
@@ -7790,7 +15965,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let chainage = centerChainage + offset
                 guard chainage >= start + 9, chainage <= end - 9 else { continue }
                 let q = orientation(at: chainage)
-                let position = topPoint(at: chainage, u: sideSign * 5.35, v: topV)
+                let position = topPoint(at: chainage, u: sideSign * furnitureU, v: topV)
                 let wood = ModelEntity(mesh: meshes.wood, materials: [woodMaterial])
                 wood.name = "\(name)-bench-wood-\(Int(offset))"
                 wood.position = position
@@ -7809,16 +15984,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         if vendingChainage <= end - 9 {
             let q = orientation(at: vendingChainage)
             _ = addBox(parent: world, name: "\(name)-vending", size: SIMD3<Float>(0.62, 1.9, 1.05),
-                       position: topPoint(at: vendingChainage, u: sideSign * 5.45, v: topV + 0.95),
+                       position: topPoint(at: vendingChainage, u: sideSign * (furnitureU + 0.10), v: topV + 0.95),
                        material: vendingBodyMaterial, orientation: q)
             _ = addBox(parent: world, name: "\(name)-vending-front", size: SIMD3<Float>(0.04, 1.35, 0.88),
-                       position: topPoint(at: vendingChainage, u: sideSign * 5.45 - sideSign * 0.32, v: topV + 1.02),
+                       position: topPoint(at: vendingChainage, u: sideSign * (furnitureU + 0.10) - sideSign * 0.32, v: topV + 1.02),
                        material: glassMaterial, orientation: q)
         }
         let binChainage = centerChainage + 14.3
         if binChainage <= end - 9 {
             _ = addBox(parent: world, name: "\(name)-bin", size: SIMD3<Float>(0.45, 0.6, 0.45),
-                       position: topPoint(at: binChainage, u: sideSign * 5.45, v: topV + 0.3),
+                       position: topPoint(at: binChainage, u: sideSign * (furnitureU + 0.10), v: topV + 0.3),
                        material: binMaterial, orientation: orientation(at: binChainage))
         }
         // Departure board (quality41 final): a pole-mounted board
@@ -7831,15 +16006,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 let q = orientation(at: boardChainage)
                 let poleMaterial = Self.pbr(UIColor(red: 0.25, green: 0.26, blue: 0.28, alpha: 1), metallic: 0.5, roughness: 0.5)
                 _ = addBox(parent: world, name: "\(name)-departure-pole", size: SIMD3<Float>(0.09, 2.5, 0.09),
-                           position: topPoint(at: boardChainage, u: sideSign * 5.5, v: topV + 1.25),
+                           position: topPoint(at: boardChainage, u: sideSign * (furnitureU + 0.15), v: topV + 1.25),
                            material: poleMaterial, orientation: q)
                 _ = addBox(parent: world, name: "\(name)-departure-board", size: SIMD3<Float>(0.08, 0.62, 1.9),
-                           position: topPoint(at: boardChainage, u: sideSign * 5.5, v: topV + 2.62),
+                           position: topPoint(at: boardChainage, u: sideSign * (furnitureU + 0.15), v: topV + 2.62),
                            material: Self.pbr(UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1), roughness: 0.4), orientation: q)
                 let bandMaterial = Self.pbr(UIColor(red: 0.96, green: 0.89, blue: 0.62, alpha: 1), roughness: 0.35)
                 for bandV: Float in [2.74, 2.50] {
                     _ = addBox(parent: world, name: "\(name)-departure-band", size: SIMD3<Float>(0.02, 0.15, 1.7),
-                               position: topPoint(at: boardChainage, u: sideSign * 5.5 - sideSign * 0.05, v: topV + bandV),
+                               position: topPoint(at: boardChainage, u: sideSign * (furnitureU + 0.15) - sideSign * 0.05, v: topV + bandV),
                                material: bandMaterial, orientation: q)
                 }
             }
@@ -7895,20 +16070,38 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let loopCenters = Set(throatFanSpecs().map { $0.center })
 
         for (stationIndex, placement) in stationModelPlacements.enumerated() {
-            let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
-            let start = placement.chainageM - length / 2
-            let end = placement.chainageM + length / 2
+            let fallbackLength = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
+            // batch75: the forecourt band spans the canonical
+            // platform (start / end / length / centre all
+            // canonical), matching the drawn slab and the
+            // frontage rows; the target-centred span survives
+            // only as the no-canonical-bounds fallback.
+            let bounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: buildRouteLengthM)
+            let start = bounds?.start ?? (placement.chainageM - fallbackLength / 2)
+            let end = bounds?.end ?? (placement.chainageM + fallbackLength / 2)
+            let length = end - start
+            let stationCenter = bounds.map { ($0.start + $0.end) / 2 } ?? placement.chainageM
             let wide = placement.archetype.contains("terminal") || placement.archetype.contains("major") || placement.archetype == "junction_3platform"
             let width: Float = wide ? 6.0 : 4.5
-            let isLoopStation = loopCenters.contains(placement.chainageM)
-            let midSample = sample(at: placement.chainageM)
+            let isLoopStation = loopCenters.contains(stationCenter)
+            let isIsland = placement.archetype == "island_platform" && placement.platformCount == 1
+            let midSample = sample(at: stationCenter)
             let isMainlineSection = travelDirection == .up ? midSample.distanceM < 60_000 : midSample.distanceM >= 8_000
             let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
+            // batch46: at a widened island + loop station the
+            // whole forecourt band keys off the loop platform's
+            // new back edge — width is set so backLateral lands
+            // exactly on target − 1.52 (10.02 m): the back fence
+            // stands on the widened platform, the vending
+            // machine keeps its 0.75 m inset, and the shelter /
+            // car rows keep the same clearances to the moved
+            // loop gauge they keep at a standard station.
+            let sideWidth: Float = (isIsland && isLoopStation && hasPassingTrack) ? loopTarget(atStationCenter: stationCenter) - 5.14 : width
             let trackLaterals: [Float] = hasPassingTrack ? [-2.1, 2.1] : [travelDirection == .up ? -2.1 : 2.1]
             for trackLateral in trackLaterals {
                 let sides: [Float] = hasPassingTrack ? [trackLateral < 0 ? -1.0 : 1.0] : [-1.0, 1.0]
                 for sideSign in sides {
-                    let backU: Float = 1.52 + width
+                    let backU: Float = 1.52 + sideWidth
                     let backLateral = trackLateral + sideSign * backU
 
                     // -- Forecourt paving, stepped every 8.5 m in
@@ -7930,27 +16123,37 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // posts every 4.25 m with a top and mid rail,
                     // standing on the platform's back edge (the
                     // benches at u = 5.35 sit just in front of it).
-                    let fenceU = sideSign * (backU - 0.15)
-                    let fenceRuns: [(Double, Double)] = [(start, placement.chainageM - 22), (placement.chainageM + 22, end)]
-                    for run in fenceRuns {
-                        var previousTop: SIMD3<Float>? = nil
-                        var previousMid: SIMD3<Float>? = nil
-                        var fd = run.0
-                        while fd <= run.1 {
-                            let station = profileStation(at: fd, trackLateral: trackLateral)
-                            let axisZ = simd_cross(station.xAxis, station.yAxis)
-                            let ramp = Float(min(min(fd - start, end - fd) / 6.0, 1))
-                            let top = 0.30 + (topFull - 0.30) * max(ramp, 0)
-                            let base = station.center + station.xAxis * fenceU + station.yAxis * top
-                            let postTop = base + station.yAxis * 0.95
-                            fenceBatch.addBoxAxes(center: base + station.yAxis * 0.475, size: SIMD3<Float>(0.07, 0.95, 0.07), ax: station.xAxis, ay: station.yAxis, az: axisZ)
-                            if let prevTop = previousTop, let prevMid = previousMid {
-                                fenceBatch.addSegment(from: prevTop, to: postTop, thickness: 0.05)
-                                fenceBatch.addSegment(from: prevMid, to: base + station.yAxis * 0.55, thickness: 0.04)
+                    // batch36: at island stations without a loop
+                    // line there is no outer platform back — the
+                    // posts would hover at platform height over
+                    // the trackside ground — so the fence is
+                    // skipped there. At island stations with a
+                    // loop line it stands on the loop platform
+                    // at the same lateral as today's
+                    // side-platform back, and stays.
+                    if !(isIsland && !isLoopStation) {
+                        let fenceU = sideSign * (backU - 0.15)
+                        let fenceRuns: [(Double, Double)] = [(start, stationCenter - 22), (stationCenter + 22, end)]
+                        for run in fenceRuns {
+                            var previousTop: SIMD3<Float>? = nil
+                            var previousMid: SIMD3<Float>? = nil
+                            var fd = run.0
+                            while fd <= run.1 {
+                                let station = profileStation(at: fd, trackLateral: trackLateral)
+                                let axisZ = simd_cross(station.xAxis, station.yAxis)
+                                let ramp = Float(min(min(fd - start, end - fd) / 6.0, 1))
+                                let top = 0.30 + (topFull - 0.30) * max(ramp, 0)
+                                let base = station.center + station.xAxis * fenceU + station.yAxis * top
+                                let postTop = base + station.yAxis * 0.95
+                                fenceBatch.addBoxAxes(center: base + station.yAxis * 0.475, size: SIMD3<Float>(0.07, 0.95, 0.07), ax: station.xAxis, ay: station.yAxis, az: axisZ)
+                                if let prevTop = previousTop, let prevMid = previousMid {
+                                    fenceBatch.addSegment(from: prevTop, to: postTop, thickness: 0.05)
+                                    fenceBatch.addSegment(from: prevMid, to: base + station.yAxis * 0.55, thickness: 0.04)
+                                }
+                                previousTop = postTop
+                                previousMid = base + station.yAxis * 0.55
+                                fd += 4.25
                             }
-                            previousTop = postTop
-                            previousMid = base + station.yAxis * 0.55
-                            fd += 4.25
                         }
                     }
 
@@ -7960,7 +16163,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // the platform-back fence leaves for the station
                     // core. Flap panels, a coloured top lamp per unit.
                     if wide {
-                        let gateFrame = profileStation(at: placement.chainageM, trackLateral: trackLateral)
+                        let gateFrame = profileStation(at: stationCenter, trackLateral: trackLateral)
                         let gateAxisZ = simd_cross(gateFrame.xAxis, gateFrame.yAxis)
                         let gateBasis = simd_quatf(simd_float3x3(gateFrame.xAxis, gateFrame.yAxis, gateAxisZ))
                         let gateCenter = gateFrame.center + gateFrame.xAxis * (sideSign * (backU + (isLoopStation ? 5.6 : 1.25))) + gateFrame.yAxis * 0.03
@@ -7988,7 +16191,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // two rows of rack bars. The GLB station
                     // building spans centre -19...-9 on one side,
                     // so the +end stays clear on both sides.
-                    let shelterFrame = profileStation(at: placement.chainageM + length * 0.32, trackLateral: 0)
+                    let shelterFrame = profileStation(at: stationCenter + length * 0.32, trackLateral: 0)
                     let shelterAxisZ = simd_cross(shelterFrame.xAxis, shelterFrame.yAxis)
                     let shelterCenter = shelterFrame.center + shelterFrame.xAxis * (backLateral + sideSign * 4.7)
                     shelterBatch.addBoxAxes(center: shelterCenter + shelterFrame.yAxis * 2.25, size: SIMD3<Float>(3.4, 0.09, 6.4), ax: shelterFrame.xAxis, ay: shelterFrame.yAxis, az: shelterAxisZ)
@@ -8013,7 +16216,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // lateral band by construction.
                     for (buildingIndex, fraction) in [(-0.58), (0.58)].enumerated() {
                         let seed = stationIndex * 7 + buildingIndex * 3 + (sideSign > 0 ? 1 : 0) + (trackLateral > 0 ? 2 : 0)
-                        let bSample = sample(at: placement.chainageM + length * fraction)
+                        let bSample = sample(at: stationCenter + length * fraction)
                         let bWidth: Float = 11 + Float(seed % 3) * 1.6
                         let bDepth: Float = 7.5 + Float((seed / 3) % 2) * 1.5
                         var bHeight: Float = 9 + Float((seed * 29) % 70) / 10
@@ -8049,13 +16252,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // loop line itself, so the machine stands on
                     // the platform back instead (2026-11-11).
                     if isLoopStation {
-                        let vFrame = profileStation(at: placement.chainageM - length * 0.32, trackLateral: trackLateral)
+                        let vFrame = profileStation(at: stationCenter - length * 0.32, trackLateral: trackLateral)
                         let vAxisZ = simd_cross(vFrame.xAxis, vFrame.yAxis)
                         let vBasis = simd_quatf(simd_float3x3(vFrame.xAxis, vFrame.yAxis, vAxisZ))
                         let vPos = vFrame.center + vFrame.xAxis * (sideSign * (backU - 0.75)) + vFrame.yAxis * (topFull + 0.925)
                         _ = addBox(parent: world, name: "station-vending-\(stationIndex)-\(Int(trackLateral))-\(Int(sideSign))", size: SIMD3<Float>(0.65, 1.85, 1.1), position: vPos, material: vendingFacadeMaterial, orientation: vBasis)
                     } else {
-                        let vSample = sample(at: placement.chainageM - length * 0.32)
+                        let vSample = sample(at: stationCenter - length * 0.32)
                         let vLateral = backLateral + sideSign * 2.2
                         let vx = vSample.x + vLateral * cos(vSample.heading)
                         let vz = vSample.z + vLateral * sin(vSample.heading)
@@ -8064,11 +16267,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // Pedestrian crossing over the loop line on
                     // the station walkway (loop stations): a low
                     // slab between the rails, top below rail head.
+                    // batch46: the slab centres on the loop line
+                    // itself, so it follows the station's loop
+                    // target (offset 7.54 m from the running
+                    // track at a standard station, 9.44 m at a
+                    // widened one).
                     if isLoopStation {
-                        let cFrame = profileStation(at: placement.chainageM, trackLateral: trackLateral)
+                        let cFrame = profileStation(at: stationCenter, trackLateral: trackLateral)
                         let cAxisZ = simd_cross(cFrame.xAxis, cFrame.yAxis)
                         let cBasis = simd_quatf(simd_float3x3(cFrame.xAxis, cFrame.yAxis, cAxisZ))
-                        let cPos = cFrame.center + cFrame.xAxis * (sideSign * 7.54) + cFrame.yAxis * 0.24
+                        let cPos = cFrame.center + cFrame.xAxis * (sideSign * (loopTarget(atStationCenter: stationCenter) - 2.1)) + cFrame.yAxis * 0.24
                         _ = addBox(parent: world, name: "station-loop-crossing-\(stationIndex)-\(Int(sideSign))", size: SIMD3<Float>(5.4, 0.05, 2.4), position: cPos, material: concreteMaterial, orientation: cBasis)
                     }
 
@@ -8092,7 +16300,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                             addParkedCar(name: "station-car-\(stationIndex)-\(Int(sideSign))-\(carI)", center: SIMD3<Float>(cx, parkSample.elevationM + 0.06, cz), groundY: parkSample.elevationM + 0.06, yaw: -carSample.heading + Float.pi / 2, seed: stationIndex * 13 + carI * 3 + (sideSign > 0 ? 1 : 0))
                         }
                     }
-                    let busSample = sample(at: placement.chainageM + length * 0.18)
+                    let busSample = sample(at: stationCenter + length * 0.18)
                     let busLateral = backLateral + sideSign * 11.7
                     let busX = busSample.x + busLateral * cos(busSample.heading)
                     let busZ = busSample.z + busLateral * sin(busSample.heading)
@@ -8124,7 +16332,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     // -- Trees between the forecourt and the
                     // frontage buildings.
                     for treeIndex in 0..<3 {
-                        let tSample = sample(at: placement.chainageM + length * (Double(treeIndex) - 1) * 0.30)
+                        let tSample = sample(at: stationCenter + length * (Double(treeIndex) - 1) * 0.30)
                         let tLateral = backLateral + sideSign * 12.3
                         let tx = tSample.x + tLateral * cos(tSample.heading)
                         let tz = tSample.z + tLateral * sin(tSample.heading)
@@ -8278,6 +16486,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             case .levelCrossing:
                 let sample = sample(at: (landmark.startChainageM + landmark.endChainageM) * 0.5)
                 let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
+                // batch88: the landmark crossing wears the same
+                // visual language as buildOneCrossing — striped
+                // base collar, crossbuck, twin red lamps in a
+                // housing, and the raised arm in the hazard-
+                // stripe texture instead of roof paint. The arm
+                // stays raised: these crossings do not interlock.
+                var landmarkLens = PhysicallyBasedMaterial()
+                landmarkLens.baseColor = .init(tint: UIColor(red: 0.4, green: 0.04, blue: 0.04, alpha: 1))
+                landmarkLens.emissiveColor = .init(color: UIColor(red: 1, green: 0.12, blue: 0.08, alpha: 1))
+                landmarkLens.emissiveIntensity = 1.6
+                let landmarkYellow = Self.pbr(UIColor(red: 0.93, green: 0.72, blue: 0.1, alpha: 1), roughness: 0.55)
+                let lateralVec = SIMD3<Float>(cos(sample.heading), 0, sin(sample.heading))
+                let alongVec = SIMD3<Float>(-sin(sample.heading), 0, cos(sample.heading))
                 for side in [-1.0, 1.0] {
                     let approach = routeOffsetPoint(sample, lateral: Float(side) * 8.0)
                     addSurfaceBox(parent: world, name: "\(landmark.id)-approach-\(Int(side))",
@@ -8288,8 +16509,23 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let post = routeOffsetPoint(sample, lateral: Float(side) * 4.3)
                     addBox(parent: world, name: "\(landmark.id)-post-\(Int(side))", size: SIMD3<Float>(0.16, 2.3, 0.16),
                            position: SIMD3<Float>(post.x, post.y + 1.15, post.z), material: poleMaterial)
+                    addBox(parent: world, name: "\(landmark.id)-base-\(Int(side))", size: SIMD3<Float>(0.3, 0.45, 0.3),
+                           position: SIMD3<Float>(post.x, post.y + 0.22, post.z), material: crossingStripeMaterial, orientation: yaw)
+                    addBox(parent: world, name: "\(landmark.id)-housing-\(Int(side))", size: SIMD3<Float>(0.14, 0.3, 0.5),
+                           position: SIMD3<Float>(post.x, post.y + 1.45, post.z), material: poleMaterial, orientation: yaw)
+                    for lampIndex in 0..<2 {
+                        let lampDz: Float = lampIndex == 0 ? -0.13 : 0.13
+                        let lampPos = SIMD3<Float>(post.x, post.y + 1.45, post.z) + lateralVec * (Float(side) * 0.10) + alongVec * lampDz
+                        addBox(parent: world, name: "\(landmark.id)-lamp-\(Int(side))-\(lampIndex)", size: SIMD3<Float>(0.06, 0.18, 0.18),
+                               position: lampPos, material: landmarkLens, orientation: yaw)
+                    }
+                    for flip: Float in [1, -1] {
+                        let bladeTilt = simd_quatf(angle: flip * 0.73, axis: SIMD3<Float>(1, 0, 0))
+                        addBox(parent: world, name: "\(landmark.id)-crossbuck-\(Int(side))-\(Int(flip))", size: SIMD3<Float>(0.04, 1.1, 0.22),
+                               position: SIMD3<Float>(post.x, post.y + 1.95, post.z), material: landmarkYellow, orientation: yaw * bladeTilt)
+                    }
                     addBox(parent: world, name: "\(landmark.id)-raised-arm-\(Int(side))", size: SIMD3<Float>(0.12, 2.15, 0.1),
-                           position: SIMD3<Float>(post.x, post.y + 2.35, post.z), material: roofMaterials[0])
+                           position: SIMD3<Float>(post.x, post.y + 2.35, post.z), material: crossingStripeMaterial)
                 }
             }
         }
@@ -8425,6 +16661,28 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             sample.elevationM,
             sample.z + lateral * sin(sample.heading)
         )
+    }
+
+    /// batch11: a tint-multiplied copy of a shared material —
+    /// the per-building weathering mechanism. Materials are
+    /// value types here, so the copy keeps the texture, normal
+    /// map and roughness of the original and only darkens /
+    /// shifts its base-colour tint (the same trick the quality32
+    /// office pool uses with stored variants, but derived at
+    /// build time so every facade pool can offer the same three
+    /// age grades: clean / settled / weathered). Falls back to
+    /// the unmodified material if the tint is not an RGB colour.
+    private func tintVariant(_ material: PhysicallyBasedMaterial, multiply grade: (Float, Float, Float)) -> PhysicallyBasedMaterial {
+        var copy = material
+        let base = material.baseColor
+        var r: CGFloat = 1
+        var g: CGFloat = 1
+        var b: CGFloat = 1
+        var a: CGFloat = 1
+        if base.tint.getRed(&r, green: &g, blue: &b, alpha: &a) {
+            copy.baseColor = .init(tint: UIColor(red: r * CGFloat(grade.0), green: g * CGFloat(grade.1), blue: b * CGFloat(grade.2), alpha: a), texture: base.texture)
+        }
+        return copy
     }
 
     private func stableIndex(_ value: String, count: Int) -> Int {
@@ -8612,7 +16870,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             while d <= last.distanceM {
                 let available = availableOffsets(sample(at: d))
                 if available.contains(trackOffset) {
-                    let station = profileStation(at: d, trackLateral: trackOffset)
+                    // batch42: rails and shoulders follow the
+                    // island spread station by station.
+                    let station = profileStation(at: d, trackLateral: spreadTrackLateral(trackOffset, at: d))
                     if let previous = run.last, station.distanceM - previous.distanceM > 600 {
                         let bridge = previous
                         flushRun()
@@ -8626,6 +16886,156 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             flushRun()
         }
+    }
+
+    /// batch42 (2026-11-14, user verdict on the batch36 photos:
+    /// "こんな極端に細いホームがあるわけないだろ"): batch36's
+    /// island slabs were 1.16 m wide because the running tracks
+    /// sit 4.2 m apart everywhere (±2.1) and the standard 1.52 m
+    /// edge offset on both sides leaves only 4.2 − 2×1.52. Real
+    /// island stations flare the tracks apart through the
+    /// station, so the drawing layer does the same: at the
+    /// eleven island stations (S03・S05・S07・S09・S11・S14・
+    /// S16・S19・S21・S24・S26 — the batch36 set, same rule as
+    /// buildStationPlatforms) each running track moves 1.9 m
+    /// outward across a 200 m cosine ramp on each side of the
+    /// platform span, giving an 8.0 m track spacing (±4.0) and a
+    /// 2×(4.0−1.52) = 4.96 m island. This is drawing only: the
+    /// physics profile, station chainages and stop scoring are
+    /// untouched, and every drawn element that follows a track
+    /// (trackbed, rails, sleepers, trains, signals, catenary,
+    /// markers) takes its lateral through islandTrackSpread /
+    /// spreadTrackLateral so the whole station area agrees.
+    private func computeIslandSpreadZones(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        var zones: [(start: Double, end: Double)] = []
+        // batch46: island stations that also carry a passing
+        // loop (the throat-fan set) swing the loop out to
+        // 11.54 m — the loop platform's back stays 1.52 m from
+        // the spread main line centre (5.52 m) and its width
+        // returns to 4.5 m (outer edge 10.02 m, the standard
+        // 1.52 m short of the loop centre), with the network's
+        // 0.045 m end margins against both vehicle gauges.
+        let fanCenters = Set(throatFanSpecs().map { $0.center })
+        var loopTargets: [Double: Float] = [:]
+        for placement in stationModelPlacements {
+            guard placement.archetype == "island_platform", placement.platformCount == 1 else { continue }
+            // The same section rule buildStationPlatforms uses
+            // to decide the island is really built: single-track
+            // sections (the branch island station B02 among
+            // them) have no between-tracks space and never
+            // spread.
+            // batch75: the spread zone is the canonical
+            // platform span (the drawn span — the tracks must
+            // be at full spread exactly where the island slab
+            // stands) and the loop target keys on the
+            // canonical centre, matching the fan specs and
+            // every loopTarget lookup.
+            let bounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: buildRouteLengthM)
+            let stationCenter = bounds.map { ($0.start + $0.end) / 2 } ?? placement.chainageM
+            let midSample = sample(at: stationCenter)
+            let isMainlineSection = travelDirection == .up ? midSample.distanceM < 60_000 : midSample.distanceM >= 8_000
+            let hasPassingTrack = routeVariant == .mainline || (routeVariant == .throughBranch && isMainlineSection)
+            guard hasPassingTrack else { continue }
+            let length = platformLengthM(stationId: placement.stationId, archetype: placement.archetype)
+            zones.append((start: bounds?.start ?? (placement.chainageM - length / 2), end: bounds?.end ?? (placement.chainageM + length / 2)))
+            if fanCenters.contains(stationCenter) {
+                loopTargets[stationCenter] = 11.54
+            }
+        }
+        islandSpreadZones = zones
+        loopTargetLaterals = loopTargets
+    }
+
+    /// Outward shift (metres) of each running track at a
+    /// chainage: 1.9 inside an island station's platform span,
+    /// cosine-smoothstepped over the 200 m before and after it,
+    /// 0 elsewhere. Zones never overlap (stations are ~2.2 km
+    /// apart); if they ever did, the largest weight wins.
+    private func islandTrackSpread(at chainage: Double) -> Float {
+        var best: Double = 0
+        for zone in islandSpreadZones {
+            let weight: Double
+            if chainage >= zone.start && chainage <= zone.end {
+                weight = 1
+            } else if chainage > zone.start - 200 && chainage < zone.start {
+                let u = (chainage - (zone.start - 200)) / 200
+                weight = 0.5 - 0.5 * cos(Double.pi * u)
+            } else if chainage > zone.end && chainage < zone.end + 200 {
+                let u = (chainage - zone.end) / 200
+                weight = 0.5 + 0.5 * cos(Double.pi * u)
+            } else {
+                weight = 0
+            }
+            if weight > best { best = weight }
+        }
+        return Float(1.9 * best)
+    }
+
+    /// A signed track-relative lateral moved outward by the
+    /// island spread at a chainage (the sign follows the base
+    /// lateral). Lineside furniture that keeps a fixed offset
+    /// from its track — cable trough, cabinets, fence, posts —
+    /// goes through here too, so it holds its distance from the
+    /// track while the track itself sweeps outward.
+    private func spreadTrackLateral(_ base: Float, at chainage: Double) -> Float {
+        let sign: Float = base < 0 ? -1 : 1
+        return base + sign * islandTrackSpread(at: chainage)
+    }
+
+    /// batch46: the passing loop's target lateral at a
+    /// station (11.54 m at island + loop stations, the
+    /// standard 9.64 m everywhere else). Every fan follower —
+    /// loop rails and trackbed, loop platforms, furniture,
+    /// people, markers, fences, decks and the trains standing
+    /// on the loop — takes its lateral from here, so the
+    /// widened stations agree everywhere.
+    private func loopTarget(atStationCenter center: Double) -> Float {
+        loopTargetLaterals[center] ?? 9.64
+    }
+
+    /// The loop target of the fan station a chainage belongs
+    /// to (platform span or either 340 m fan); 9.64 m away
+    /// from every fan station.
+    private func loopTarget(atChainage chainage: Double) -> Float {
+        for spec in throatFanSpecs() where abs(chainage - spec.center) <= spec.half + 340 {
+            return loopTarget(atStationCenter: spec.center)
+        }
+        return 9.64
+    }
+
+    /// A train's lateral on a siding track (data lateral
+    /// ±9.64): through a widened station's span the loop runs
+    /// at its new target, and the fans thread out to it and
+    /// back. Returns nil away from every fan station, where
+    /// the data lateral stands as-is.
+    private func sidingTrackLateral(_ base: Float, at chainage: Double) -> Float? {
+        let side: Float = base < 0 ? -1 : 1
+        for spec in throatFanSpecs() where abs(chainage - spec.center) <= spec.half + 340 {
+            let target = loopTarget(atStationCenter: spec.center)
+            if chainage < spec.center - spec.half {
+                return side * fanSpreadLateral(base: throatFanLateral(u: (chainage - (spec.center - spec.half - 340)) / 340, tag: "in", target: target), at: chainage)
+            }
+            if chainage > spec.center + spec.half {
+                return side * fanSpreadLateral(base: throatFanLateral(u: (chainage - (spec.center + spec.half)) / 340, tag: "out", target: target), at: chainage)
+            }
+            return side * target
+        }
+        return nil
+    }
+
+    /// batch42: compose the island spread into a throat-fan
+    /// lateral. The fan leaves the running line, so where the
+    /// running line is itself spread the fan's root follows it;
+    /// the spread share tapers to nothing as the fan reaches
+    /// the loop line, which never moves. batch46: the taper is
+    /// measured against the station's loop target (11.54 m at
+    /// the widened island stations), so the root share reaches
+    /// zero exactly at the moved loop line; at 9.64 m stations
+    /// the arithmetic is unchanged.
+    private func fanSpreadLateral(base: Float, at chainage: Double) -> Float {
+        let target = loopTarget(atChainage: chainage)
+        let shift = (base - 2.1) / (target - 2.1)
+        return base + islandTrackSpread(at: chainage) * (1 - shift)
     }
 
     /// quality37: the multi-track stations (the 5-track major
@@ -8649,8 +17059,30 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let extraLoopStations: Set<String> = ["S03", "S04", "S06", "S07", "S09", "S11", "S14", "S15", "S19", "S23", "S24", "S27"]
         var specs: [(center: Double, half: Double)] = []
         for placement in stationModelPlacements {
-            if placement.archetype == "major_5track_4platform" || placement.archetype == "passing_3track_2platform" || extraLoopStations.contains(placement.stationId) {
-                specs.append((center: placement.chainageM, half: platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2))
+            // batch15 (2026-11-13, user verdict): the terminal
+            // (S01 Kaibukuro, terminal_3platform, 4 tracks in the
+            // layout data) and the junction terminus (S28
+            // Kamogawa, junction_3platform, 4 tracks) had NO loop
+            // tracks at all, so both photographed as plain
+            // 2-track stations. They join the fan list: parallel
+            // tracks at ±9.64 through the platform span, fans
+            // merging at the throat(s) the route geometry allows
+            // (spans outside the sampled route are skipped by the
+            // builders' range guards).
+            if placement.archetype == "major_5track_4platform" || placement.archetype == "passing_3track_2platform" || placement.archetype == "terminal_3platform" || placement.archetype == "junction_3platform" || extraLoopStations.contains(placement.stationId) {
+                // batch75: the fan's parallel section IS the
+                // canonical platform span — centre and half
+                // from canonicalPlatformBounds, so the siding
+                // runs parallel exactly alongside the drawn
+                // platform and the fans root at its ends. (Keyed
+                // on the stop target, the siding's parallel run
+                // sat 95 m inside the drawn span and its
+                // approach fan swept through the platform face.)
+                if let bounds = canonicalPlatformBounds(stationId: placement.stationId) {
+                    specs.append((center: (bounds.start + bounds.end) / 2, half: (bounds.end - bounds.start) / 2))
+                } else {
+                    specs.append((center: placement.chainageM, half: platformLengthM(stationId: placement.stationId, archetype: placement.archetype) / 2))
+                }
             }
         }
         return specs
@@ -8676,13 +17108,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
     /// Siding lateral across its 340 m fan span. Since the
     /// passing-wait work (2026-11-11) the loop line runs THROUGH
-    /// the station at 9.64 m — outside the platform, whose outer
-    /// face (platform band ends at 8.12 m) serves the siding with
-    /// the standard 1.52 m clearance. The "in" fan diverges over
-    /// its first 240 m and then holds; the "out" fan holds and
-    /// converges over its last 300 m; between the fans the
-    /// through segment (buildThroatFans) stays at 9.64 m.
-    private func throatFanLateral(u: Double, tag: String) -> Float {
+    /// the station at the loop target — outside the platform,
+    /// whose outer face serves the siding with the standard
+    /// 1.52 m clearance. The "in" fan diverges over its first
+    /// 240 m and then holds; the "out" fan holds and converges
+    /// over its last 300 m; between the fans the through
+    /// segment (buildThroatFans) stays at the target. batch46:
+    /// the target is a parameter — 11.54 m at the widened
+    /// island stations, 9.64 m elsewhere (identical profile).
+    private func throatFanLateral(u: Double, tag: String, target: Float) -> Float {
         func smooth(_ x: Double) -> Double {
             let t = min(max(x, 0), 1)
             return t * t * (3 - 2 * t)
@@ -8693,7 +17127,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         } else {
             shift = 1 - smooth((u - 40.0 / 340.0) / (300.0 / 340.0))
         }
-        return Float(2.1 + 7.54 * shift)
+        return Float(2.1 + Double(target - 2.1) * shift)
     }
 
     private func buildThroatFans(routeVariant: RegionalRouteVariant) {
@@ -8715,6 +17149,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let shoulderRight: [(x: Float, y: Float)] = [(1.72, 0.165), (2.65, 0.03)]
         let zeroOffsets = [Float](repeating: 0, count: samples.count)
         for spec in throatFanSpecs() {
+            // batch46: the widened island stations swing the
+            // whole fan — rails, trackbed, decks, fences — out
+            // to the 11.54 m loop target; the deck widens with
+            // it so the moved trackbed (outer edge 13.84 m) and
+            // the fence line (14.20 m) stay on the slab.
+            let specTarget = loopTarget(atStationCenter: spec.center)
+            let specDeckWidth: Float = specTarget > 9.64 ? 30 : 25
             let spans: [(start: Double, end: Double, tag: String)] = [
                 (start: spec.center - spec.half - 340, end: spec.center - spec.half, tag: "in"),
                 (start: spec.center + spec.half, end: spec.center + spec.half + 340, tag: "out")
@@ -8727,14 +17168,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // Kankumoshi throat the siding would otherwise hang
                 // off the 8.4 m deck edge. At ground level the slab
                 // lies below the formation and stays invisible.
-                if let deck = ribbonEntity(name: "fan-deck-\(Int(spec.center))-\(span.tag)", width: 25, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
+                if let deck = ribbonEntity(name: "fan-deck-\(Int(spec.center))-\(span.tag)", width: specDeckWidth, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
                     world.addChild(deck)
                 }
                 for side: Float in [-1.0, 1.0] {
                     let sideTag = side > 0 ? "r" : "l"
                     let offsets = samples.map { sample -> Float in
                         let u = (min(max(sample.distanceM, span.start), span.end) - span.start) / 340
-                        return side * throatFanLateral(u: u, tag: span.tag)
+                        // batch42: the fan's root follows the
+                        // spread running line (fanSpreadLateral).
+                        return side * fanSpreadLateral(base: throatFanLateral(u: u, tag: span.tag, target: specTarget), at: sample.distanceM)
                     }
                     // 5 mm above the running trackbed so the two
                     // ribbons never z-fight where the siding lies
@@ -8745,10 +17188,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     var stations: [ProfileStation] = []
                     var d = span.start
                     while d < span.end {
-                        stations.append(profileStation(at: d, trackLateral: side * throatFanLateral(u: (d - span.start) / 340, tag: span.tag)))
+                        stations.append(profileStation(at: d, trackLateral: side * fanSpreadLateral(base: throatFanLateral(u: (d - span.start) / 340, tag: span.tag, target: specTarget), at: d)))
                         d += 8.5
                     }
-                    stations.append(profileStation(at: span.end, trackLateral: side * throatFanLateral(u: 1, tag: span.tag)))
+                    stations.append(profileStation(at: span.end, trackLateral: side * fanSpreadLateral(base: throatFanLateral(u: 1, tag: span.tag, target: specTarget), at: span.end)))
                     let prefix = "fan-\(Int(spec.center))-\(span.tag)-\(sideTag)"
                     for railSide: Float in [-0.72, 0.72] {
                         let profile = railProfile.map { (x: $0.x + railSide, y: $0.y) }
@@ -8769,8 +17212,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 }
             }
             // Passing-wait addendum (2026-11-11): the loop line
-            // continues through the station at 9.64 m, outside the
-            // platform — the track the waiting train stands on.
+            // continues through the station at the loop target,
+            // outside the platform — the track the waiting train
+            // stands on. batch46: the target is 11.54 m at the
+            // widened island stations, 9.64 m elsewhere.
             for side: Float in [-1.0, 1.0] {
                 let sideTag = side > 0 ? "r" : "l"
                 let midStart = spec.center - spec.half
@@ -8778,10 +17223,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 if let lo = samples.firstIndex(where: { $0.distanceM >= midStart - 8.5 }),
                    let hi = samples.lastIndex(where: { $0.distanceM <= midEnd + 8.5 }), lo < hi {
                     let range = lo..<(hi + 1)
-                    if let deck = ribbonEntity(name: "fan-mid-deck-\(Int(spec.center))-\(sideTag)", width: 25, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
+                    if let deck = ribbonEntity(name: "fan-mid-deck-\(Int(spec.center))-\(sideTag)", width: specDeckWidth, y: -0.495, tileLength: 12, offsets: zeroOffsets, material: deckMaterial, range: range) {
                         world.addChild(deck)
                     }
-                    let midOffsets = samples.map { _ in side * Float(9.64) }
+                    let midOffsets = samples.map { _ in side * specTarget }
                     if let bed = ribbonEntity(name: "fan-mid-trackbed-\(Int(spec.center))-\(sideTag)", width: 4.6, y: 0.185, tileLength: 5, offsets: midOffsets, material: trackbedMaterial, range: range) {
                         world.addChild(bed)
                     }
@@ -8789,10 +17234,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 var stations: [ProfileStation] = []
                 var d = midStart
                 while d < midEnd {
-                    stations.append(profileStation(at: d, trackLateral: side * Float(9.64)))
+                    stations.append(profileStation(at: d, trackLateral: side * specTarget))
                     d += 8.5
                 }
-                stations.append(profileStation(at: midEnd, trackLateral: side * Float(9.64)))
+                stations.append(profileStation(at: midEnd, trackLateral: side * specTarget))
                 let prefix = "fan-mid-\(Int(spec.center))-\(sideTag)"
                 for railSide: Float in [-0.72, 0.72] {
                     let profile = railProfile.map { (x: $0.x + railSide, y: $0.y) }
@@ -8820,8 +17265,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let atWalkway = abs(segMid - spec.center) < 2.2
                     let atShelter = abs(segMid - (spec.center + spec.half * 2 * 0.32)) < 4.8
                     if !atWalkway && !atShelter {
-                        let f0 = profileStation(at: fd, trackLateral: side * Float(12.3))
-                        let f1 = profileStation(at: min(fd + 8.5, midEnd), trackLateral: side * Float(12.3))
+                        // batch46: the fence keeps its 2.66 m
+                        // standoff from the loop centre, so it
+                        // moves out with a widened target.
+                        let f0 = profileStation(at: fd, trackLateral: side * (specTarget + 2.66))
+                        let f1 = profileStation(at: min(fd + 8.5, midEnd), trackLateral: side * (specTarget + 2.66))
                         let fAxisZ = simd_cross(f0.xAxis, f0.yAxis)
                         let mid = (f0.center + f1.center) / 2
                         for railY: Float in [0.55, 0.95] {
@@ -8840,33 +17288,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
     /// quality37: at Touhama the branch visibly leaves the
     /// terminus. A track peels away from the inland running track
-    /// past the end of the line on fabricated profile stations,
-    /// and buffer stops close both running tracks — the end of
-    /// the main line and the start of the branch finally read as
-    /// a junction instead of the two tracks simply stopping.
+    /// past the end of the line on fabricated profile stations —
+    /// the end of the main line and the start of the branch
+    /// finally read as a junction instead of the two tracks
+    /// simply stopping. (The terminus buffer stops live in
+    /// buildTerminalThroats since batch69.)
     private func buildTerminusDivergence(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
         guard let firstSample = samples.first, let lastSample = samples.last, firstSample.distanceM < lastSample.distanceM else { return }
         guard let terminus = stationModelPlacements.first(where: { $0.archetype == "junction_3platform" }) else { return }
-        let center = terminus.chainageM
+        // batch75: the divergence roots at the rendered end
+        // of the platform — the canonical bound touching the
+        // route extremity — not at the stop target, which
+        // batch74 moved 5 m inside that edge (and which sat
+        // at the platform centre before it).
+        let center: Double
+        if let bounds = canonicalPlatformBounds(stationId: terminus.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM) {
+            center = bounds.end >= route.distanceM - 0.5 ? bounds.end : bounds.start
+        } else {
+            center = terminus.chainageM
+        }
         let inlandSign = -seaSideSign(travelDirection: travelDirection)
-        // Buffer stops on both running tracks, 10 m before the end.
-        var bufferBatch = MeshBatchBuilder()
-        for lateral: Float in [-2.1, 2.1] {
-            let st = profileStation(at: center - 10, trackLateral: lateral)
-            let tangent = -simd_cross(st.xAxis, st.yAxis)
-            for postU: Float in [-0.85, 0.85] {
-                bufferBatch.addBoxAxes(center: st.center + postU * st.xAxis + 0.55 * st.yAxis,
-                                       size: SIMD3<Float>(0.28, 1.1, 0.28), ax: st.xAxis, ay: st.yAxis, az: tangent)
-            }
-            bufferBatch.addBoxAxes(center: st.center + st.yAxis,
-                                   size: SIMD3<Float>(2.4, 0.42, 0.3), ax: st.xAxis, ay: st.yAxis, az: tangent)
-            bufferBatch.addBoxAxes(center: st.center + 0.15 * st.yAxis,
-                                   size: SIMD3<Float>(2.4, 0.3, 0.8), ax: st.xAxis, ay: st.yAxis, az: tangent)
-        }
-        if let buffers = bufferBatch.build(name: "terminus-buffers", material: poleMaterial) {
-            world.addChild(buffers)
-        }
+        // batch69: the single sea-side buffer stop that used
+        // to stand here (batch15) is gone — buildTerminalThroats
+        // now closes all four tracks at both line terminals
+        // with buffer stops past the platform end, so this
+        // builder only draws the diverging branch track.
         // The diverging track: lateral grows with the square of
         // the distance past its root, the way a turnout curve
         // leaves the straight — slow enough at the root to clear
@@ -8886,8 +17333,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let shoulderRight: [(x: Float, y: Float)] = [(1.72, 0.165), (2.65, 0.03)]
         let base = profileStation(at: center - 30, trackLateral: inlandSign * 2.1)
         let tangent = -simd_cross(base.xAxis, base.yAxis)
+        // batch15: the fabricated branch used to start at
+        // centre − 30 m, so it visibly peeled away from the
+        // middle of the platform. It now starts at the centre
+        // (the rendered end of the platform) and only clears
+        // the platform face line well past the station.
         var stations: [ProfileStation] = []
-        var t = 0.0
+        var t = 30.0
         while t <= 330 {
             let lateral = inlandSign * Float(2.1 + (t * t) / 2400.0)
             let c = base.center + Float(t) * tangent + (lateral - inlandSign * 2.1) * base.xAxis
@@ -8917,6 +17369,417 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         if let right = profileStripEntity(name: "branch-shoulder-r", stations: stations, profile: shoulderRight, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
             world.addChild(right)
+        }
+    }
+
+    /// batch69 (2026-11-15, user verdict on the terminals:
+    /// 「2線しかない」「出発信号機がない」): the terminal
+    /// throat rebuild. Why the terminals read as plain
+    /// two-track stations: the layout data gives both S01
+    /// Kaibukuro and S28 Kamogawa four tracks and three
+    /// platforms, but no builder ever laid out a terminal —
+    /// the running lines are a uniform double track from end
+    /// to end, and the only extra rails at the terminals are
+    /// the batch15 passing-loop fans, which merge back into
+    /// the running lines at the throat like any passing loop.
+    /// At the end of the line itself there was nothing: the
+    /// running tracks stopped dead at the last sample, no
+    /// buffer stops (S28 had one, on one track, in the
+    /// mainline variant only), no concourse, no headhouse.
+    /// This builder gives every route-end terminal the full
+    /// treatment in the extrapolated throat past the route
+    /// end (the fabricated-frame technique of
+    /// buildTerminusDivergence; sample(at:) extrapolates the
+    /// end sample's heading and elevation):
+    ///   - the two running tracks extended on rails and
+    ///     trackbed to the end of the platform span, joining
+    ///     the loop tracks the fans already carry there, so
+    ///     the station throat is four tracks end to end;
+    ///   - a buffer stop at the end of all four tracks,
+    ///     where the extended tracks meet the concourse —
+    ///     stopped consists berth on the canonical platform
+    ///     zone in the inner part of the span (their nearest
+    ///     end 22 m inside the line end), so the buffers
+    ///     close the throat well clear of every train;
+    ///   - a paved concourse at platform-top level across the
+    ///     track ends and a headhouse behind it (glass photo
+    ///     facade, brick annexes, concrete roof slab, canopy);
+    ///   - a ballast apron under the whole throat, so the
+    ///     extrapolated ground is ballast, not void;
+    ///   - fixed departure signals (TOO standard 4-aspect A
+    ///     heads, green lit) at the exit end of the three
+    ///     tracks buildSignals does not serve — the player's
+    ///     own departure track gets the live head from
+    ///     buildSignals, whose terminal guard is also fixed
+    ///     in this batch;
+    ///   - on the main line, a crossover between the running
+    ///     lines on the approach side (S-curve track strip,
+    ///     switch stands at both toes), clear of the fan
+    ///     spans, which end 440 m from the station centre
+    ///     (batch75: canonical half 100 + 340 fan; the
+    ///     crossover toes moved out to 560–690 m from the
+    ///     line end to stay clear of them).
+    /// The running paths, track IDs and the fan geometry are
+    /// untouched: everything here is scenery in the throat,
+    /// and the added tracks read as the terminal's platform
+    /// and stabling roads for future shunting.
+    private func buildTerminalThroats(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        guard !samples.isEmpty else { return }
+        let railSteel = Self.pbr(UIColor(red: 0.52, green: 0.57, blue: 0.60, alpha: 1), metallic: 0.85, roughness: 0.36)
+        let runningBand = Self.pbr(UIColor(red: 0.78, green: 0.82, blue: 0.85, alpha: 1), metallic: 0.95, roughness: 0.12)
+        let shoulderMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_ballast", normalName: "normal_ballast")
+        let trackbedMaterial = Self.texturedPBR(.white, roughness: 0.95, textureName: "scenery_trackbed", normalName: "normal_trackbed")
+        let railProfile: [(x: Float, y: Float)] = [
+            (-0.075, 0.145), (0.075, 0.145), (0.075, 0.175), (0.018, 0.185),
+            (0.018, 0.255), (0.037, 0.265), (0.037, 0.305), (-0.037, 0.305),
+            (-0.037, 0.265), (-0.018, 0.255), (-0.018, 0.185), (-0.075, 0.175)
+        ]
+        let bandProfile: [(x: Float, y: Float)] = [(-0.026, 0.3065), (0.026, 0.3065)]
+        let shoulderLeft: [(x: Float, y: Float)] = [(-2.65, 0.03), (-1.72, 0.165)]
+        let shoulderRight: [(x: Float, y: Float)] = [(1.72, 0.165), (2.65, 0.03)]
+        let bufferRedMaterial = Self.pbr(UIColor(red: 0.75, green: 0.16, blue: 0.12, alpha: 1), roughness: 0.6)
+        // batch86: same weathered-steel housing material as
+        // buildSignals (was the same flat near-black PBR).
+        let headMaterial = Self.texturedPBR(UIColor(red: 0.16, green: 0.16, blue: 0.17, alpha: 1), metallic: 0.35, roughness: 0.58, textureName: "scenery_steel")
+        let plateMaterial = Self.pbr(.white, roughness: 0.6)
+        // batch86: cast-concrete foundation blocks, as in
+        // buildSignals.
+        let foundationMaterial = Self.texturedPBR(UIColor(red: 0.62, green: 0.62, blue: 0.60, alpha: 1), roughness: 0.95, textureName: "scenery_concrete", normalName: "normal_concrete")
+        let glassFacadeMaterial = Self.texturedPBR(.white, roughness: 0.4, textureName: "scenery_glass_facade_2")
+        let brickMaterial = Self.texturedPBR(.white, roughness: 0.9, textureName: "scenery_brick_warm")
+        let roofMaterial = Self.texturedPBR(UIColor(red: 0.32, green: 0.33, blue: 0.35, alpha: 1), roughness: 0.9, textureName: "scenery_concrete", normalName: "normal_concrete")
+        let canopyMaterial = Self.texturedPBR(.white, roughness: 0.65, textureName: "scenery_canopy")
+        let apronMaterial = Self.texturedPBR(.white, roughness: 1, textureName: "scenery_ballast", normalName: "normal_ballast")
+
+        func smoothstep(_ u: Double) -> Double {
+            let t = min(max(u, 0), 1)
+            return t * t * (3 - 2 * t)
+        }
+
+        /// One track's worth of strips (trackbed, rail pair
+        /// with running bands, ballast shoulders) along
+        /// fabricated profile stations — the buildThroatFans
+        /// recipe, shared by the running-track extensions and
+        /// the crossover.
+        func trackStrips(prefix: String, stations: [ProfileStation], bedY: Float) {
+            if let bed = profileStripEntity(name: "\(prefix)-bed", stations: stations, profile: [(-2.3, bedY), (2.3, bedY)], closed: false, material: trackbedMaterial, uvVTileLength: 5) {
+                world.addChild(bed)
+            }
+            for railSide: Float in [-0.72, 0.72] {
+                let profile = railProfile.map { (x: $0.x + railSide, y: $0.y) }
+                if let rail = profileStripEntity(name: "\(prefix)-rail-\(railSide)", stations: stations, profile: profile, closed: true, material: railSteel) {
+                    world.addChild(rail)
+                }
+                let band = bandProfile.map { (x: $0.x + railSide, y: $0.y) }
+                if let bandEntity = profileStripEntity(name: "\(prefix)-band-\(railSide)", stations: stations, profile: band, closed: false, material: runningBand) {
+                    world.addChild(bandEntity)
+                }
+            }
+            if let left = profileStripEntity(name: "\(prefix)-shoulder-l", stations: stations, profile: shoulderLeft, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+                world.addChild(left)
+            }
+            if let right = profileStripEntity(name: "\(prefix)-shoulder-r", stations: stations, profile: shoulderRight, closed: false, material: shoulderMaterial, uvVTileLength: 6) {
+                world.addChild(right)
+            }
+        }
+
+        /// A fixed TOO standard 4-aspect A departure head at a
+        /// terminal track's exit end, green lit, built exactly
+        /// like buildSignals' heads but facing the platform:
+        /// departures run from the terminal toward the line, so
+        /// the travel vector is flipped and the lamps look back
+        /// at the waiting driver.
+        /// batch86: these fixed heads are unified onto the
+        /// batch86 placeSignal model — they were the last
+        /// signals still wearing the pre-batch76 flat modeling
+        /// (slab ladder, plate hood, shared near-black glass,
+        /// no foundation). Same parts, same dimensions, in
+        /// this builder's frame: `face` points at the waiting
+        /// driver (lamps, plate), the ladder/platform side is
+        /// -face, and `right` is the lateral axis.
+        func staticDepartureHead(tag: String, at chainage: Double, postLateral: Float, endSign: Double) {
+            let s = sample(at: chainage)
+            let yaw = simd_quatf(angle: -s.heading, axis: SIMD3<Float>(0, 1, 0))
+            let base = routeOffsetPoint(s, lateral: postLateral)
+            let footY = base.y - 0.10
+            let postTop = base.y + 5.62
+            let travel = SIMD3<Float>(sin(s.heading), 0, -cos(s.heading)) * Float(-endSign)
+            let face = SIMD3<Float>(-travel.x, 0, -travel.z)
+            let right = SIMD3<Float>(face.z, 0, -face.x)
+            let footRel = footY - base.y
+            func headPos(faceOffset: Float, y: Float, rightOffset: Float = 0) -> SIMD3<Float> {
+                SIMD3<Float>(base.x + face.x * faceOffset + right.x * rightOffset,
+                             base.y + y,
+                             base.z + face.z * faceOffset + right.z * rightOffset)
+            }
+            _ = addBox(parent: world, name: "terminal-departure-post-\(tag)", size: SIMD3<Float>(0.16, postTop - footY, 0.16),
+                       position: SIMD3<Float>(base.x, (footY + postTop) / 2, base.z), material: poleMaterial, orientation: yaw)
+            // batch86: foundation block, flange and bolts,
+            // base cabinet — as in placeSignal.
+            _ = addBox(parent: world, name: "terminal-departure-foundation-\(tag)", size: SIMD3<Float>(0.70, 0.55, 0.70),
+                       position: SIMD3<Float>(base.x, footY + 0.125, base.z), material: foundationMaterial, orientation: yaw)
+            _ = addBox(parent: world, name: "terminal-departure-baseplate-\(tag)", size: SIMD3<Float>(0.46, 0.06, 0.46),
+                       position: SIMD3<Float>(base.x, footY + 0.43, base.z), material: poleMaterial, orientation: yaw)
+            for boltF: Float in [-0.17, 0.17] {
+                for boltR: Float in [-0.17, 0.17] {
+                    _ = addBox(parent: world, name: "terminal-departure-basebolt-\(tag)-\(Int(boltF * 100))-\(Int(boltR * 100))", size: SIMD3<Float>(0.035, 0.05, 0.035),
+                               position: headPos(faceOffset: boltF, y: footRel + 0.485, rightOffset: boltR), material: headMaterial, orientation: yaw)
+                }
+            }
+            _ = addBox(parent: world, name: "terminal-departure-basecabinet-\(tag)", size: SIMD3<Float>(0.52, 0.78, 0.26),
+                       position: headPos(faceOffset: -0.34, y: footRel + 0.79), material: poleMaterial, orientation: yaw)
+            _ = addBox(parent: world, name: "terminal-departure-basecabinet-panel-\(tag)", size: SIMD3<Float>(0.44, 0.66, 0.015),
+                       position: headPos(faceOffset: -0.475, y: footRel + 0.79), material: headMaterial, orientation: yaw)
+            _ = addBox(parent: world, name: "terminal-departure-backboard-\(tag)", size: SIMD3<Float>(0.74, 1.42, 0.04),
+                       position: SIMD3<Float>(base.x + travel.x * 0.10, base.y + 4.9, base.z + travel.z * 0.10), material: headMaterial, orientation: yaw)
+            _ = addBox(parent: world, name: "terminal-departure-head-\(tag)", size: SIMD3<Float>(0.58, 1.24, 0.17),
+                       position: SIMD3<Float>(base.x, base.y + 4.9, base.z), material: headMaterial, orientation: yaw)
+            // batch86: face plate, rain lip, back door +
+            // latch — as in placeSignal.
+            _ = addBox(parent: world, name: "terminal-departure-faceplate-\(tag)", size: SIMD3<Float>(0.62, 1.28, 0.02),
+                       position: headPos(faceOffset: 0.095, y: 4.9), material: headMaterial, orientation: yaw)
+            _ = addBox(parent: world, name: "terminal-departure-rainlip-\(tag)", size: SIMD3<Float>(0.66, 0.03, 0.26),
+                       position: headPos(faceOffset: 0.02, y: 5.535), material: headMaterial, orientation: yaw)
+            _ = addBox(parent: world, name: "terminal-departure-backpanel-\(tag)", size: SIMD3<Float>(0.48, 1.08, 0.015),
+                       position: headPos(faceOffset: -0.0925, y: 4.9), material: headMaterial, orientation: yaw)
+            _ = addBox(parent: world, name: "terminal-departure-backlatch-\(tag)", size: SIMD3<Float>(0.03, 0.10, 0.02),
+                       position: headPos(faceOffset: -0.10, y: 4.9, rightOffset: 0.19), material: poleMaterial, orientation: yaw)
+            // batch86: the ladder is a ladder (two stiles +
+            // rungs every 300 mm), replacing the flat slab.
+            let ladderHeight = postTop - footY - 0.4
+            for stileSign: Float in [-1, 1] {
+                _ = addBox(parent: world, name: "terminal-departure-ladder-stile-\(tag)-\(Int(stileSign))", size: SIMD3<Float>(0.045, ladderHeight, 0.045),
+                           position: headPos(faceOffset: -0.15, y: (footY + postTop) / 2 - base.y, rightOffset: stileSign * 0.13), material: headMaterial, orientation: yaw)
+            }
+            var rungY = footY + 0.5
+            while rungY < postTop - 0.35 {
+                _ = addBox(parent: world, name: "terminal-departure-ladder-rung-\(tag)-\(Int(rungY * 10))", size: SIMD3<Float>(0.30, 0.03, 0.03),
+                           position: headPos(faceOffset: -0.15, y: rungY - base.y), material: headMaterial, orientation: yaw)
+                rungY += 0.3
+            }
+            _ = addBox(parent: world, name: "terminal-departure-platform-\(tag)", size: SIMD3<Float>(0.72, 0.05, 0.55),
+                       position: SIMD3<Float>(base.x + travel.x * 0.18, base.y + 3.75, base.z + travel.z * 0.18), material: headMaterial, orientation: yaw)
+            // batch86: platform handrail — uprights plus top
+            // and mid rails on the back and both sides, as in
+            // placeSignal (the deck used to float bare).
+            let railPostOffsets: [(face: Float, right: Float)] = [(-0.42, -0.345), (-0.42, 0.345), (0.02, -0.345), (0.02, 0.345)]
+            for (postIndex, postOffset) in railPostOffsets.enumerated() {
+                _ = addBox(parent: world, name: "terminal-departure-platform-rail-post-\(tag)-\(postIndex)", size: SIMD3<Float>(0.03, 0.85, 0.03),
+                           position: headPos(faceOffset: postOffset.face, y: 4.20, rightOffset: postOffset.right), material: headMaterial, orientation: yaw)
+            }
+            for railY: Float in [4.62, 4.19] {
+                _ = addBox(parent: world, name: "terminal-departure-platform-rail-back-\(tag)-\(Int(railY * 100))", size: SIMD3<Float>(0.72, 0.03, 0.03),
+                           position: headPos(faceOffset: -0.42, y: railY), material: headMaterial, orientation: yaw)
+                for railSign: Float in [-1, 1] {
+                    _ = addBox(parent: world, name: "terminal-departure-platform-rail-side-\(tag)-\(Int(railY * 100))-\(Int(railSign))", size: SIMD3<Float>(0.03, 0.03, 0.47),
+                               position: headPos(faceOffset: -0.20, y: railY, rightOffset: railSign * 0.345), material: headMaterial, orientation: yaw)
+                }
+            }
+            // batch86: framed number plate, as in placeSignal.
+            _ = addBox(parent: world, name: "terminal-departure-plateframe-\(tag)", size: SIMD3<Float>(0.26, 0.34, 0.012),
+                       position: headPos(faceOffset: 0.086, y: 2.55), material: headMaterial, orientation: yaw)
+            _ = addBox(parent: world, name: "terminal-departure-plate-\(tag)", size: SIMD3<Float>(0.22, 0.3, 0.02),
+                       position: SIMD3<Float>(base.x - travel.x * 0.1, base.y + 2.55, base.z - travel.z * 0.1), material: plateMaterial, orientation: yaw)
+            // batch86: seated lamp assemblies — bezel ring,
+            // half-tube visor, per-position dark glass, and a
+            // permanent glow disc behind the lit green — as in
+            // placeSignal (was: flat plate hood + shared
+            // near-black glass).
+            let hoodTilt = simd_quatf(angle: -Float.pi / 2, axis: SIMD3<Float>(1, 0, 0))
+            let lampX = base.x - travel.x * 0.104
+            let lampZ = base.z - travel.z * 0.104
+            for (lampIndex, lampY) in [5.35, 5.05, 4.75, 4.45].enumerated() {
+                let bezel = ModelEntity(mesh: signalBezelMesh, materials: [signalBezelMaterial])
+                bezel.name = "terminal-departure-bezel-\(tag)-\(lampIndex)"
+                bezel.position = SIMD3<Float>(lampX - travel.x * 0.008, base.y + Float(lampY), lampZ - travel.z * 0.008)
+                bezel.orientation = yaw * hoodTilt
+                world.addChild(bezel)
+                let visor = ModelEntity(mesh: signalVisorMesh, materials: [signalVisorMaterial])
+                visor.name = "terminal-departure-hood-\(tag)-\(lampIndex)"
+                visor.position = SIMD3<Float>(lampX - travel.x * 0.059, base.y + Float(lampY), lampZ - travel.z * 0.059)
+                visor.orientation = yaw * hoodTilt
+                world.addChild(visor)
+                let lamp = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.075),
+                                       materials: [lampIndex == 3 ? signalGreenMaterial : signalDarkLampMaterials[lampIndex]])
+                lamp.scale = SIMD3<Float>(1, 1, 0.45)
+                lamp.position = SIMD3<Float>(lampX, base.y + Float(lampY), lampZ)
+                lamp.orientation = yaw
+                lamp.name = "terminal-departure-lamp-\(tag)-\(lampIndex)"
+                world.addChild(lamp)
+                if lampIndex == 3 {
+                    let glow = ModelEntity(mesh: signalGlowMesh, materials: [signalGlowLampMaterials[3]])
+                    glow.name = "terminal-departure-lampglow-\(tag)-\(lampIndex)"
+                    glow.position = SIMD3<Float>(lampX - travel.x * 0.010, base.y + Float(lampY), lampZ - travel.z * 0.010)
+                    glow.orientation = yaw * hoodTilt
+                    world.addChild(glow)
+                }
+            }
+        }
+
+        for placement in stationModelPlacements {
+            guard placement.archetype == "terminal_3platform" || placement.archetype == "junction_3platform" else { continue }
+            // batch75: the throat anchors on the LINE END the
+            // canonical platform touches, not on
+            // placement.chainageM. batch69 wrote this builder
+            // against the placement being the station position
+            // (the line end at a terminal); batch74 turned the
+            // placement into the stop target — the line end
+            // for the ORIGIN terminal (raw position kept), but
+            // 5 m inside it for the DESTINATION terminal, so
+            // this guard has silently skipped the destination
+            // terminal's whole throat (buffers, concourse,
+            // headhouse, departure heads, crossover) ever
+            // since. The canonical bounds restore both ends:
+            // c is the touching bound, every offset below is
+            // unchanged relative to it, and the loop-target
+            // key is the canonical centre the fan specs use.
+            let bounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: route.distanceM)
+            let c: Double
+            let stationCenter: Double
+            let atLowEnd: Bool
+            let atHighEnd: Bool
+            if let bounds {
+                atLowEnd = bounds.start <= 0.5
+                atHighEnd = bounds.end >= route.distanceM - 0.5
+                c = atLowEnd ? bounds.start : bounds.end
+                stationCenter = (bounds.start + bounds.end) / 2
+            } else {
+                c = placement.chainageM
+                stationCenter = placement.chainageM
+                atLowEnd = c <= 0.5
+                atHighEnd = c >= route.distanceM - 0.5
+            }
+            guard atLowEnd || atHighEnd else { continue }
+            let endSign: Double = atLowEnd ? -1 : 1
+            let tag = placement.stationId
+            let loopT = loopTarget(atStationCenter: stationCenter)
+            let runningLaterals: [Float] = [-2.1, 2.1]
+            let allLaterals: [Float] = [-loopT, -2.1, 2.1, loopT]
+
+            // -- Formation apron over the extrapolated throat.
+            var apronStations: [ProfileStation] = []
+            var apronD = c + endSign * 2
+            while (apronD - c) * endSign <= 136 {
+                apronStations.append(profileStation(at: apronD, trackLateral: 0))
+                apronD += endSign * 8.5
+            }
+            apronStations.append(profileStation(at: c + endSign * 136, trackLateral: 0))
+            if let apron = profileStripEntity(name: "terminal-apron-\(tag)", stations: apronStations, profile: [(-17, -0.06), (17, -0.06)], closed: false, material: apronMaterial, uvVTileLength: 6) {
+                world.addChild(apron)
+            }
+
+            // -- Running tracks extended to the platform end.
+            // (The loop tracks already run the full span on the
+            // fan mid-segments.)
+            for lateral in runningLaterals {
+                var stations: [ProfileStation] = []
+                var d = c
+                while (d - c) * endSign < 105 {
+                    stations.append(profileStation(at: d, trackLateral: lateral))
+                    d += endSign * 8.5
+                }
+                stations.append(profileStation(at: c + endSign * 105, trackLateral: lateral))
+                trackStrips(prefix: "terminal-ext-\(tag)-\(Int(lateral * 10))", stations: stations, bedY: 0.185)
+            }
+
+            // -- Buffer stops closing all four tracks at the
+            // head of the extended tracks: 98 m past the line
+            // end, 7 m inside the end of the platform span.
+            var bufferBatch = MeshBatchBuilder()
+            for lateral in allLaterals {
+                let st = profileStation(at: c + endSign * 98, trackLateral: lateral)
+                let tangent = -simd_cross(st.xAxis, st.yAxis)
+                for postU: Float in [-0.85, 0.85] {
+                    bufferBatch.addBoxAxes(center: st.center + postU * st.xAxis + 0.55 * st.yAxis,
+                                           size: SIMD3<Float>(0.28, 1.1, 0.28), ax: st.xAxis, ay: st.yAxis, az: tangent)
+                }
+                bufferBatch.addBoxAxes(center: st.center + st.yAxis,
+                                       size: SIMD3<Float>(2.4, 0.42, 0.3), ax: st.xAxis, ay: st.yAxis, az: tangent)
+                bufferBatch.addBoxAxes(center: st.center + 0.15 * st.yAxis,
+                                       size: SIMD3<Float>(2.4, 0.3, 0.8), ax: st.xAxis, ay: st.yAxis, az: tangent)
+                for strutU: Float in [-0.7, 0.7] {
+                    let from = st.center + strutU * st.xAxis + 0.2 * st.yAxis + Float(endSign * 1.7) * tangent
+                    let to = st.center + strutU * st.xAxis + 0.95 * st.yAxis
+                    bufferBatch.addSegment(from: from, to: to, thickness: 0.12)
+                }
+            }
+            if let buffers = bufferBatch.build(name: "terminal-buffers-\(tag)", material: poleMaterial) {
+                world.addChild(buffers)
+            }
+            for lateral in allLaterals {
+                let discSample = sample(at: c + endSign * 97.8)
+                let discPoint = routeOffsetPoint(discSample, lateral: lateral)
+                let discYaw = simd_quatf(angle: -discSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                _ = addBox(parent: world, name: "terminal-buffer-disc-\(tag)-\(Int(lateral * 10))", size: SIMD3<Float>(0.55, 0.55, 0.06),
+                           position: SIMD3<Float>(discPoint.x, discPoint.y + 1.0, discPoint.z), material: bufferRedMaterial, orientation: discYaw)
+            }
+
+            // -- Concourse across the track ends at platform
+            // level, headhouse behind it.
+            let concourseSample = sample(at: c + endSign * 113.25)
+            let concourseYaw = simd_quatf(angle: -concourseSample.heading, axis: SIMD3<Float>(0, 1, 0))
+            let concoursePoint = routeOffsetPoint(concourseSample, lateral: 0)
+            _ = addBox(parent: world, name: "terminal-concourse-\(tag)", size: SIMD3<Float>(30, 0.3, 15.5),
+                       position: SIMD3<Float>(concoursePoint.x, concoursePoint.y + 1.2565, concoursePoint.z), material: concreteMaterial, orientation: concourseYaw, censusTexture: "scenery_concrete")
+            let headSample = sample(at: c + endSign * 127.5)
+            let headYaw = simd_quatf(angle: -headSample.heading, axis: SIMD3<Float>(0, 1, 0))
+            let headGround = groundLevelM(at: headSample)
+            let mainPoint = routeOffsetPoint(headSample, lateral: 0)
+            _ = addBox(parent: world, name: "terminal-headhouse-\(tag)", size: SIMD3<Float>(18, 8.5, 11),
+                       position: SIMD3<Float>(mainPoint.x, headGround + 4.25, mainPoint.z), material: glassFacadeMaterial, orientation: headYaw, censusTexture: "scenery_glass_facade_2")
+            for annexSide: Float in [-1, 1] {
+                let annexPoint = routeOffsetPoint(headSample, lateral: annexSide * 12.5)
+                _ = addBox(parent: world, name: "terminal-headhouse-annex-\(tag)-\(Int(annexSide))", size: SIMD3<Float>(7, 5.5, 10),
+                           position: SIMD3<Float>(annexPoint.x, headGround + 2.75, annexPoint.z), material: brickMaterial, orientation: headYaw, censusTexture: "scenery_brick_warm")
+            }
+            _ = addBox(parent: world, name: "terminal-headhouse-roof-\(tag)", size: SIMD3<Float>(30.5, 0.35, 12.5),
+                       position: SIMD3<Float>(mainPoint.x, headGround + 8.675, mainPoint.z), material: roofMaterial, orientation: headYaw, censusTexture: "scenery_concrete")
+            let canopySample = sample(at: c + endSign * 121.6)
+            let canopyYaw = simd_quatf(angle: -canopySample.heading, axis: SIMD3<Float>(0, 1, 0))
+            let canopyPoint = routeOffsetPoint(canopySample, lateral: 0)
+            _ = addBox(parent: world, name: "terminal-headhouse-canopy-\(tag)", size: SIMD3<Float>(16, 0.18, 3.4),
+                       position: SIMD3<Float>(canopyPoint.x, canopyPoint.y + 3.9, canopyPoint.z), material: canopyMaterial, orientation: canopyYaw, censusTexture: "scenery_canopy")
+
+            // -- Fixed departure heads on the tracks the live
+            // signal builder does not serve (the other running
+            // track and both loop tracks), at the exit end.
+            let playerLateral: Float = travelDirection == .up ? -2.1 : 2.1
+            for lateral in allLaterals where lateral != playerLateral {
+                let sideSign: Float = lateral < 0 ? -1 : 1
+                staticDepartureHead(tag: "\(tag)-\(Int(lateral * 10))", at: c - endSign * 118, postLateral: sideSign * (abs(lateral) + 1.9), endSign: endSign)
+            }
+
+            // -- Crossover between the running lines on the
+            // approach side (main line only; the branch
+            // approach is single track).
+            if placement.stationId.hasPrefix("S") {
+                // batch75: pushed 90 m further out — the
+                // canonical fan's approach span now ends
+                // 540 m from the line end (centre 100 + fan
+                // 340), past the old 470 m toe.
+                let a = c - endSign * 690
+                let b = c - endSign * 560
+                var stations: [ProfileStation] = []
+                var t = 0.0
+                while t <= 130 {
+                    let u = t / 130
+                    let lat = Float(-2.1 + 4.2 * smoothstep(u))
+                    stations.append(profileStation(at: a + (b - a) * u, trackLateral: lat))
+                    t += 8.5
+                }
+                stations.append(profileStation(at: b, trackLateral: 2.1))
+                trackStrips(prefix: "terminal-crossover-\(tag)", stations: stations, bedY: 0.195)
+                for (toeChainage, toeLateral) in [(a, Float(-4.7)), (b, Float(4.7))] {
+                    let toeSample = sample(at: toeChainage)
+                    let toeYaw = simd_quatf(angle: -toeSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let toePoint = routeOffsetPoint(toeSample, lateral: toeLateral)
+                    _ = addBox(parent: world, name: "terminal-switchstand-\(tag)-\(Int(toeChainage))", size: SIMD3<Float>(0.55, 0.95, 0.4),
+                               position: SIMD3<Float>(toePoint.x, toeSample.elevationM + 0.42, toePoint.z), material: headMaterial, orientation: toeYaw)
+                    _ = addBox(parent: world, name: "terminal-switchtarget-\(tag)-\(Int(toeChainage))", size: SIMD3<Float>(0.3, 0.3, 0.03),
+                               position: SIMD3<Float>(toePoint.x, toeSample.elevationM + 1.05, toePoint.z), material: plateMaterial, orientation: toeYaw)
+                }
+            }
         }
     }
 
@@ -8952,7 +17815,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         while km < limit {
             if let sample = bestSample(for: km, mainlineOnly: false), !corridorReserved(at: sample.distanceM, landmarks: markerLandmarks) {
                 let yaw = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0))
-                let base = routeOffsetPoint(sample, lateral: postLateral)
+                // batch42: the post keeps its 2.5 m from the
+                // running track's centre through the island
+                // spread (an unshifted post at ±4.6 would stand
+                // inside the widened gauge near a station).
+                let base = routeOffsetPoint(sample, lateral: spreadTrackLateral(postLateral, at: sample.distanceM))
                 addBox(parent: world, name: "km-post-\(Int(km))", size: SIMD3<Float>(0.12, 0.95, 0.12),
                        position: SIMD3<Float>(base.x, base.y + 0.48, base.z), material: concreteMaterial, orientation: yaw)
                 addBox(parent: world, name: "km-post-cap-\(Int(km))", size: SIMD3<Float>(0.15, 0.2, 0.15),
@@ -8968,7 +17835,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             for approach in [target - 30, target] {
                 guard let sample = bestSample(for: approach, mainlineOnly: true) else { continue }
                 let orientation = simd_quatf(angle: -sample.heading, axis: SIMD3<Float>(0, 1, 0)) * simd_quatf(angle: -sample.bankRadians, axis: SIMD3<Float>(0, 0, 1))
-                let center = routeOffsetPoint(sample, lateral: runningTrack)
+                // batch42: on the running track's centre,
+                // wherever the island spread has moved it.
+                let center = routeOffsetPoint(sample, lateral: spreadTrackLateral(runningTrack, at: sample.distanceM))
                 addBox(parent: world, name: "ats-balise-\(Int(approach))", size: SIMD3<Float>(0.34, 0.07, 0.55),
                        position: SIMD3<Float>(center.x, center.y + 0.22, center.z), material: baliseMaterial, orientation: orientation)
             }
@@ -8984,8 +17853,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var normals: [SIMD3<Float>] = []
         var uvs: [SIMD2<Float>] = []
         var indices: [UInt32] = []
+        /// batch56: track-structure batches (trackbed / rails /
+        /// sleepers) opt out of the scenery census; every other
+        /// batched box counts as one placement.
+        var censusExcluded = false
+        /// batch58: centres of the placements recorded above,
+        /// kept so build(name:material:censusTexture:) can join
+        /// them to the texture census — the batch's material is
+        /// only known at build time, not at add time.
+        var censusCenters: [SIMD3<Float>] = []
 
         mutating func addBoxAxes(center: SIMD3<Float>, size: SIMD3<Float>, ax: SIMD3<Float>, ay: SIMD3<Float>, az: SIMD3<Float>) {
+            if !censusExcluded { CensusSink.recordPosition(center); censusCenters.append(center) }
             let hx = size.x / 2, hy = size.y / 2, hz = size.z / 2
             func corner(_ sx: Float, _ sy: Float, _ sz: Float) -> SIMD3<Float> {
                 center + ax * (sx * hx) + ay * (sy * hy) + az * (sz * hz)
@@ -9048,6 +17927,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
         /// Vertical hexagonal prism (pole, transformer can, insulator).
         mutating func addPrism(baseCenter: SIMD3<Float>, radius: Float, height: Float, yaw: Float) {
+            if !censusExcluded { CensusSink.recordPosition(baseCenter); censusCenters.append(baseCenter) }
             let sides = 6
             var ringBottom: [SIMD3<Float>] = []
             var ringTop: [SIMD3<Float>] = []
@@ -9093,8 +17973,21 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             addBoxAxes(center: (from + to) / 2, size: SIMD3<Float>(thickness, thickness, length), ax: ax, ay: ay, az: az)
         }
 
-        func build(name: String, material: PhysicallyBasedMaterial) -> ModelEntity? {
+        // MeshResource.generate(from:) and ModelEntity.init(mesh:materials:)
+        // are MainActor-isolated in the iOS 17 SDK (relaxed in the iOS 18
+        // SDK, which is why Xcode 16 accepted this). All callers run inside
+        // the @MainActor RailwayARViewRepresentable, so isolate this method.
+        @MainActor
+        func build(name: String, material: PhysicallyBasedMaterial, censusTexture: String? = nil) -> ModelEntity? {
             guard !positions.isEmpty else { return nil }
+            // batch58: when the caller names the batch material's
+            // photo texture, every recorded centre also joins
+            // the texture census.
+            if let censusTexture, !censusExcluded {
+                for center in censusCenters {
+                    CensusSink.recordTexturedPosition(center, texture: censusTexture)
+                }
+            }
             var descriptor = MeshDescriptor(name: name)
             descriptor.positions = MeshBuffers.Positions(positions)
             descriptor.normals = MeshBuffers.Normals(normals)

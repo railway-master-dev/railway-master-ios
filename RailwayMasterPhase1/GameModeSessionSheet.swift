@@ -276,7 +276,7 @@ struct GameModeSessionSheet: View {
             }
 
         case .timetable(let state):
-            ForEach(current.scenario.stops.filter { $0.positionM > 0.1 }) { stop in
+            ForEach(Array(current.scenario.stops.dropFirst())) { stop in
                 let delay = [state.arrivalDelayByStop[stop.id], state.departureDelayByStop[stop.id]]
                     .compactMap { $0 }.max(by: { abs($0) < abs($1) })
                 if let delay, abs(delay) > stop.arrivalToleranceSeconds,
@@ -319,7 +319,7 @@ struct GameModeSessionSheet: View {
             }
 
         case .fullLine(let state):
-            Text("通過駅 \(state.visitedStopIDs.count)/\(current.scenario.stops.filter { $0.positionM > 0.1 }.count) · \(state.routeProgressM.formatted()) / \(current.scenario.routeLengthM.formatted()) m")
+            Text("通過駅 \(state.visitedStopIDs.count)/\(current.scenario.stops.dropFirst().count) · \(state.routeProgressM.formatted()) / \(current.scenario.routeLengthM.formatted()) m")
                 .font(.caption.monospaced())
 
         case .tourism(let state):

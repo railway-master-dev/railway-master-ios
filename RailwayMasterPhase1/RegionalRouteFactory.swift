@@ -429,13 +429,22 @@ enum RegionalRouteFactory {
                     radiusRange: 450...650, cantRange: 35...70,
                     leadingMarginM: 100, trailingMarginM: 100, seedSalt: 0x94D0_49BB_1331_11EB)
             case .zoo:
-                // Gentle alignment for the zoo shuttle: one early curve
-                // reads as the branch-off from the mainline, then long
-                // easy tangents along the enclosures.
+                // batch31 (2026-11-14, user direction): the zoo
+                // shuttle weaves between the enclosures — it is
+                // NOT a straight line. The old parameters put
+                // the whole 450-1,900 m enclosure stretch on
+                // one 520-1,150 m tangent, so the line read as
+                // a ruler through empty grass. Short tangents,
+                // R300-560 curves and alternating directions
+                // (the generator flips side with p=0.76) now
+                // give about four S-curves over the 2.5 km;
+                // the 30 km/h enclosure-stretch cap keeps the
+                // tight radii legal (curve limit at R300 with
+                // 60 mm cant is ~58 km/h).
                 return GeneratedAlignmentRegion(kind: kind, offsetM: offsetM, lengthM: lengthM,
-                    tangentRange: 520...1_150, transitionRange: 120...220, circularRange: 480...900,
-                    radiusRange: 700...1_400, cantRange: 40...80,
-                    leadingMarginM: 180, trailingMarginM: 350, seedSalt: 0x5A4F_4F4C_494E_4531)
+                    tangentRange: 130...340, transitionRange: 60...120, circularRange: 140...300,
+                    radiusRange: 300...560, cantRange: 30...60,
+                    leadingMarginM: 120, trailingMarginM: 180, seedSalt: 0x5A4F_4F4C_494E_4531)
             case .park:
                 return GeneratedAlignmentRegion(kind: kind, offsetM: offsetM, lengthM: lengthM,
                     tangentRange: 480...1_050, transitionRange: 120...220, circularRange: 450...850,
@@ -469,6 +478,63 @@ enum RegionalRouteFactory {
             var previousDirection = 0
             let regionEnd = region.offsetM + region.lengthM - region.trailingMarginM
             var runs: [GeneratedCurveRun] = []
+            // batch31/32 (2026-11-14, user: every station
+            // looked straight, then "add stations on strong
+            // curves too — give them character"): stations
+            // are pinned onto curves of graded severity, so
+            // their platforms — built from the route
+            // samples — curve with the track.
+            // Mainline: S05 Ishigamiike R950 (gentle),
+            // S14 Tsudaike R1100 (gentle), S21 Katsunuma
+            // R800 (medium, coastal), S25 Mihama R650
+            // (strong, coastal), S16 Misagi R550 (strong —
+            // the platform bends ~11 m end to end).
+            // Branch: B02 Okitsu R450 (strong, 170 m
+            // platform). The spans clear the tunnels
+            // (17.8-19.25k, 42.1-43.6k), the depot fan
+            // (27.58-27.82k) and the Akimizu fan (12.0k);
+            // fan/junction stations keep straight
+            // alignments because their turnout geometry is
+            // built on tangents. The near-station 55 km/h
+            // cap already applies, so the diagram is
+            // unaffected; cant is graded with severity so
+            // the tight stations visibly lean.
+            let pins: [(centerM: Double, radiusM: Double, direction: Int, cantMm: Double)]
+            switch region.kind {
+            case .mainline:
+                pins = [(8_226, 950, 1, 70), (28_452, 1_100, -1, 70), (44_032, 800, 1, 80),
+                        (52_935, 650, 1, 85), (32_903, 550, -1, 90)]
+            case .branch:
+                pins = [(4_000, 450, -1, 80)]
+            default:
+                pins = []
+            }
+            // The cant ramp inside a transition is linear, and
+            // the profile continuity tests cap the cant step at
+            // 4.2 mm per 10 m — a 160 m transition at cant 70
+            // steps 4.375 mm and failed the seeded-mainline
+            // test on the 2026-11-14 01:15 Mac build (measured
+            // steps 4.375 and 7.26). Size each pin's transition
+            // from its cant: transition = max(200, cant x 3.0)
+            // keeps the step at or below ~3.3 mm per 10 m.
+            let pinRuns: [(run: GeneratedCurveRun, span: (start: Double, end: Double))] = pins.map { pin in
+                let c = region.offsetM + pin.centerM
+                let transitionM = max(200.0, pin.cantMm * 3.0)
+                let run = GeneratedCurveRun(
+                    transition: RouteCurveTransition(
+                        startM: c - transitionM - 150,
+                        circularStartM: c - 150,
+                        circularEndM: c + 150,
+                        endM: c + transitionM + 150
+                    ),
+                    radiusM: pin.radiusM,
+                    direction: pin.direction,
+                    cantMm: pin.cantMm
+                )
+                return (run, (c - transitionM - 150, c + transitionM + 150))
+            }
+            runs.append(contentsOf: pinRuns.map(\.run))
+            let pinSpans: [(start: Double, end: Double)] = pinRuns.map(\.span)
             while cursor < regionEnd {
                 // Mainline curves take their shape from the alignment
                 // zone at the curve start (BVE-measured radii per
@@ -507,6 +573,14 @@ enum RegionalRouteFactory {
                 let endM = circularEndM + transitionOutM
                 guard endM <= regionEnd else { break }
 
+                // batch31: never let a random run collide
+                // with a pinned station curve — hop past it
+                // (the draws are consumed; the profile stays
+                // deterministic for the seed).
+                if let clash = pinSpans.first(where: { cursor < $0.end + 120 && endM > $0.start - 120 }) {
+                    cursor = clash.end + 120
+                    continue
+                }
                 runs.append(GeneratedCurveRun(
                     transition: RouteCurveTransition(
                         startM: cursor,
@@ -536,7 +610,6 @@ enum RegionalRouteFactory {
             let activeRegion = regions.first { midpointM >= $0.offsetM && midpointM < $0.offsetM + $0.lengthM }
             let localM = midpointM - (activeRegion?.offsetM ?? 0)
             let localSection = max(0, Int(floor(localM / step)))
-            let nearStation = stations.contains { abs($0.positionM - midpointM) < 720 }
             let baseLimit = [75.0, 90.0, 100.0, 85.0, 110.0, 95.0][localSection % 6]
             // Curve limit from the cant equilibrium (2026-11-11,
             // recalibrated to passenger practice at the user's
@@ -548,7 +621,16 @@ enum RegionalRouteFactory {
             let curveLimit = run.map { curve in
                 min(baseLimit, max(40.0, 3.6 * sqrt(max(1, 9.8 * (curve.cantMm + 55) / 1_067 * curve.radiusM))))
             } ?? baseLimit
-            var speedLimit = nearStation ? min(curveLimit, 55.0) : curveLimit
+            // batch71: no blanket near-station cap. A ±720 m,
+            // 55 km/h cap around every station used to sit here;
+            // with stations roughly 2 km apart it covered most of
+            // the line, so the displayed limit stayed 55 even at a
+            // green terminal departure whose section limit is the
+            // city-zone 80. Station approach control is the safety
+            // pattern's job (the stop-target braking envelope),
+            // not a section cap — passing stations run at the
+            // section limit, as on a real railway.
+            var speedLimit = curveLimit
             if variant == .zooLine {
                 // Zoo line zones (up layout): approach 45, the enclosure
                 // stretch 450-1,900 m is a hard 30 km/h so passengers can
@@ -582,9 +664,22 @@ enum RegionalRouteFactory {
             } else {
                 gradient = sin(localM / 1_430 + 0.8) * 4.2 + sin(localM / 6_200 + 2.1) * 2.1
             }
-            let tunnel = (activeRegion?.kind == .mainline &&
-                ((localM > 17_800 && localM < 19_250) || (localM > 42_100 && localM < 43_600)))
-                || (activeRegion?.kind == .branch && localM > 3_500 && localM < 4_050)
+            // batch98: the tunnel spans come from the canonical
+            // TunnelSpans table (TunnelSpans.swift) — the same
+            // table the legacy fallback converter reads, and the
+            // one the pinning test in RegionalIntegrationTests
+            // guards. localM is the section midpoint in region
+            // coordinates, matching the table's frames (mainline
+            // chainage / branch-local chainage).
+            let tunnel: Bool
+            switch activeRegion?.kind {
+            case .mainline:
+                tunnel = TunnelSpans.contains(mainlineChainage: localM)
+            case .branch:
+                tunnel = TunnelSpans.contains(branchLocalChainage: localM)
+            default:
+                tunnel = false
+            }
             sections.append(RouteSection(
                 startM: startM,
                 endM: endM,
@@ -594,7 +689,7 @@ enum RegionalRouteFactory {
                 cantMm: run?.cantMm,
                 curveTransition: run?.transition,
                 speedLimitKmh: speedLimit,
-                tunnelResistanceMultiplier: tunnel ? 1.25 : 1
+                tunnelResistanceMultiplier: tunnel ? TunnelSpans.resistanceMultiplier : 1
             ))
         }
 
