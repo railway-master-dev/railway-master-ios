@@ -33,10 +33,28 @@ final class SceneTrafficActorTests: XCTestCase {
 
         let reverseTrain = try XCTUnwrap(poses.first { $0.id == "scenario/train/west-1" })
         let routeFrame = try XCTUnwrap(route.frame(at: 120))
+        // batch56: the projector places actors on the SCENE's
+        // lateral axis, which is the negative of the route frame's
+        // right vector (see SceneTrafficActorProjector) — a
+        // positive lateral offset lands at position − right ×
+        // offset. The old assertion mirrored the projector's own
+        // formula and so could not catch the sign error against
+        // the scene convention.
         XCTAssertEqual(reverseTrain.position.x,
-                       routeFrame.position.x + routeFrame.right.x * 2.1, accuracy: 1e-8)
+                       routeFrame.position.x - routeFrame.right.x * 2.1, accuracy: 1e-8)
         XCTAssertEqual(reverseTrain.forward.dot(routeFrame.forward), -1, accuracy: 1e-7)
         XCTAssertEqual(reverseTrain.up.dot(routeFrame.up), 1, accuracy: 1e-7)
+        // batch58: the POSE basis must stay right-handed in the
+        // route frame even though the position offset uses the
+        // scene lateral. For a π heading the pose right is the
+        // negated frame right, and right × up must reproduce the
+        // pose forward — batch56's scene-lateral basis was a
+        // reflection (right × up = −forward), which the adapter
+        // rendered as a world-axis-aligned consist lying across
+        // the track.
+        XCTAssertEqual(reverseTrain.right.dot(routeFrame.right), -1, accuracy: 1e-7)
+        let handedness = reverseTrain.right.cross(reverseTrain.up)
+        XCTAssertEqual(handedness.dot(reverseTrain.forward), 1, accuracy: 1e-7)
 
         let pedestrian = try XCTUnwrap(poses.first { $0.kind == .platformPassenger })
         XCTAssertTrue(pedestrian.isWalking)
