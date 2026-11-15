@@ -264,11 +264,18 @@ public enum FictionalFormationCatalog {
         var weakTrailerServiceBrakeN: Double { serviceBrakeN * 0.56 }
         var weakTrailerEmergencyBrakeN: Double { emergencyBrakeN * 0.58 }
 
-        var aerodynamicCN: Double {
+        /// Aerodynamic Davis C per car [N·s²/m²]. batch68 recalibration:
+        /// the old absolute values (2.3-3.1 for a whole 8-10 car set) made
+        /// the v² term roughly a tenth of a real EMU's, so high-speed
+        /// coasting barely slowed. Published whole-train Davis fits for
+        /// commuter EMUs put C near 28-35 for an 8-car set; the per-car
+        /// values below reproduce that scale and grow with train length
+        /// (skin friction and inter-car gaps dominate train aero drag).
+        var aerodynamicCNPerCar: Double {
             switch self {
-            case .vvvf: 2.3
-            case .fieldChopper: 2.6
-            case .resistance: 3.1
+            case .vvvf: 4.0
+            case .fieldChopper: 4.5
+            case .resistance: 5.2
             }
         }
     }
@@ -310,10 +317,16 @@ public enum FictionalFormationCatalog {
             displayName: displayName,
             fictionalNotice: notice,
             rotationalInertiaFactor: 1.06,
+            // batch68: coasting resistance recalibrated to the real-EMU
+            // Davis band (level-track coast ≈0.17-0.20 km/h/s at 60 km/h,
+            // ≈0.42-0.51 at 110 km/h for these sets). a covers rolling and
+            // drivetrain drag with the motors cut out (≈1.99 kgf/tonne);
+            // b follows the classic EMU linear term (≈0.0288 kgf/(t·km/h)
+            // ≈ 0.08-0.11 in these units; the old 0.32 was ~3x that).
             davisResistance: DavisResistanceProfile(
-                aNPerTonne: 18,
-                bNSecondPerMeterPerTonne: 0.32,
-                cNSecondSquaredPerMeterSquared: kind.aerodynamicCN
+                aNPerTonne: 19.5,
+                bNSecondPerMeterPerTonne: 0.11,
+                cNSecondSquaredPerMeterSquared: kind.aerodynamicCNPerCar * Double(cars)
             ),
             curveResistanceNPerKNAtOnePerM: 600,
             brakeSystem: BrakeSystemProfile(

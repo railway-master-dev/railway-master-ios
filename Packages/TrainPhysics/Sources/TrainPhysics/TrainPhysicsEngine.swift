@@ -580,7 +580,17 @@ public struct TrainPhysicsEngine: Sendable {
         let netForce = tractionForce - brakeForce - rolling - gradientForce - curveResistance
         let rawAcceleration = netForce / effectiveMass
         let newSpeed = max(speed + rawAcceleration * dt, 0)
-        let requestedSpeedLimitKmh = min(min(profile.traction.maximumSpeedKmh, condition.speedLimitKmh), effects.speedCapKmh ?? .infinity)
+        // Physical ceiling only: the vehicle's design maximum and
+        // an explicit host cap (effects.speedCapKmh, e.g. a vehicle
+        // fault limit). The track condition's speedLimitKmh is the
+        // legal line limit, NOT a physical law: a real train can
+        // exceed it, and enforcement belongs to the host's ATS
+        // pattern (warning -> acknowledgement -> service/emergency
+        // brake). Clamping to the line limit here turned every
+        // restriction into a cruise control — speed pinned at
+        // exactly the limit under full notch and overspeed (and
+        // therefore ATS intervention) could never occur.
+        let requestedSpeedLimitKmh = min(profile.traction.maximumSpeedKmh, effects.speedCapKmh ?? .infinity)
         let speedLimitMps = max(requestedSpeedLimitKmh, 0) / 3.6
         let finiteNewSpeed = newSpeed.isFinite ? min(newSpeed, speedLimitMps) : 0
         accelerationMps2 = (finiteNewSpeed - speed) / dt
