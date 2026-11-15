@@ -59,7 +59,7 @@ public final class VehicleCabControlRig {
 
     public func setValue(_ rawValue: Float, for kind: VehicleCabControlKind) {
         guard let node = nodes[kind],
-              var component = node.components[VehicleCabControlComponent.self],
+              var component = node.components[VehicleCabControlComponent.self] as? VehicleCabControlComponent,
               let initial = initialTransforms[kind] else { return }
         let value = min(max(rawValue, component.minimumValue), component.maximumValue)
         let delta = value - component.neutralValue
@@ -77,6 +77,8 @@ public final class VehicleCabControlRig {
     }
 
     public func value(for kind: VehicleCabControlKind) -> Float? {
-        nodes[kind]?.components[VehicleCabControlComponent.self]?.value
+        guard let node = nodes[kind],
+              let component = node.components[VehicleCabControlComponent.self] as? VehicleCabControlComponent else { return nil }
+        return component.value
     }
 }

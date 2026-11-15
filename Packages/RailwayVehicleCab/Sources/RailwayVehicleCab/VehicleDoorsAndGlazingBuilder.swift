@@ -30,7 +30,23 @@ enum VehicleDoorsAndGlazingBuilder {
 
         for index in 0..<2 {
             let x: Float = index == 0 ? -0.60 : 0.60
-            VehicleGeometryFactory.box("FrontWindshield_\(index)", size: SIMD3(1.10, 0.72, 0.035), at: SIMD3(x, 2.98, -9.715), material: VehicleMaterialPalette.cabGlass, in: group)
+            // batch45 (2026-11-14, cab photo verdict): the panes
+            // were 0.72 tall at y 2.98 (band 2.62..3.34), leaving
+            // the front face open from the fascia (top 1.67) to
+            // 2.62 — through that slot the driver saw the front
+            // gangway and the headlamp housings instead of glass.
+            // The panes are now 1.00 tall at y 2.80 (band
+            // 2.30..3.30), meeting the new lower panel, so the
+            // windshield covers the full view band like the real
+            // E231's two front windows.
+            // batch46 (2026-11-14, user: 「全然視野が広くない」):
+            // the band grows downward to 2.05 — panes 1.25 tall
+            // at y 2.675, meeting the lowered cab panel — so the
+            // glass share of the cab frame's centre column rises
+            // from 0.44 to 0.61 (projection model in the batch46
+            // report). The centre pillar gap (0.10 m between the
+            // panes) and the top edge stay as they were.
+            VehicleGeometryFactory.box("FrontWindshield_\(index)", size: SIMD3(1.10, 1.25, 0.035), at: SIMD3(x, 2.675, -9.715), material: VehicleMaterialPalette.cabGlass, in: group)
             VehicleGeometryFactory.box("RearWindow_\(index)", size: SIMD3(1.10, 0.72, 0.035), at: SIMD3(x, 2.98, 9.715), material: glass, in: group)
         }
         VehicleGeometryFactory.box("DestinationDisplay", size: SIMD3(0.90, 0.20, 0.04), at: SIMD3(0, 3.47, -9.72), material: VehicleMaterialPalette.darkMetal, in: group)

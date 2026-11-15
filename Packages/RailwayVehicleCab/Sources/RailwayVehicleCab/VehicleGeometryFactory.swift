@@ -19,6 +19,25 @@ enum VehicleGeometryFactory {
         return entity
     }
 
+    /// Unlit-material variant (powered screens). A separate
+    /// name, not an overload: SimpleMaterial also conforms to
+    /// Material, so an overload on the material type alone
+    /// would make every existing call site ambiguous.
+    @discardableResult
+    static func boxUnlit(
+        _ name: String,
+        size: SIMD3<Float>,
+        at position: SIMD3<Float>,
+        material: UnlitMaterial,
+        in parent: Entity
+    ) -> ModelEntity {
+        let entity = ModelEntity(mesh: .generateBox(size: size), materials: [material])
+        entity.name = name
+        entity.position = position
+        parent.addChild(entity)
+        return entity
+    }
+
     @discardableResult
     static func cylinder(
         _ name: String,
@@ -30,11 +49,7 @@ enum VehicleGeometryFactory {
         in parent: Entity
     ) -> ModelEntity {
         let mesh: MeshResource
-        if #available(iOS 18.0, *) {
-            mesh = .generateCylinder(height: length, radius: radius)
-        } else {
-            mesh = FallbackCylinderMesh.make(height: length, radius: radius)
-        }
+        mesh = FallbackCylinderMesh.make(height: length, radius: radius)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         entity.name = name
         entity.position = position
@@ -46,6 +61,21 @@ enum VehicleGeometryFactory {
         } else if dot < 0.9999 {
             entity.orientation = simd_quatf(from: yAxis, to: normalizedAxis)
         }
+        parent.addChild(entity)
+        return entity
+    }
+
+    @discardableResult
+    static func disc(
+        _ name: String,
+        radius: Float,
+        at position: SIMD3<Float>,
+        material: SimpleMaterial,
+        in parent: Entity
+    ) -> ModelEntity {
+        let entity = ModelEntity(mesh: GaugeDiscMesh.make(radius: radius), materials: [material])
+        entity.name = name
+        entity.position = position
         parent.addChild(entity)
         return entity
     }
@@ -127,6 +157,36 @@ enum FallbackCylinderMesh {
         descriptor.normals = MeshBuffers.Normals(normals)
         descriptor.primitives = .triangles(indices)
         // The descriptor is built entirely from the values above, so generation cannot fail.
+        return try! MeshResource.generate(from: [descriptor])
+    }
+}
+
+/// Flat disc in the XY plane facing +Z, with planar UVs across
+/// its bounding square — for textured gauge faces, which the
+/// UV-less FallbackCylinderMesh cannot carry.
+enum GaugeDiscMesh {
+    static func make(radius: Float, segments: Int = 40) -> MeshResource {
+        var positions: [SIMD3<Float>] = [SIMD3(0, 0, 0)]
+        var normals: [SIMD3<Float>] = [SIMD3(0, 0, 1)]
+        var uvs: [SIMD2<Float>] = [SIMD2(0.5, 0.5)]
+        var indices: [UInt32] = []
+        for step in 0...segments {
+            let theta = Float(step) / Float(segments) * 2 * .pi
+            let x = radius * cos(theta)
+            let y = radius * sin(theta)
+            positions.append(SIMD3(x, y, 0))
+            normals.append(SIMD3(0, 0, 1))
+            uvs.append(SIMD2(x / (2 * radius) + 0.5, y / (2 * radius) + 0.5))
+        }
+        for step in 0..<segments {
+            indices.append(contentsOf: [0, UInt32(step + 1), UInt32(step + 2)])
+        }
+        var descriptor = MeshDescriptor(name: "gauge-disc")
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+        descriptor.primitives = .triangles(indices)
+        // Built entirely from the values above; generation cannot fail.
         return try! MeshResource.generate(from: [descriptor])
     }
 }

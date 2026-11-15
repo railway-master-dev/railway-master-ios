@@ -34,6 +34,29 @@ enum VehicleCabInteriorBuilder {
         let dark = deskPaint(desk)
         VehicleGeometryFactory.box("CabDeskBody", size: SIMD3(2.30, 1.02, 0.50), at: SIMD3(0, 1.26, -8.50), material: dark, in: interior)
         VehicleGeometryFactory.box("CabDeskTop", size: SIMD3(2.34, 0.05, 0.78), at: SIMD3(0, 1.80, -8.42), material: texturedMaterial(named: "cab_desk_grain_light.png"), in: interior)
+        // batch32 (2026-11-14, user verdict on the first cab
+        // photo: the desk reads as one flat dark slab). Give
+        // the desk a face: a lighter inset fascia panel with
+        // seam strips on the front, a dark kick plate at foot
+        // level, and a raised lip along the back of the desk
+        // top so the top surface has an edge to catch light.
+        let fascia = VehicleMaterialPalette.paint(UIColor(red: 0.30, green: 0.32, blue: 0.33, alpha: 1), roughness: 0.62)
+        VehicleGeometryFactory.box("CabDeskFascia", size: SIMD3(1.90, 0.62, 0.02), at: SIMD3(0, 1.34, -8.245), material: fascia, in: interior)
+        VehicleGeometryFactory.box("CabDeskFasciaSeamL", size: SIMD3(0.015, 0.62, 0.024), at: SIMD3(-0.62, 1.34, -8.245), material: VehicleMaterialPalette.rubber, in: interior)
+        VehicleGeometryFactory.box("CabDeskFasciaSeamR", size: SIMD3(0.015, 0.62, 0.024), at: SIMD3(0.62, 1.34, -8.245), material: VehicleMaterialPalette.rubber, in: interior)
+        VehicleGeometryFactory.box("CabDeskKickPlate", size: SIMD3(2.30, 0.20, 0.02), at: SIMD3(0, 0.84, -8.245), material: VehicleMaterialPalette.rubber, in: interior)
+        VehicleGeometryFactory.box("CabDeskTopLip", size: SIMD3(2.34, 0.05, 0.04), at: SIMD3(0, 1.845, -8.79), material: dark, in: interior)
+        // Timetable stand on the desk top, right of the
+        // driver: a dark board, a paper card and a clip —
+        // the small dressing every real cab carries.
+        let stand = Entity()
+        stand.name = "TimetableStand"
+        stand.position = SIMD3(0.55, 1.83, -8.33)
+        stand.orientation = simd_quatf(angle: -0.28, axis: SIMD3(1, 0, 0))
+        interior.addChild(stand)
+        VehicleGeometryFactory.box("TimetableBoard", size: SIMD3(0.24, 0.33, 0.012), at: SIMD3(0, 0.165, 0), material: VehicleMaterialPalette.darkMetal, in: stand)
+        VehicleGeometryFactory.box("TimetablePaper", size: SIMD3(0.21, 0.30, 0.004), at: SIMD3(0, 0.16, 0.009), material: VehicleMaterialPalette.paint(UIColor(red: 0.93, green: 0.94, blue: 0.92, alpha: 1), roughness: 0.9), in: stand)
+        VehicleGeometryFactory.box("TimetableClip", size: SIMD3(0.10, 0.025, 0.006), at: SIMD3(0, 0.315, 0.011), material: VehicleMaterialPalette.trim, in: stand)
         let binnacle = Entity()
         binnacle.name = "CabBinnacle"
         binnacle.position = SIMD3(0, 2.06, -8.55)
@@ -41,20 +64,24 @@ enum VehicleCabInteriorBuilder {
         interior.addChild(binnacle)
         VehicleGeometryFactory.box("CabPanelFace", size: SIMD3(2.30, 0.56, 0.06), at: SIMD3(0, 0, 0), material: dark, in: binnacle)
 
-        addGauge(name: "speed", texture: "cab_gauge_speed_e231.png", x: -0.55, in: binnacle)
-        addGauge(name: "pressure", texture: "cab_gauge_pressure_e231.png", x: -0.20, in: binnacle)
+        addRoundGauge(name: "speed", texture: "cab_gauge_speed_e231.png", x: -0.55, y: 0.18, radius: 0.095, in: binnacle)
+        addRoundGauge(name: "pressure", texture: "cab_gauge_pressure_e231.png", x: -0.20, y: 0.18, radius: 0.095, in: binnacle)
         let inkBlack = UIColor(red: 0.08, green: 0.08, blue: 0.09, alpha: 1)
-        addNeedle(name: "GaugeNeedle_speed", x: -0.55, color: inkBlack, in: binnacle)
-        addNeedle(name: "GaugeNeedle_mr", x: -0.20, color: UIColor(red: 0.85, green: 0.16, blue: 0.10, alpha: 1), in: binnacle)
-        addNeedle(name: "GaugeNeedle_bc", x: -0.20, color: inkBlack, in: binnacle)
-        addLamp(name: "door", x: -0.68, y: 0.205, litColor: UIColor(red: 0.55, green: 0.95, blue: 0.62, alpha: 1), litByDefault: true, in: binnacle)
-        addLamp(name: "ats", x: -0.56, y: 0.205, litColor: UIColor(red: 0.98, green: 0.30, blue: 0.12, alpha: 1), litByDefault: false, in: binnacle)
-        addLamp(name: "slip", x: -0.44, y: 0.205, litColor: UIColor(red: 1.0, green: 0.62, blue: 0.10, alpha: 1), litByDefault: false, in: binnacle)
-        addLamp(name: "emergency", x: -0.32, y: 0.205, litColor: UIColor(red: 0.98, green: 0.16, blue: 0.10, alpha: 1), litByDefault: false, in: binnacle)
+        addNeedle(name: "GaugeNeedle_speed", x: -0.55, y: 0.18, color: inkBlack, in: binnacle)
+        addNeedle(name: "GaugeNeedle_mr", x: -0.20, y: 0.18, color: UIColor(red: 0.85, green: 0.16, blue: 0.10, alpha: 1), in: binnacle)
+        addNeedle(name: "GaugeNeedle_bc", x: -0.20, y: 0.18, color: inkBlack, in: binnacle)
+        addLamp(name: "door", x: -0.68, y: -0.20, litColor: UIColor(red: 0.55, green: 0.95, blue: 0.62, alpha: 1), litByDefault: true, in: binnacle)
+        addLamp(name: "ats", x: -0.56, y: -0.20, litColor: UIColor(red: 0.98, green: 0.30, blue: 0.12, alpha: 1), litByDefault: false, in: binnacle)
+        addLamp(name: "slip", x: -0.44, y: -0.20, litColor: UIColor(red: 1.0, green: 0.62, blue: 0.10, alpha: 1), litByDefault: false, in: binnacle)
+        addLamp(name: "emergency", x: -0.32, y: -0.20, litColor: UIColor(red: 0.98, green: 0.16, blue: 0.10, alpha: 1), litByDefault: false, in: binnacle)
 
-        // TIMS monitor at the panel centre.
-        VehicleGeometryFactory.box("TIMSMonitorFrame", size: SIMD3(0.56, 0.40, 0.04), at: SIMD3(0.30, 0.0, 0.030), material: VehicleMaterialPalette.darkMetal, in: binnacle)
-        VehicleGeometryFactory.box("TIMSMonitorScreen", size: SIMD3(0.50, 0.34, 0.012), at: SIMD3(0.30, 0.0, 0.052), material: texturedMaterial(named: "cab_tims_screen.png"), in: binnacle)
+        // TIMS monitor at the panel centre. batch32: a deeper
+        // frame with the screen set into it, and the screen is
+        // unlit so it reads as a powered LCD instead of a
+        // printed card.
+        VehicleGeometryFactory.box("TIMSMonitorFrame", size: SIMD3(0.58, 0.42, 0.06), at: SIMD3(0.30, 0.0, 0.030), material: VehicleMaterialPalette.darkMetal, in: binnacle)
+        VehicleGeometryFactory.box("TIMSMonitorBezel", size: SIMD3(0.52, 0.36, 0.02), at: SIMD3(0.30, 0.0, 0.058), material: VehicleMaterialPalette.rubber, in: binnacle)
+        VehicleGeometryFactory.boxUnlit("TIMSMonitorScreen", size: SIMD3(0.50, 0.34, 0.012), at: SIMD3(0.30, 0.0, 0.066), material: unlitTexturedMaterial(named: "cab_tims_screen.png"), in: binnacle)
         // Lamp cluster panel right of the monitor.
         VehicleGeometryFactory.box("CabLampPanel", size: SIMD3(0.36, 0.30, 0.015), at: SIMD3(0.80, 0.03, 0.036), material: texturedMaterial(named: "cab_lamp_panel.png"), in: binnacle)
         VehicleGeometryFactory.box("RightKeypad", size: SIMD3(0.20, 0.10, 0.03), at: SIMD3(0.80, -0.20, 0.036), material: VehicleMaterialPalette.darkMetal, in: binnacle)
@@ -124,15 +151,38 @@ enum VehicleCabInteriorBuilder {
         VehicleGeometryFactory.box("CabNotchPlate", size: SIMD3(0.52, 0.012, 0.26), at: SIMD3(-0.55, 1.835, -8.16), material: texturedMaterial(named: "cab_notch_plate.png"), in: interior)
     }
 
+    /// batch50: a real round instrument for the E231 desk —
+    /// a proud bezel ring, a black recess and the dial texture
+    /// on a UV-mapped disc set back inside it, replacing the
+    /// flat square plate that read as a sprite in the first
+    /// cab photo. The needle pivot stays at z 0.048 (addNeedle),
+    /// ahead of the disc face at 0.041.
+    /// batch50 (2026-11-14, cab gauges half-cut in batch46):
+    /// the 0.28 m dials sat at binnacle y 0 (world 2.07), 36 deg
+    /// below the cab eye, so only their tops cleared the
+    /// frame's bottom edge (fy 0.95, centres fy 1.05). The
+    /// dials shrink to 0.19 m and move to y +0.18 (world 2.24,
+    /// bezel top just under the panel top at 2.34): the centre
+    /// is then ~21 deg below the eye and the whole dial spans
+    /// fy ~0.70-0.96 at the unchanged FOV 61, so the outside
+    /// view ratio (~0.55) is untouched. The lamps move to
+    /// y -0.20 to clear the raised dials.
+    private static func addRoundGauge(name: String, texture: String, x: Float, y: Float = 0, radius: Float = 0.140, in binnacle: Entity) {
+        VehicleGeometryFactory.cylinder("GaugeBezel_\(name)", radius: radius, length: 0.036, at: SIMD3(x, y, 0.020), axis: SIMD3(0, 0, 1), material: VehicleMaterialPalette.darkMetal, in: binnacle)
+        let recess = VehicleMaterialPalette.paint(UIColor(red: 0.05, green: 0.05, blue: 0.055, alpha: 1), roughness: 0.6)
+        VehicleGeometryFactory.cylinder("GaugeRecess_\(name)", radius: radius * 0.907, length: 0.032, at: SIMD3(x, y, 0.024), axis: SIMD3(0, 0, 1), material: recess, in: binnacle)
+        VehicleGeometryFactory.disc("GaugeFace_\(name)", radius: radius * 0.857, at: SIMD3(x, y, 0.041), material: texturedMaterial(named: texture), in: binnacle)
+    }
+
     private static func addGauge(name: String, texture: String, x: Float, in binnacle: Entity) {
         VehicleGeometryFactory.cylinder("GaugeBezel_\(name)", radius: 0.128, length: 0.030, at: SIMD3(x, 0, 0.018), axis: SIMD3(0, 0, 1), material: VehicleMaterialPalette.darkMetal, in: binnacle)
         VehicleGeometryFactory.box("GaugeFace_\(name)", size: SIMD3(0.235, 0.235, 0.012), at: SIMD3(x, 0, 0.036), material: texturedMaterial(named: texture), in: binnacle)
     }
 
-    private static func addNeedle(name: String, x: Float, color: UIColor, in binnacle: Entity) {
+    private static func addNeedle(name: String, x: Float, y: Float = 0, color: UIColor, in binnacle: Entity) {
         let pivot = Entity()
         pivot.name = name
-        pivot.position = SIMD3(x, 0, 0.048)
+        pivot.position = SIMD3(x, y, 0.048)
         binnacle.addChild(pivot)
         let needleMaterial = VehicleMaterialPalette.paint(color, roughness: 0.4)
         VehicleGeometryFactory.box("\(name)_Arm", size: SIMD3(0.013, 0.088, 0.004), at: SIMD3(0, 0.026, 0), material: needleMaterial, in: pivot)
@@ -199,8 +249,19 @@ enum VehicleCabInteriorBuilder {
             let visorSize = wideBlinds ? SIMD3<Float>(1.06, 0.36, 0.02) : SIMD3<Float>(0.95, 0.28, 0.02)
             let visor = VehicleGeometryFactory.box("SunVisor_\(side)", size: visorSize, at: SIMD3(side * 0.58, wideBlinds ? 3.27 : 3.24, -9.52), material: VehicleMaterialPalette.rubber, in: interior)
             visor.orientation = simd_quatf(angle: 0.5, axis: SIMD3(1, 0, 0))
-            VehicleGeometryFactory.box("WiperBlade_\(side)", size: SIMD3(0.52, 0.030, 0.010), at: SIMD3(side * 0.60, 2.655, -9.685), material: VehicleMaterialPalette.rubber, in: interior)
-            VehicleGeometryFactory.box("WiperArm_\(side)", size: SIMD3(0.020, 0.020, 0.010), at: SIMD3(side * 0.60, 2.70, -9.685), material: VehicleMaterialPalette.darkMetal, in: interior)
+            // batch45 (2026-11-14, cab photo verdict): the
+            // blades parked at y 2.655, which the photo showed
+            // as a black bar crossing the window at mid height
+            // because the old glass band floated high. With the
+            // windshield lowered (band 2.30..3.30 in the glazing
+            // builder) the blades now park at its bottom edge,
+            // y 2.36, the real rest position.
+            // batch46: the glass bottom drops to 2.05, so the
+            // parked blades follow it down (blade 2.11, arm
+            // 2.18 — the same +0.06 / +0.13 offsets from the
+            // glass bottom as batch45 set).
+            VehicleGeometryFactory.box("WiperBlade_\(side)", size: SIMD3(0.52, 0.030, 0.010), at: SIMD3(side * 0.60, 2.11, -9.685), material: VehicleMaterialPalette.rubber, in: interior)
+            VehicleGeometryFactory.box("WiperArm_\(side)", size: SIMD3(0.020, 0.020, 0.010), at: SIMD3(side * 0.60, 2.18, -9.685), material: VehicleMaterialPalette.darkMetal, in: interior)
         }
     }
 
@@ -290,6 +351,17 @@ enum VehicleCabInteriorBuilder {
     }
 
     // MARK: - Materials
+
+    /// Unlit variant for powered screens (TIMS): the texture
+    /// shows at full brightness regardless of scene lighting.
+    private static func unlitTexturedMaterial(named name: String) -> UnlitMaterial {
+        if let texture = try? TextureResource.load(named: name, in: Bundle.module) {
+            var material = UnlitMaterial()
+            material.color = .init(tint: .white, texture: .init(texture))
+            return material
+        }
+        return UnlitMaterial(color: UIColor(red: 0.10, green: 0.14, blue: 0.16, alpha: 1))
+    }
 
     private static func texturedMaterial(named name: String, tint: UIColor = .white) -> SimpleMaterial {
         if let texture = try? TextureResource.load(named: name, in: Bundle.module) {

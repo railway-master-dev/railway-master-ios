@@ -22,7 +22,23 @@ enum VehicleBodyBuilder {
         VehicleGeometryFactory.box("FrontCabLeftPillar", size: SIMD3(0.22, 1.16, 0.12), at: SIMD3(-1.24, 2.91, -9.64), material: metal, in: group)
         VehicleGeometryFactory.box("FrontCabRightPillar", size: SIMD3(0.22, 1.16, 0.12), at: SIMD3(1.24, 2.91, -9.64), material: metal, in: group)
         VehicleGeometryFactory.box("FrontCabHeader", size: SIMD3(2.70, 0.38, 0.12), at: SIMD3(0, 3.42, -9.64), material: metal, in: group)
-        VehicleGeometryFactory.box("FrontCabCenterPillar", size: SIMD3(0.10, 0.82, 0.12), at: SIMD3(0, 2.91, -9.64), material: metal, in: group)
+        // batch45 (2026-11-14, cab photo verdict): the centre
+        // pillar used to span y 2.50..3.32 while the windshield
+        // glass only covered y 2.62..3.34, so its lower end
+        // dangled into the open band under the glass and read
+        // in the cab photo as a grey strap hanging in front of
+        // the gangway. The pillar now spans exactly the enlarged
+        // glass band (y 2.30..3.30, see the glazing builder) and
+        // is slimmed to 0.08 m, and a solid lower panel closes
+        // the front face between the fascia and the glass, the
+        // way a real driving cab's front wall does.
+        // batch46: the glass band grows to y 2.05..3.30 (see
+        // the glazing builder), so the pillar spans the new
+        // band at the same 0.08 m slimness, and the lower
+        // panel shrinks to close only what is left below the
+        // glass (1.66..2.05).
+        VehicleGeometryFactory.box("FrontCabCenterPillar", size: SIMD3(0.08, 1.25, 0.12), at: SIMD3(0, 2.675, -9.64), material: metal, in: group)
+        VehicleGeometryFactory.box("FrontCabLowerPanel", size: SIMD3(2.70, 0.39, 0.12), at: SIMD3(0, 1.855, -9.64), material: metal, in: group)
         VehicleGeometryFactory.box("FrontLowerFascia", size: SIMD3(2.72, 0.48, 0.16), at: SIMD3(0, 1.43, -9.69), material: accent, in: group)
         VehicleGeometryFactory.box("RearEndFace", size: SIMD3(2.70, 2.18, 0.12), at: SIMD3(0, 2.43, 9.64), material: metal, in: group)
         VehicleGeometryFactory.box("RearLowerFascia", size: SIMD3(2.72, 0.48, 0.16), at: SIMD3(0, 1.43, 9.69), material: accent, in: group)
@@ -30,7 +46,14 @@ enum VehicleBodyBuilder {
         // 前後の貫通幌・連結器の基本形状。
         VehicleGeometryFactory.box("FrontCoupler", size: SIMD3(0.34, 0.24, 0.42), at: SIMD3(0, 0.78, -9.82), material: dark, in: group)
         VehicleGeometryFactory.box("RearCoupler", size: SIMD3(0.34, 0.24, 0.42), at: SIMD3(0, 0.78, 9.82), material: dark, in: group)
-        VehicleGeometryFactory.box("FrontGangway", size: SIMD3(0.82, 1.65, 0.10), at: SIMD3(0, 2.05, -9.73), material: dark, in: group)
+        // batch45: no gangway bellows on the FRONT face. A
+        // driving cab's front is a smooth wall (windows, centre
+        // pillar, lower panel); the protruding dark bellows box
+        // (0.82 x 1.65 at z -9.73) filled the centre of the cab
+        // photo as a huge black rectangle seen through the open
+        // band under the old glass. Inter-car gaps keep the rear
+        // bellows of the car ahead, so removing the front one
+        // does not open the gaps.
         VehicleGeometryFactory.box("RearGangway", size: SIMD3(0.82, 1.65, 0.10), at: SIMD3(0, 2.05, 9.73), material: dark, in: group)
     }
 }
