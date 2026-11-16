@@ -14,11 +14,15 @@ final class FictionalTrackImpactTests: XCTestCase {
         // with their full S-curve length (toes 560–690 m from
         // each line end); every other span stays a compact
         // points-plus-frog length.
+        // batch107: B04-crossover joins the set — the branch
+        // terminal's drawn siding divergence, registered at
+        // its full 340 m S-curve length on the branch line.
         let crossovers = spans.filter { $0.id.hasSuffix("-crossover") }
-        XCTAssertEqual(Set(crossovers.map(\.id)), ["S01-crossover", "S28-crossover"])
+        XCTAssertEqual(Set(crossovers.map(\.id)), ["S01-crossover", "S28-crossover", "B04-crossover"])
         XCTAssertTrue(crossovers.contains { $0.line == .main && $0.startM == 560 && $0.endM == 690 })
         XCTAssertTrue(crossovers.contains { $0.line == .main && $0.startM == 59_310 && $0.endM == 59_440 })
-        XCTAssertTrue(crossovers.allSatisfy { $0.lengthM == 130 })
+        XCTAssertTrue(crossovers.filter { $0.line == .main }.allSatisfy { $0.lengthM == 130 })
+        XCTAssertTrue(crossovers.contains { $0.id == "B04-crossover" && $0.line == .branch && $0.role == .stationConnection && $0.startM == 7_460 && $0.endM == 7_800 && $0.lengthM == 340 })
         // batch89: the drawn throat fans at the diagram v4
         // passing stations are registered with their true
         // transition lengths (entry 240 m, exit 300 m — the
@@ -60,7 +64,12 @@ final class FictionalTrackImpactTests: XCTestCase {
                 XCTAssertLessThanOrEqual(a.endM, b.startM, "\(a.id) overlaps \(b.id)")
             }
         }
-        XCTAssertEqual(spans.count, 51)
+        // batch105: 51 -> 41 after the phantom placeholder
+        // loop spans (S05/S10/S20/S25/B02) were deleted; only
+        // S15's placeholder spans remain, on its drawn fan.
+        // batch107: 41 -> 42 — B04-crossover registers the
+        // branch terminal's drawn siding divergence.
+        XCTAssertEqual(spans.count, 42)
         XCTAssertEqual(Set(spans.map(\.id)).count, spans.count)
     }
 
