@@ -393,6 +393,25 @@ final class GameSystemsIntegrationTests: XCTestCase {
         model.setThrottle(5)
         var wall = 1_000.0
         model.advance(at: wall)
+        // batch108: a fresh session starts with the doors open at
+        // the origin and the departure sequence (bell, close,
+        // buzzer) gates departure, so the train cannot move until
+        // the sequence lands. Wait for the doors to close (bounded)
+        // before starting the overspeed window; the staging below
+        // is about the ATS intervention, not the departure hold.
+        // If the doors never close, the sequence itself is broken
+        // and this fails here with that message instead of at the
+        // overspeed unwrap below.
+        var doorsClosedWall: Double?
+        for _ in 0..<120 {
+            wall += 0.25
+            model.advance(at: wall)
+            if model.gameModeDoorState == .closed {
+                doorsClosedWall = wall
+                break
+            }
+        }
+        _ = try XCTUnwrap(doorsClosedWall, "the batch108 departure sequence must close the doors")
         var firstOverspeedWall: Double?
         var brakeWall: Double?
         for _ in 0..<480 {
