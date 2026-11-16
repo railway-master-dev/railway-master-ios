@@ -197,8 +197,9 @@ final class RegionalIntegrationTests: XCTestCase {
             Double(RegionalRouteGeometrySampler.carBodyPitchRadians(frontBogieElevationM: 0, rearBogieElevationM: 1.27)), 0)
 
         // Over the real profile the bogie-difference pitch must track the
-        // analytic local gradient and stay inside the steepest zone
-        // gradient (25 permille -> atan(0.025) = 0.025 rad).
+        // analytic local gradient and stay inside the steepest grade
+        // of the canonical grade table (ruling grade 10 permille ->
+        // atan(0.010) = 0.010 rad).
         let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
         let route = try RegionalRouteFactory.make(
             plan: plan, variant: .mainline, direction: .up, geometrySeed: RegionalRouteFactory.defaultGeometrySeed
@@ -228,7 +229,7 @@ final class RegionalIntegrationTests: XCTestCase {
             maxMismatch = max(maxMismatch, abs(pitch - atan(gradient)))
         }
         XCTAssertLessThan(maxPitch, atan(0.026), "Pitch beyond the steepest zone gradient")
-        XCTAssertGreaterThan(maxPitch, atan(0.015), "No steep grade exercised: pitch never engages")
+        XCTAssertGreaterThan(maxPitch, atan(0.008), "No steep grade exercised: pitch never engages")
         XCTAssertLessThan(maxMismatch, 0.002, "Bogie-difference pitch does not track the local gradient")
     }
 
