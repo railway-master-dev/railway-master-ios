@@ -199,63 +199,74 @@ final class GameSystemsIntegrationTests: XCTestCase {
     }
 
     @MainActor
-    func testDepotGameModeScenarioPinsSingleCoLocatedYardTarget() throws {
+    func testDepotGameModeScenarioPinsSplitYardTargets() throws {
         let model = SimulatorModel()
         XCTAssertTrue(model.selectRoute(variant: .depotTransfer, category: .local, direction: .up))
         let context = model.gameModeContext
         XCTAssertEqual(context.variant, .depotTransfer)
         XCTAssertEqual(context.stops.count, 2)
-        // The yard is a single zone: StopScoringRouteAdapter
-        // bounds every depot stop by the whole spur and centres
-        // the target, so the prepared origin target and the
-        // final stop's adjusted target coincide, well short of
-        // the spur end. This pins the batch103 audit finding —
-        // the depot scenario has exactly one target, not a
-        // stop-by-stop structure.
+        // batch116: the yard is no longer a single zone.
+        // StopScoringRouteAdapter gives each depot stop its
+        // own 200 m zone (origin at the spur start, terminal
+        // at the spur end) and centres the target in it, so
+        // the origin target and the final stop's target are
+        // ~1.8 km apart instead of co-located — the batch103
+        // audit finding this test used to pin is superseded.
+        // The bounds below are consist-independent: any
+        // consist that fits a 200 m zone centres inside it.
         let finalStop = try XCTUnwrap(context.stops.last)
         XCTAssertGreaterThan(context.originTargetM, 0)
-        XCTAssertEqual(finalStop.positionM, context.originTargetM, accuracy: 0.1)
+        XCTAssertLessThan(context.originTargetM, StopScoringRouteAdapter.depotZoneLengthM)
+        XCTAssertGreaterThan(finalStop.positionM, context.route.distanceM - StopScoringRouteAdapter.depotZoneLengthM)
         XCTAssertLessThan(finalStop.positionM, context.route.distanceM)
-        // The consist is placed at that same target on reset:
-        // the run's start position is its only target.
+        XCTAssertGreaterThan(finalStop.positionM - context.originTargetM, 1_500)
+        // The consist is placed at the origin target on
+        // reset: the run now STARTS there, ~1.8 km short of
+        // its only other target.
         let snapshot = try XCTUnwrap(model.gameModeSnapshot)
         XCTAssertEqual(snapshot.positionM, context.originTargetM, accuracy: 0.1)
-        // The depot exception in validOrderedStops lets the
-        // large terminal shortfall through, so an unscored mode
-        // still builds, with both plans on the one yard target.
+        // validOrderedStops anchors the first stop on the
+        // origin target and bounds the depot terminal
+        // shortfall by half the end zone, which the centred
+        // final target satisfies, so an unscored mode builds
+        // with the two distinct yard targets.
         let freeResult = RegionalGameModeAdapter.build(
             mode: .free, playStyle: .standard, context: context, snapshot: snapshot
         )
         let scenario = try XCTUnwrap(freeResult.scenario)
         XCTAssertEqual(scenario.stops.count, 2)
         XCTAssertEqual(scenario.stops[0].positionM, context.originTargetM, accuracy: 0.1)
-        XCTAssertEqual(scenario.stops[1].positionM, scenario.stops[0].positionM, accuracy: 0.1)
+        XCTAssertEqual(scenario.stops[1].positionM, finalStop.positionM, accuracy: 0.1)
+        XCTAssertGreaterThan(scenario.stops[1].positionM, scenario.stops[0].positionM)
     }
 
     @MainActor
-    func testDepotScoredRunModesAreBlockedWhileProcedureModesStayAvailable() throws {
+    func testDepotScoredRunModesAreAvailableWithSplitYardTargets() throws {
         let model = SimulatorModel()
         XCTAssertTrue(model.selectRoute(variant: .depotTransfer, category: .local, direction: .up))
         let context = model.gameModeContext
         let snapshot = try XCTUnwrap(model.gameModeSnapshot)
-        // batch103: driver and full-line success is purely
-        // positional (ordered stop visits + the service-end
-        // position), and on the depot both are already met at
-        // the start position, so the adapter must refuse to
-        // certify a run that never moved.
+        // batch103 refused driver and full-line on the depot
+        // because success there is purely positional (ordered
+        // stop visits + the service-end position) and both
+        // gates were already met at the start position, the
+        // two yard targets being co-located. batch116 split
+        // the yard zones, so the origin target and the final
+        // target are ~1.8 km apart, the batch103 co-location
+        // guard no longer fires, and the scored modes build
+        // like on any other two-target route: certifying a
+        // depot run now requires actually driving the spur.
         for mode in [GameModeID.driver, .fullLine] {
             let result = RegionalGameModeAdapter.build(
                 mode: mode, playStyle: .standard, context: context, snapshot: snapshot
             )
-            XCTAssertNil(result.scenario, "\(mode) must not build a scored depot run")
-            XCTAssertFalse(result.blockingMessages.isEmpty)
-            XCTAssertThrowsError(try RegionalGameModeAdapter.makeSession(
+            XCTAssertNotNil(result.scenario, "\(mode) must build a scored depot run now that the yard targets are split")
+            let session = try RegionalGameModeAdapter.makeSession(
                 mode: mode, playStyle: .standard, context: context, snapshot: snapshot
-            ))
+            )
+            XCTAssertEqual(session.status, .ready)
         }
-        // Conductor scores the door procedure performed at the
-        // yard target, not travel between targets, so it stays
-        // available; free mode has no stop scoring at all.
+        // Conductor and free stay available, as before.
         let conductor = try RegionalGameModeAdapter.makeSession(
             mode: .conductor, playStyle: .standard, context: context, snapshot: snapshot
         )
@@ -306,15 +317,28 @@ final class GameSystemsIntegrationTests: XCTestCase {
             snapshot: snapshot
         )
         XCTAssertNotNil(marginResult.scenario)
-        // The same large shortfall is legitimate for the depot
-        // transfer, whose single yard-zone target is centred
-        // ~900 m short of the spur end by design.
+        // The depot transfer's terminal target is centred in
+        // its own 200 m end zone (batch116), so a shortfall up
+        // to half the zone — 100 m, the limit as the consist
+        // length shrinks — is legitimate there. Beyond the
+        // zone the depot is invalid again: that bound is what
+        // keeps a collapsed or misplaced yard target from
+        // validating (the pre-batch116 whole-spur zone put
+        // the target ~900 m short and the clause was skipped
+        // entirely).
         let depotResult = RegionalGameModeAdapter.build(
             mode: .free, playStyle: .standard,
             context: contextWithFinalShortfall(100, variant: .depotTransfer),
             snapshot: snapshot
         )
         XCTAssertNotNil(depotResult.scenario)
+        let depotShortResult = RegionalGameModeAdapter.build(
+            mode: .free, playStyle: .standard,
+            context: contextWithFinalShortfall(500, variant: .depotTransfer),
+            snapshot: snapshot
+        )
+        XCTAssertNil(depotShortResult.scenario)
+        XCTAssertEqual(depotShortResult.blockingReason, .missingStops)
     }
 
     @MainActor
@@ -496,5 +520,329 @@ final class GameSystemsIntegrationTests: XCTestCase {
         XCTAssertTrue(opposingAtS28.phase == .running || opposingAtS28.phase == .dwelling,
                       "the S28 opposing seed must be posed (running or dwelling), got \(opposingAtS28.phase)")
         XCTAssertGreaterThanOrEqual(opposingAtS28.positionM, 50_000)
+    }
+
+    // batch119 regression (IPA #12 device report, 2026-11-16:
+    // "no oncoming trains at all" on a 06:23–06:32 up
+    // service): batch108 anchored the DISPLAY clock to the
+    // player's origin departure − 30 s, but the traffic
+    // scenario kept the 05:30 service-day zero, so the
+    // traffic world in that session was still at 05:47–05:56
+    // — before the first 06:00 departures — and the batch90
+    // seeds covering the window had already arrived and
+    // despawned. The batch90 test above pins the ENGINE
+    // alone (playerTrain = nil) on the free-running
+    // scenario; this test pins the HOST path: a scheduled
+    // session's scenario is generated on the session's own
+    // anchor, so the 06:00 departures from the far terminus
+    // are already en route in the snapshot reset() installs.
+    @MainActor
+    func testScheduledSessionStartsWithOncomingDiagramTrainsEnRoute() throws {
+        let model = SimulatorModel()
+        XCTAssertTrue(model.selectRoute(variant: .mainline, category: .local, direction: .down))
+        // The first morning local out of Kamogawa departs
+        // just after 06:00 (06:06:05 in the device session),
+        // so the anchor (origin departure − 30 s) sits just
+        // after 06:00 as well — past the first departures
+        // from both termini, not half an hour before them.
+        let anchor = model.gameClockAnchorDaySeconds
+        XCTAssertGreaterThan(anchor, 21_600, "the session anchor must be past the 06:00 first departures, got \(anchor)")
+        XCTAssertLessThan(anchor, 22_200, "the session anchor must stay near 06:05, got \(anchor)")
+        let snapshot = try XCTUnwrap(model.trafficSnapshot)
+        // Oncoming for a Kamogawa → Kaibukuro player is the
+        // main-up track (the geographic down direction).
+        let oncoming = snapshot.trains.filter {
+            $0.trackID == "main-up" && ($0.phase == .running || $0.phase == .dwelling)
+        }
+        XCTAssertFalse(oncoming.isEmpty, "diagram trains out of Kaibukuro must already be en route at session start")
+        let firstDown = try XCTUnwrap(snapshot.trains.first { $0.id == "v4-local-down-morningRush-360" })
+        XCTAssertTrue(firstDown.phase == .running || firstDown.phase == .dwelling,
+                      "the 06:00 Kaibukuro local must be en route at session start, got \(firstDown.phase)")
+        XCTAssertGreaterThan(firstDown.positionM, 0)
+        XCTAssertLessThan(firstDown.positionM, 20_000)
+    }
+
+    // batch112 regression (IPA #12 device report, 2026-11-16:
+    // the session started with the doors already closed and
+    // no departure sequence ran): reset placed the train
+    // front at the adjusted origin target (platformEnd − 5 m,
+    // 195 m at S01), but activeStops[0] kept the raw station
+    // position (0) — 195 m away, far outside the door cycle's
+    // 4 m stop match — so the automatic door cycle never
+    // recognised the train as standing at the origin, the
+    // doors never opened, and the batch108 bell → close →
+    // buzzer sequence never ran. The overspeed test above
+    // cannot see this: it waits for .closed, which is also
+    // the initial state, so its wait is satisfied vacuously.
+    // This test asserts the missing half: the origin stop
+    // record carries the placement target, and the doors
+    // actually OPEN after reset and close again through the
+    // sequence.
+    @MainActor
+    func testOriginDoorsOpenAfterResetForScheduledService() throws {
+        let model = SimulatorModel()
+        XCTAssertTrue(model.selectRoute(variant: .mainline, category: .local, direction: .up))
+        let originStop = try XCTUnwrap(model.activeStops.first)
+        let context = model.gameModeContext
+        XCTAssertGreaterThan(context.originTargetM, 0)
+        XCTAssertEqual(originStop.positionM, context.originTargetM, accuracy: 0.001,
+                       "the origin stop must carry the placement target, not the raw station position")
+        // The placed train front stands on that same target.
+        let snapshot = try XCTUnwrap(model.gameModeSnapshot)
+        XCTAssertEqual(snapshot.positionM, originStop.positionM, accuracy: 0.001)
+
+        var wall = 3_000.0
+        model.advance(at: wall)
+        var sawOpen = false
+        var closedAgain = false
+        for _ in 0..<240 {
+            wall += 0.25
+            model.advance(at: wall)
+            if model.gameModeDoorState.isOpen { sawOpen = true }
+            if sawOpen, model.gameModeDoorState == .closed {
+                closedAgain = true
+                break
+            }
+        }
+        XCTAssertTrue(sawOpen, "the automatic door cycle must open the doors at the origin after reset")
+        XCTAssertTrue(closedAgain, "the batch108 departure sequence must close the origin doors again")
+    }
+
+    // batch116 regression (IPA #12 device report, 2026-11-16:
+    // selecting the depot line showed the result sheet before
+    // the train moved): both depot stops shared the whole
+    // 2 km yard zone, so the centred origin target and the
+    // final target coincided (1,078 m for 8 cars), reset
+    // placed the train exactly on the final target with
+    // nextStopIndex already pointing at it, and
+    // updateRunPhase — which has no must-depart-first guard —
+    // counted the 2 s arrival dwell from the first tick and
+    // completed the run untouched. The batch103 pins pinned
+    // the co-location itself, but nothing asserted the normal
+    // driving path could not complete at spawn. Phase 1 is
+    // that missing assertion; phase 2 drives the spur and
+    // pins that a genuine arrival still completes the run.
+    @MainActor
+    func testDepotRunDoesNotCompleteAtSpawnAndArrivesAtSpurEnd() throws {
+        let model = SimulatorModel()
+        XCTAssertTrue(model.selectRoute(variant: .depotTransfer, category: .local, direction: .up))
+        let finalTarget = try XCTUnwrap(model.activeStops.last).positionM
+
+        // Phase 1: no input for 10 s of simulation — five
+        // times the 2 s arrival dwell that used to end the
+        // run at spawn. The run must still be live.
+        var wall = 5_000.0
+        model.advance(at: wall)
+        for _ in 0..<40 {
+            wall += 0.25
+            model.advance(at: wall)
+        }
+        XCTAssertEqual(model.runPhase, .running,
+                       "an untouched depot run must not complete itself at spawn")
+        XCTAssertNil(model.completedSummary)
+
+        // Phase 2: drive the ~1.8 km to the spur end and stop
+        // on the final target. The controller tracks the lower
+        // of the host's own permitted speed and a 0.5 m/s²
+        // braking-curve profile for the remaining distance,
+        // floored at creep pace while there is still ground
+        // to cover, and holds full brake inside the last
+        // metres, so the stop lands inside the ±4 m arrival
+        // window without tripping the +12 m overshoot
+        // completion. (The door cycle opens at the yard
+        // origin after the reset and the interlock holds the
+        // train until it closes; the loop simply keeps
+        // commanding through that, as a driver would.)
+        model.reset()
+        var arrived = false
+        for _ in 0..<2_000 {
+            let remaining = finalTarget - model.telemetry.positionM
+            let speed = model.telemetry.speedMps
+            let permitted = (model.operationsSnapshot?.permittedSpeedKmh ?? 100) / 3.6
+            var desired = min(permitted - 0.6, 16)
+            desired = min(desired, (max(0, remaining - 2)).squareRoot())
+            if remaining < 25 {
+                desired = min(desired, max(0.8, remaining / 6))
+            }
+            if remaining > 3.2 {
+                desired = max(desired, 0.8)
+            }
+            if remaining <= 3.2 {
+                model.setThrottle(0)
+                model.setBrake(7)
+            } else if speed < desired - 0.4 {
+                model.setThrottle(4)
+                model.setBrake(0)
+            } else if speed > desired + 0.2 {
+                model.setThrottle(0)
+                model.setBrake(3)
+            } else {
+                model.setThrottle(0)
+                model.setBrake(0)
+            }
+            wall += 0.25
+            model.advance(at: wall)
+            if model.runPhase == .arrived {
+                arrived = true
+                break
+            }
+            XCTAssertNotEqual(model.runPhase, .overshot,
+                              "the driven arrival must stop at the target, not run through it")
+        }
+        XCTAssertTrue(arrived, "driving the depot spur to its end target must complete the run as an arrival")
+        XCTAssertNotNil(model.completedSummary)
+    }
+
+    // batch121 regression (design study §1.6, IPA #12 device
+    // reports): StopScoringRouteAdapter.prepare THREW for
+    // every down zoo / park session — the junction station is
+    // the final stop there, and its canonical platform
+    // (station centre ± 100 m in mainline chainage) maps to a
+    // travel-frame range ending 100 m past the route end,
+    // tripping the scoring loop's route-bounds guard. The
+    // whole preparation failed with it: no stop scoring, no
+    // adjusted stops, no origin placement (the train spawned
+    // at 0 with the terminal platform drawn at the opposite
+    // end of the world). The synthetic terminal's zone was
+    // likewise fixed at the far end, so as the down ORIGIN
+    // its zone sat 2.3 km from the stop itself. Both stops
+    // now take a 200 m zone at their own end of the route,
+    // keyed on travel order like the depot zones.
+    func testZooAndParkDownPrepareSucceedsWithValidOriginPlacement() throws {
+        let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
+        let routePackage = try RailwayRouteData.RoutePackageLoader.loadResource(named: "fictional_70km_network")
+        // Zoo / park services run 8 cars = 156 m by the
+        // consist rule; centred in a 200 m span the front
+        // stands at 0 + 156 + (200 − 156) / 2 = 178.
+        for (variant, routeLength) in [(RegionalRouteVariant.zooLine, 2_500.0), (RegionalRouteVariant.parkLine, 2_000.0)] {
+            let trip = try RegionalRouteFactory.make(plan: plan, variant: variant, category: .local, direction: .down)
+            let prepared = try StopScoringRouteAdapter.prepare(
+                trip: trip,
+                plan: plan,
+                routePackage: routePackage,
+                trainLengthMeters: 156
+            )
+            XCTAssertEqual(prepared.originTargetM, 178, accuracy: 0.001,
+                           "\(variant) down: the origin consist must be centred in its 200 m end zone")
+            XCTAssertEqual(prepared.activeStops.count, 2)
+            XCTAssertEqual(prepared.activeStops[0].positionM, prepared.originTargetM, accuracy: 0.001,
+                           "\(variant) down: the origin stop record must carry the placement target")
+            // The junction final stop keeps the ARRIVAL rule
+            // (front at platformEnd − 5) inside the far-end
+            // zone — prepare succeeding at all is the core
+            // regression assertion (it threw before).
+            XCTAssertEqual(prepared.activeStops[1].positionM, routeLength - 5, accuracy: 0.001,
+                           "\(variant) down: the junction arrival target must sit on the margin line")
+            let definition = try XCTUnwrap(prepared.stationDefinitions.first)
+            XCTAssertEqual(definition.platformStartChainageMeters, routeLength - 200, accuracy: 0.001)
+            XCTAssertEqual(definition.platformEndChainageMeters, routeLength, accuracy: 0.001)
+            XCTAssertEqual(definition.targetStopChainageMeters, routeLength - 5, accuracy: 0.001)
+        }
+        // Host path: selecting a down zoo / park session must
+        // leave the model with a prepared scoring session and
+        // the train placed on the origin target, not with a
+        // prepare error and a spawn at 0.
+        for variant in [RegionalRouteVariant.zooLine, RegionalRouteVariant.parkLine] {
+            let model = SimulatorModel()
+            XCTAssertTrue(model.selectRoute(variant: variant, category: .local, direction: .down))
+            XCTAssertNil(model.stopScoringError,
+                         "\(variant) down must prepare cleanly through the host path, got \(model.stopScoringError ?? "")")
+            let context = model.gameModeContext
+            XCTAssertGreaterThan(context.originTargetM, 0,
+                                 "\(variant) down: the origin placement must not fall back to 0")
+            XCTAssertEqual(model.activeStops.first?.positionM ?? -1, context.originTargetM, accuracy: 0.001)
+            XCTAssertGreaterThan(model.activeStops.last?.positionM ?? 0, context.route.distanceM - 200)
+        }
+    }
+
+    // batch121 (design study §2.5): the origin placement rule
+    // is unified across ALL lines — the consist is CENTRED in
+    // the origin platform span. Before this batch the origin
+    // borrowed the arrival rule (front at platformEnd − 5,
+    // batch74), so at 海袋 and on the branch only the end
+    // slope was visible ahead of the cab, and on the zoo /
+    // park up shuttles the train sat at 95 m while the drawn
+    // platform was centred on 0. Non-origin stops keep the
+    // arrival rule; the depot keeps the centred numbers it
+    // already had (batch116).
+    func testOriginTargetIsCentredInPlatformSpanOnEveryLine() throws {
+        let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
+        let routePackage = try RailwayRouteData.RoutePackageLoader.loadResource(named: "fictional_70km_network")
+        func originTarget(_ variant: RegionalRouteVariant, _ direction: RegionalTravelDirection) throws -> PreparedStopScoringSession {
+            let trip = try RegionalRouteFactory.make(plan: plan, variant: variant, category: .local, direction: direction)
+            return try StopScoringRouteAdapter.prepare(
+                trip: trip,
+                plan: plan,
+                routePackage: routePackage,
+                trainLengthMeters: 156
+            )
+        }
+        // Every passenger origin span is 200 m, so an 8-car
+        // consist centres with its front at 178 everywhere:
+        // mainline both ways, branch both ways, zoo / park
+        // both ways.
+        for (variant, direction) in [
+            (RegionalRouteVariant.mainline, RegionalTravelDirection.up),
+            (RegionalRouteVariant.mainline, RegionalTravelDirection.down),
+            (RegionalRouteVariant.branchShuttle, RegionalTravelDirection.up),
+            (RegionalRouteVariant.branchShuttle, RegionalTravelDirection.down),
+            (RegionalRouteVariant.zooLine, RegionalTravelDirection.up),
+            (RegionalRouteVariant.zooLine, RegionalTravelDirection.down),
+            (RegionalRouteVariant.parkLine, RegionalTravelDirection.up),
+            (RegionalRouteVariant.parkLine, RegionalTravelDirection.down),
+        ] {
+            let prepared = try originTarget(variant, direction)
+            XCTAssertEqual(prepared.originTargetM, 178, accuracy: 0.001,
+                           "\(variant)/\(direction): origin front must centre the consist in the 200 m span")
+            XCTAssertEqual(prepared.activeStops[0].positionM, 178, accuracy: 0.001,
+                           "\(variant)/\(direction): the origin stop record must carry the centred target")
+        }
+        // The arrival rule is untouched for non-origin stops:
+        // S02's target is still its platform end − 5.
+        let mainlineUp = try originTarget(.mainline, .up)
+        let s02 = try XCTUnwrap(mainlineUp.stationDefinitions.first)
+        XCTAssertEqual(s02.stationID, "S02")
+        XCTAssertEqual(s02.platformStartChainageMeters, 1_739, accuracy: 0.001)
+        XCTAssertEqual(s02.platformEndChainageMeters, 1_939, accuracy: 0.001)
+        XCTAssertEqual(s02.targetStopChainageMeters, 1_934, accuracy: 0.001)
+        // Depot: batch116's centred split-zone targets are
+        // exactly what the unified rule produces — unchanged.
+        let depot = try originTarget(.depotTransfer, .up)
+        XCTAssertEqual(depot.originTargetM, 178, accuracy: 0.001)
+        XCTAssertEqual(depot.activeStops.last?.positionM ?? -1, 1_978, accuracy: 0.001)
+    }
+
+    // batch121 (user decision 2026-11-16, real-world
+    // convention): 上り means travel toward the line's origin
+    // — mainline toward 海袋 (decreasing chainage), branch /
+    // zoo / park toward their junction station. Internally
+    // RegionalTravelDirection.up keeps its chainage meaning
+    // (increasing), so the case labelled 上り is .down; the
+    // pin below keeps the label, the factory travel and the
+    // plan's ServiceDirection (whose .up already meant
+    // decreasing and already displayed 上り) in agreement.
+    func testUpLabelMeansTravelTowardTheOrigin() throws {
+        XCTAssertEqual(RegionalTravelDirection.down.title, "上り")
+        XCTAssertEqual(RegionalTravelDirection.up.title, "下り")
+        XCTAssertEqual(ServiceDirection.up.displayName, "上り")
+        XCTAssertEqual(ServiceDirection.down.displayName, "下り")
+        let plan = try XCTUnwrap(FictionalOperationsPlan.loadBundled())
+        // Selecting 上り on the mainline (the .down case)
+        // yields travel from 鴨河 toward the 海袋 terminus.
+        let nobori = try RegionalRouteFactory.make(plan: plan, variant: .mainline, category: .local, direction: .down)
+        XCTAssertEqual(nobori.stops.first?.stationID, "S28")
+        XCTAssertEqual(nobori.stops.last?.stationID, "S01")
+        XCTAssertEqual(nobori.profile.departureStation, "鴨河")
+        XCTAssertEqual(nobori.profile.arrivalStation, "海袋")
+        let kudari = try RegionalRouteFactory.make(plan: plan, variant: .mainline, category: .local, direction: .up)
+        XCTAssertEqual(kudari.stops.first?.stationID, "S01")
+        XCTAssertEqual(kudari.stops.last?.stationID, "S28")
+        // On the branch lines 上り ends at the junction
+        // station, not at the outer terminal.
+        let zooNobori = try RegionalRouteFactory.make(plan: plan, variant: .zooLine, category: .local, direction: .down)
+        XCTAssertEqual(zooNobori.stops.map(\.stationID), ["ZOO_END", "S24"])
+        let branchNobori = try RegionalRouteFactory.make(plan: plan, variant: .branchShuttle, category: .local, direction: .down)
+        XCTAssertEqual(branchNobori.stops.first?.stationID, "B04")
+        XCTAssertEqual(branchNobori.stops.last?.stationID, "S28")
     }
 }
