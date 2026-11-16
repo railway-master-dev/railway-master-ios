@@ -647,7 +647,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// creates anchors for cells the near pass never saw).
     /// Keys pack the two cell coordinates into one Int64
     /// (see chunkCellKey).
-    private var chunkAnchorIndexByKey: [Int64: Int] = []
+    private var chunkAnchorIndexByKey: [Int64: Int] = [:]
     /// batch80: one world child held back by
     /// organizeWorldChunks because its own origin sits
     /// beyond the near-organize radius. It stays a direct
