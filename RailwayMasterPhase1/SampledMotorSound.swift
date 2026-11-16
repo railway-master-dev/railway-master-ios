@@ -29,6 +29,17 @@ final class SampledMotorSound {
     /// The AudioHarness installs only attachHandler and relies
     /// on this fallback.
     var runAttachHandler: ((AVAudioPlayerNode, AVAudioUnitVarispeed, AVAudioFormat) -> Void)?
+    /// batch114: set by the host engine: attaches a MOTOR
+    /// player through an AVAudioUnitVarispeed, mirroring
+    /// runAttachHandler, so the motor bands get the same
+    /// BVE-style pitch drive the run bed already has (see
+    /// the vari-speed drive in update). Optional: when nil,
+    /// preattachIfNeeded falls back to attachHandler for the
+    /// motor players and the varispeeds stay out of the
+    /// graph (rate writes are inert) — the AudioHarness
+    /// relies on this fallback, exactly as it does for the
+    /// run role.
+    var motorAttachHandler: ((AVAudioPlayerNode, AVAudioUnitVarispeed, AVAudioFormat) -> Void)?
     /// Set by the host engine: best-effort engine start.
     var startHandler: (() -> Void)?
 
@@ -43,6 +54,29 @@ final class SampledMotorSound {
 
     private var motorPlayers: [AVAudioPlayerNode] = []
     private var motorSlotSample: [String?] = [nil, nil, nil]
+    /// batch114: per-slot varispeed units for the motor
+    /// pitch drive, parallel to motorPlayers (created in
+    /// preattachIfNeeded whether or not the host wires them
+    /// into the graph — an unattached unit's rate is inert).
+    private var motorVarispeeds: [AVAudioUnitVarispeed] = []
+    /// batch114: per-slot smoothed playback rate, driven
+    /// toward motorTargetRate each update.
+    private var motorSlotRates: [Float] = [1, 1, 1]
+    /// batch114: slot hysteresis state (see update): the
+    /// uptime at which the slot's sample first fell out of
+    /// the interpolated desired set, nil while the sample
+    /// is desired or the slot is empty.
+    private var motorSlotAbsentSince: [Double?] = [nil, nil, nil]
+    /// batch114: home-speed tables for the vari-speed
+    /// drive, per "family|mode", built lazily by
+    /// motorHomeSpeeds(family:mode:).
+    private var homeSpeedCache: [String: [String: Float]] = [:]
+    /// batch114: host-frame delta (seconds) feeding the
+    /// time-based approach(); refreshed at the top of every
+    /// update and clamped to [0, 0.25]. 1/60 until the
+    /// first measured delta exists.
+    private var frameDtSeconds: Double = 1.0 / 60.0
+    private var lastUpdateUptime: Double?
     private var runPlayer: AVAudioPlayerNode?
     /// batch78: varispeed inserted in the run player's chain
     /// when the host installs runAttachHandler (see above).
@@ -280,9 +314,18 @@ final class SampledMotorSound {
         let runFormat = runConnectionFormat ?? Self.codeGeneratedRunFormat
         for _ in 0..<3 {
             let player = AVAudioPlayerNode()
-            attachHandler(player, motorFormat)
+            // batch114: each motor player gets its varispeed
+            // at attach time, like the run player — the graph
+            // never changes shape after init (CI #138/#163).
+            let varispeed = AVAudioUnitVarispeed()
+            if let motorAttachHandler {
+                motorAttachHandler(player, varispeed, motorFormat)
+            } else {
+                attachHandler(player, motorFormat)
+            }
             attachedFormats[ObjectIdentifier(player)] = motorFormat
             motorPlayers.append(player)
+            motorVarispeeds.append(varispeed)
         }
         let run = AVAudioPlayerNode()
         let varispeed = AVAudioUnitVarispeed()
@@ -385,8 +428,59 @@ final class SampledMotorSound {
         }
     }
 
+    /// batch114: the smoothing is TIME-based now. It used to
+    /// close a fixed 0.4 of the gap per call, and update()
+    /// runs once per host frame, so the effective time
+    /// constant stretched with the frame rate — at the
+    /// device's choppy 10–20 fps the ramps took 0.25–0.5 s
+    /// and landed irregularly, part of what the IPA #12
+    /// verdict heard as motor bands not joining (diagnosis
+    /// M3). The factor 1 − 0.6^(dt·60) is exactly the old
+    /// 0.4 at a 60 fps cadence and gives the same
+    /// convergence in seconds at any other cadence.
     private func approach(_ current: Float, _ target: Float) -> Float {
-        current + (target - current) * 0.4
+        let factor = 1 - pow(0.6, frameDtSeconds * 60)
+        return current + (target - current) * Float(factor)
+    }
+
+    /// batch114: each band sample's "home speed" for the
+    /// vari-speed drive — the gain-weighted mean of the
+    /// curve-step speeds at which the sample sounds in this
+    /// family and mode. A band recording was made at about
+    /// the speeds where its table gains live, so playing it
+    /// at speedKmh / homeSpeed keeps its pitch on the BVE
+    /// Freq curve: continuous inside a band, instead of the
+    /// old fixed rate 1.0 with a pitch step at every band
+    /// change (diagnosis M1). Built once per family+mode
+    /// from the 61-step tables and cached.
+    private func motorHomeSpeeds(family: String, mode: String) -> [String: Float] {
+        let key = "\(family)|\(mode)"
+        if let cached = homeSpeedCache[key] { return cached }
+        var weighted: [String: Float] = [:]
+        var weights: [String: Float] = [:]
+        for step in curves[family]?[mode] ?? [] {
+            for (name, gain) in step.gains where gain > 0 {
+                weighted[name, default: 0] += gain * step.speedKmh
+                weights[name, default: 0] += gain
+            }
+        }
+        var result: [String: Float] = [:]
+        for (name, total) in weights where total > 0 {
+            result[name] = (weighted[name] ?? 0) / total
+        }
+        homeSpeedCache[key] = result
+        return result
+    }
+
+    /// Playback rate for one motor slot: current speed over
+    /// the sample's home speed. The home is floored at
+    /// 5 km/h (a sample that only sounds at the 0 km/h step
+    /// still gets a sane rate) and the rate is clamped to
+    /// [0.5, 2.0], the range a band recording can be
+    /// stretched without turning to mush.
+    private func motorTargetRate(family: String, mode: String, sample: String, speedKmh: Float) -> Float {
+        let home = motorHomeSpeeds(family: family, mode: mode)[sample] ?? max(speedKmh, 5)
+        return min(2, max(0.5, speedKmh / max(home, 5)))
     }
 
     /// batch79: cooling-fan ambience (the user's standing
@@ -536,6 +630,14 @@ final class SampledMotorSound {
     }
 
     func update(snapshot: RailwaySimulationSnapshot, settings: RailwayAudioSettings, isEnabled: Bool, engineRunning: Bool) {
+        // batch114: measure the host-frame delta first —
+        // approach() (time-based smoothing) and the slot
+        // hysteresis both read it / the uptime.
+        let nowUptime = ProcessInfo.processInfo.systemUptime
+        if let lastUpdateUptime {
+            frameDtSeconds = min(max(nowUptime - lastUpdateUptime, 0), 0.25)
+        }
+        lastUpdateUptime = nowUptime
         loadCurvesIfNeeded()
         // batch79: VVVF profiles (the E231 services) default to
         // the Primrose family when its curves are bundled; the
@@ -585,6 +687,13 @@ final class SampledMotorSound {
                 motorPlayers[index].stop()
                 motorSlotSample[index] = nil
                 motorPlayers[index].volume = 0
+                // batch114: the hysteresis and pitch state
+                // belongs to the old family's bands.
+                motorSlotAbsentSince[index] = nil
+                motorSlotRates[index] = 1
+                if motorVarispeeds.indices.contains(index) {
+                    motorVarispeeds[index].rate = 1
+                }
             }
             runPlayer?.stop()
             runSample = nil
@@ -621,6 +730,33 @@ final class SampledMotorSound {
             lastDesiredSummary = "-"
         }
 
+        // batch114: slot hysteresis bookkeeping (diagnosis
+        // M2). A playing sample that falls out of the
+        // interpolated desired set is not evicted the moment
+        // a top-3 newcomer wants its slot: with the 2 km/h
+        // curve steps and almost no sample overlap between
+        // neighbouring steps, steady acceleration crossed a
+        // boundary every ~1.1 s and each crossing restarted
+        // a slot from the buffer head with its volume reset
+        // to zero — the "not joining" sawtooth. A slot whose
+        // sample has been absent for less than the hold
+        // window is passed over by the fill below (unless
+        // nothing else is free) and is not stopped in the
+        // slot loop, so a boundary hover re-adopts the
+        // still-looping sample with no restart at all.
+        let holdSeconds = 0.35
+        for slot in motorSlotSample.indices {
+            if let current = motorSlotSample[slot] {
+                if desired[current] != nil {
+                    motorSlotAbsentSince[slot] = nil
+                } else if motorSlotAbsentSince[slot] == nil {
+                    motorSlotAbsentSince[slot] = nowUptime
+                }
+            } else {
+                motorSlotAbsentSince[slot] = nil
+            }
+        }
+
         var wantsSound = false
         // Keep samples already playing in their slots where possible.
         var assignment: [Int: (name: String, volume: Float)] = [:]
@@ -632,19 +768,41 @@ final class SampledMotorSound {
             }
         }
         for entry in desiredSorted where !usedNames.contains(entry.key) {
-            if let free = motorSlotSample.indices.first(where: { assignment[$0] == nil && motorSlotSample[$0] == nil })
-                ?? motorSlotSample.indices.first(where: { assignment[$0] == nil }) {
+            // Slot preference: an empty slot, then a slot
+            // whose sample has been absent past the hold
+            // window, then (last resort) any unassigned slot.
+            let free = motorSlotSample.indices.first(where: { assignment[$0] == nil && motorSlotSample[$0] == nil })
+                ?? motorSlotSample.indices.first(where: { slot in
+                    guard assignment[slot] == nil, motorSlotSample[slot] != nil else { return false }
+                    guard let absentSince = motorSlotAbsentSince[slot] else { return true }
+                    return nowUptime - absentSince >= holdSeconds
+                })
+                ?? motorSlotSample.indices.first(where: { assignment[$0] == nil })
+            if let free {
                 assignment[free] = (entry.key, entry.value)
                 usedNames.insert(entry.key)
             }
         }
+        // batch114: the curve mode the vari-speed drive keys
+        // its home speeds on (nil while coasting — no slot
+        // is assigned then, so no rate is computed).
+        let activeMode: String? = motoring ? "power" : (braking ? "brake" : nil)
         for slot in motorPlayers.indices {
             let player = motorPlayers[slot]
             if let target = assignment[slot] {
+                let targetRate = activeMode.map { motorTargetRate(family: family, mode: $0, sample: target.name, speedKmh: speedKmh) } ?? 1
                 if motorSlotSample[slot] != target.name {
                     if engineRunning, playLoop(player, sample: target.name) {
                         motorSlotSample[slot] = target.name
                         player.volume = 0
+                        // batch114: a fresh sample starts AT
+                        // the current pitch, not at whatever
+                        // rate the slot's previous sample had
+                        // tracked to.
+                        motorSlotRates[slot] = targetRate
+                        if motorVarispeeds.indices.contains(slot) {
+                            motorVarispeeds[slot].rate = targetRate
+                        }
                     } else {
                         motorSlotSample[slot] = nil
                         continue
@@ -667,13 +825,30 @@ final class SampledMotorSound {
                 let staging: Float = (family == "primrose" || family == "primrose_r") ? 1.35 : 0.85
                 let targetVolume = min(1, target.volume) * master * staging
                 player.volume = approach(player.volume, targetVolume)
+                // batch114: the vari-speed drive — the rate
+                // tracks the speed continuously INSIDE the
+                // band (smoothed through the same time-based
+                // approach), so pitch no longer sits fixed
+                // between band steps and jumps at them.
+                if motorVarispeeds.indices.contains(slot) {
+                    motorSlotRates[slot] = approach(motorSlotRates[slot], targetRate)
+                    motorVarispeeds[slot].rate = motorSlotRates[slot]
+                }
                 if targetVolume > 0.02 { wantsSound = true }
             } else {
                 player.volume = approach(player.volume, 0)
                 if player.volume < 0.005, motorSlotSample[slot] != nil {
-                    player.stop()
-                    motorSlotSample[slot] = nil
-                    player.volume = 0
+                    // batch114: inside the hysteresis hold
+                    // the sample is NOT stopped — if it
+                    // re-enters the desired set it resumes
+                    // mid-loop at the curve's gain, with no
+                    // head-restart (diagnosis M2).
+                    let inHold = motorSlotAbsentSince[slot].map { nowUptime - $0 < holdSeconds } ?? false
+                    if !inHold {
+                        player.stop()
+                        motorSlotSample[slot] = nil
+                        player.volume = 0
+                    }
                 }
             }
         }
