@@ -37,6 +37,11 @@ struct ContentView: View {
     /// batch66: build progress for the loading screen, fed by
     /// the scene world while its deferred build runs.
     @StateObject private var loadingProgress = LoadingProgress()
+    /// batch113: the scene world's 5 s perf readout (fps /
+    /// footprint / live entities) for the telemetry block —
+    /// the device verdict on the perf batch is numeric, not
+    /// impressionistic.
+    @StateObject private var perfStats = ScenePerfStats()
     @State private var activeSheet: DrivingSheet?
     @State private var selectedReferenceVehicleID = "jr-east-e233"
     @State private var titleDismissed = false
@@ -150,7 +155,8 @@ struct ContentView: View {
                     distanceToNextStopM: distanceToNextStopM,
                     signalPositionM: model.tracksideSignalReading?.blockStartM,
                     signalAspect: model.tracksideSignalReading?.aspect,
-                    loadingProgress: loadingProgress
+                    loadingProgress: loadingProgress,
+                    perfStats: perfStats
                 )
                 }
                 // Full-bleed 3D: the cab interior in the scene is the desk;
@@ -173,6 +179,9 @@ struct ContentView: View {
                             Text(model.gameClockText)
                             if let scheduleLine = model.hudScheduleLine {
                                 Text(scheduleLine)
+                            }
+                            if !perfStats.line.isEmpty {
+                                Text(perfStats.line)
                             }
                             Text("MR \(Int(model.telemetry.mainReservoirPressureKPa.rounded())) · BP \(Int(model.telemetry.brakePipePressureKPa.rounded())) · BC \(Int(model.telemetry.brakeCylinderPressureKPa.rounded())) kPa")
                             Text("引張 \(Int(model.telemetry.tractionForceN / 1_000)) kN · 制動 \(Int(model.telemetry.brakingForceN / 1_000)) kN")
