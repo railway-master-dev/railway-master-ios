@@ -107,16 +107,29 @@ public enum FictionalTrackImpactSchedule {
             // terminals. Until now these were drawn but had
             // no span, so trains crossed them in silence.
             span("S01-crossover", .main, .stationConnection, 560, 690),
-            span("S28-crossover", .main, .stationConnection, 59_310, 59_440)
+            span("S28-crossover", .main, .stationConnection, 59_310, 59_440),
+            // batch107: B04's drawn terminal siding
+            // divergence (buildTerminalThroats' branch
+            // treatment) — both sidings leave the single
+            // branch line on one 340 m S-curve that completes
+            // at the platform end, 200 m before the line
+            // end, so the full S-curve registers as one
+            // span: the terminal-crossover equivalent for
+            // the branch. Branch-local chainages.
+            span("B04-crossover", .branch, .stationConnection, 7_460, 7_800)
 
         ]
+        // batch105: the placeholder loop spans for S05, S10,
+        // S20, S25 and B02 are deleted — none of those stations
+        // has a drawn fan, siding or point machine (S05's spans
+        // sat inside its island-spread ramps, which are plain
+        // running track), so point clatter fired where no
+        // switch exists. S15 stays: its fan IS drawn, and
+        // batch89 deliberately kept these spans (registering
+        // the true fan transitions too would double-fire).
+        // Span count 51 -> 41.
         let loops: [(String, FictionalTrackLine, Double)] = [
-            ("S05", .main, 8_226),
-            ("S10", .main, 19_161),
-            ("S15", .main, 30_677),
-            ("S20", .main, 41_806),
-            ("S25", .main, 52_935),
-            ("B02", .branch, 4_000)
+            ("S15", .main, 30_677)
         ]
         for loop in loops {
             spans.append(span("\(loop.0)-entry", loop.1, .stationConnection, loop.2 - 186, loop.2 - 162))
