@@ -85,7 +85,16 @@ struct TimetableControlSheet: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("選択列車")
                                 .font(.headline)
-                            Text("\(selection.plannedTrip.category.displayNameJa) · \(selection.plannedTrip.direction == .down ? "上り" : "下り") · \(selection.plannedTrip.tripID)")
+                            // batch121: the timetable package's
+                            // .down trips run toward increasing
+                            // chainage (RegionalTimetableAdapter
+                            // maps the factory's increasing .up
+                            // onto them), which under the real
+                            // convention adopted this batch is
+                            // 下り; .up (decreasing, toward 海袋)
+                            // is 上り. The labels were swapped
+                            // against that until now.
+                            Text("\(selection.plannedTrip.category.displayNameJa) · \(selection.plannedTrip.direction == .down ? "下り" : "上り") · \(selection.plannedTrip.tripID)")
                                 .font(.subheadline.weight(.semibold))
                             Text("始発駅のゲーム内出発待ち: \(selection.routeOriginDelaySeconds) 秒")
                                 .font(.caption.monospacedDigit())
