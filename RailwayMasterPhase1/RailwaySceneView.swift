@@ -72,6 +72,22 @@ final class LoadingProgress: ObservableObject {
     }
 }
 
+/// batch113: one-line performance readout for the driving
+/// HUD (fps / physical footprint / live chunked ModelEntity
+/// count). The scene world (the only writer) publishes from
+/// recordFramePerf's 5 s window close; ContentView observes.
+/// Kept beside LoadingProgress because it rides the same
+/// representable wiring: the coordinator hands the object to
+/// the world, the world writes, SwiftUI reads. Published only
+/// when the text actually changes, like LoadingProgress.
+final class ScenePerfStats: ObservableObject {
+    @Published private(set) var line: String = ""
+
+    func publish(_ line: String) {
+        if line != self.line { self.line = line }
+    }
+}
+
 /// Procedural game scene with fictional data; it is not a photoreal or real-railway simulation.
 struct RealityTrackView: View {
     let route: RailwayRouteProfile
@@ -102,6 +118,9 @@ struct RealityTrackView: View {
     /// batch66: the scene world reports its deferred-build
     /// progress here for ContentView's loading screen.
     let loadingProgress: LoadingProgress
+    /// batch113: the scene world publishes its 5 s perf
+    /// readout here for ContentView's HUD line.
+    let perfStats: ScenePerfStats
 
     var body: some View {
         ZStack {
@@ -135,7 +154,8 @@ struct RealityTrackView: View {
                 stationModelPlacements: stationModelPlacements,
                 signalPositionM: signalPositionM,
                 signalAspect: signalAspect,
-                loadingProgress: loadingProgress
+                loadingProgress: loadingProgress,
+                perfStats: perfStats
             )
                 .accessibilityHidden(true)
             let visibilityLoss = max(0, 1 - environmentSelection.environment.visibilityM / 20_000)
@@ -202,11 +222,13 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
     var signalPositionM: Double? = nil
     var signalAspect: ThreeAspectSignal? = nil
     let loadingProgress: LoadingProgress
+    let perfStats: ScenePerfStats
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> ARView {
         context.coordinator.scene.loadingProgress = loadingProgress
+        context.coordinator.scene.perfStats = perfStats
         let view = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
         // The renderer clears with environment.background, not with the
         // UIView's backgroundColor: setting only the latter left the
@@ -243,6 +265,7 @@ private struct RailwayARViewRepresentable: UIViewRepresentable {
 
     func updateUIView(_ view: ARView, context: Context) {
         context.coordinator.scene.loadingProgress = loadingProgress
+        context.coordinator.scene.perfStats = perfStats
         if context.coordinator.lastSkySelection != environmentSelection {
             let skyColor = RailwaySkyPalette.color(for: environmentSelection)
             view.backgroundColor = skyColor
@@ -571,6 +594,43 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let roughness: Float
     }
 
+    /// batch113: registration for the memory-warning purge
+    /// (see init). Removed in deinit so a discarded world
+    /// never leaves a registration behind.
+    private var memoryWarningObserver: NSObjectProtocol?
+
+    /// batch113: the app had NO memory-warning handling at
+    /// all (the perf diagnosis' jetsam case: a ~296 MB
+    /// texture working set, the whole 68 km world resident,
+    /// and nothing that sheds weight under pressure). On a
+    /// warning, drop the two texture caches: the shared
+    /// SceneTextureProvider cache (scenery photo textures)
+    /// and the scene-fidelity adapter's own surface-texture
+    /// cache. Materials keep their own references, so
+    /// anything on screen survives; what goes is the caches'
+    /// extra hold on textures no live material may need
+    /// again, and the next build / LOD pass re-loads what it
+    /// actually uses from disk.
+    init() {
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            SceneTextureProvider.purgeCache()
+            guard let self else { return }
+            Task { @MainActor [weak self] in
+                self?.sceneFidelityAdapter.purgeTextureCache()
+            }
+        }
+    }
+
+    deinit {
+        if let memoryWarningObserver {
+            NotificationCenter.default.removeObserver(memoryWarningObserver)
+        }
+    }
+
     let root = AnchorEntity(world: SIMD3<Float>(0, 0, 0))
     private var world = Entity()
     private var camera = PerspectiveCamera()
@@ -585,6 +645,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// tooling); every report goes through reportBuildProgress
     /// or LoadingProgress.report and is a no-op when nil.
     var loadingProgress: LoadingProgress?
+    /// batch113: perf readout sink for the driving HUD,
+    /// wired by the representable beside loadingProgress.
+    /// Optional for the same reason (tests / tour tooling use
+    /// the world without a UI observer); recordFramePerf
+    /// publishes only when set.
+    var perfStats: ScenePerfStats?
     /// batch66: the variant of the build currently in flight,
     /// remembered from rebuild() so reportBuildProgress can
     /// pick the placement-total estimate for the raw percent.
@@ -686,6 +752,31 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     }
     private var deferredOrganizeQueue: [DeferredOrganizeWork] = []
     private var deferredOrganizeTask: Task<Void, Never>?
+    /// batch113: parallel to chunkAnchors — each anchor's
+    /// ModelEntity count as last surveyed / merged (see
+    /// organizeWorldChunks, organizeDeferredChild and the
+    /// merge call sites). recordFramePerf sums the ATTACHED
+    /// anchors' counts into the live-entity figure on the
+    /// PERF_WINDOW line and the HUD readout, so the count
+    /// costs one array walk per 5 s window, never a scene
+    /// traversal per frame.
+    private var chunkAnchorModelCounts: [Int] = []
+    /// batch113: work items the deferred organize pass has
+    /// not processed yet (set when the pass takes its queue,
+    /// decremented per item). Rides the PERF_WINDOW line so
+    /// a pulled log shows whether the pass is keeping up,
+    /// stalled behind the moving gate, or drained.
+    private var deferredOrganizeRemaining = 0
+    /// batch113: worst single deferred-organize item cost in
+    /// the current perf window (ms), reset at every window
+    /// close beside the other perf accumulators.
+    private var perfDeferredMaxItemMs = 0.0
+    /// batch113: the speed the most recent update() call
+    /// carried. The deferred organize pass reads it to keep
+    /// its slices out of the driving frames entirely (see
+    /// runDeferredOrganize): no new slice starts while the
+    /// train is moving.
+    private var lastUpdateSpeedKmh: Double = 0
     /// batch80: running counter for merged-entity names,
     /// shared by the load-time and deferred merge passes.
     private var chunkMergedNameCounter = 0
@@ -892,10 +983,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private var perfTrafficTotalMs = 0.0
     private var perfTrafficMaxMs = 0.0
     private var pendingPerfLogLines: [String] = []
+    /// batch119: the latest TRAFFIC_STATE line (computed in
+    /// updateTrafficActors when the traffic snapshot changes),
+    /// emitted alongside each PERF_WINDOW line so a pulled
+    /// device log proves oncoming presence numerically.
+    private var latestTrafficStateLine: String?
+    private var lastTrafficStateTick: UInt64?
 
     private func recordTrafficPerf(milliseconds: Double) {
         perfTrafficTotalMs += milliseconds
         perfTrafficMaxMs = max(perfTrafficMaxMs, milliseconds)
+    }
+
+    /// batch113: the process's physical memory footprint in
+    /// bytes — the figure jetsam accounting watches — via
+    /// Mach task info. Zero when the query fails (the log
+    /// line then shows 0.0, which reads as "not measured",
+    /// never as a real footprint).
+    private func physicalFootprintBytes() -> UInt64 {
+        var info = task_vm_info()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? info.phys_footprint : 0
     }
 
     private func recordFramePerf(milliseconds: Double) {
@@ -906,17 +1019,43 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         perfUpdateMaxMs = max(perfUpdateMaxMs, milliseconds)
         guard let windowStart = perfWindowStartUptime, now - windowStart >= 5 else { return }
         let frames = max(perfFrameCount, 1)
-        pendingPerfLogLines.append(String(format: "PERF_WINDOW frames=%d updateAvgMs=%.2f updateMaxMs=%.2f trafficAvgMs=%.2f trafficMaxMs=%.2f pendingAttach=%d",
-                                          perfFrameCount,
+        let windowSeconds = max(now - windowStart, 0.001)
+        let fps = Double(perfFrameCount) / windowSeconds
+        // batch113: memory + live-load figures for the same
+        // window (see the perf diagnosis' measurement plan).
+        // liveEntities sums the attached anchors' recorded
+        // ModelEntity counts (chunkAnchorModelCounts) — the
+        // chunked world's live total, excluding the always-
+        // live roots (vehicles, traffic actors) that were
+        // never chunked.
+        let footprintMB = Double(physicalFootprintBytes()) / 1_000_000
+        let availableMB = Double(os_proc_available_memory()) / 1_000_000
+        var liveEntities = 0
+        for (index, attached) in chunkAttached.enumerated() where attached {
+            if chunkAnchorModelCounts.indices.contains(index) {
+                liveEntities += chunkAnchorModelCounts[index]
+            }
+        }
+        pendingPerfLogLines.append(String(format: "PERF_WINDOW frames=%d fps=%.1f updateAvgMs=%.2f updateMaxMs=%.2f trafficAvgMs=%.2f trafficMaxMs=%.2f pendingAttach=%d footprintMB=%.1f availableMB=%.1f liveEntities=%d deferredRemaining=%d deferredMaxItemMs=%.2f",
+                                          perfFrameCount, fps,
                                           perfUpdateTotalMs / Double(frames), perfUpdateMaxMs,
                                           perfTrafficTotalMs / Double(frames), perfTrafficMaxMs,
-                                          pendingChunkAttaches.count))
+                                          pendingChunkAttaches.count,
+                                          footprintMB, availableMB, liveEntities,
+                                          deferredOrganizeRemaining, perfDeferredMaxItemMs))
+        // batch119: TRAFFIC_STATE rides the same 5 s window
+        // (see latestTrafficStateLine).
+        if let latestTrafficStateLine {
+            pendingPerfLogLines.append(latestTrafficStateLine)
+        }
+        perfStats?.publish(String(format: "%.0f fps · %.0f MB · live %d", fps, footprintMB, liveEntities))
         perfWindowStartUptime = now
         perfFrameCount = 0
         perfUpdateTotalMs = 0
         perfUpdateMaxMs = 0
         perfTrafficTotalMs = 0
         perfTrafficMaxMs = 0
+        perfDeferredMaxItemMs = 0
     }
     /// batch56: per-segment scenery census (the user's request
     /// for real per-segment object counts) plus the one-chain
@@ -1291,6 +1430,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         windRotors.removeAll()
         chunkAnchors.removeAll()
         chunkBounds.removeAll()
+        chunkAnchorModelCounts.removeAll()
+        deferredOrganizeRemaining = 0
         chunkSweepPosition = nil
         chunkAttached.removeAll()
         pendingChunkAttaches.removeAll()
@@ -1662,9 +1803,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// merge, and the loading percent is weighted by the
     /// near work actually processed, reaching 100 when the
     /// playable neighbourhood is ready.
+    /// batch113: the near radius is 950 m now (B3), and the
+    /// load-time merge boundary is the CRITICAL radius
+    /// (425 m + the anchor's bounds radius), not the near
+    /// radius (B1): anchors between the critical radius and
+    /// the near radius are re-parented here but their merge
+    /// joins the deferred queue, so the 96–99% phase only
+    /// pays for the anchors the first frames can actually
+    /// show. The LOAD_TAIL line at the end of the pass
+    /// records the bounds-vs-merge split of what remains.
     private func organizeWorldChunks() async {
         chunkAnchors.removeAll()
         chunkBounds.removeAll()
+        chunkAnchorModelCounts.removeAll()
+        deferredOrganizeRemaining = 0
         chunkSweepPosition = nil
         chunkAttached.removeAll()
         pendingChunkAttaches.removeAll()
@@ -1705,7 +1857,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         } else {
             startPosition = .zero
         }
-        let nearRadius: Float = 1_200
+        // batch113 (B3): the near radius drops 1,200 -> 950 m.
+        // The load-time pass only has to cover the attach
+        // radius (850 m) plus a margin for the first sweeps;
+        // every metre beyond that multiplied the classification,
+        // bounds-measurement and merge work the loading screen
+        // sat on, for anchors updateChunkVisibility would only
+        // detach again. The deferred pass still organizes the
+        // whole line afterwards, in distance order.
+        let nearRadius: Float = 950
         var nearChildren: [Entity] = []
         let children = Array(world.children)
         for child in children {
@@ -1732,13 +1892,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // ready, not when the whole 68 km is organized).
         // batch80: the anchor dictionaries are keyed by the
         // packed Int64 cell key, not an interpolated string.
+        // batch113: the loop is timed for the LOAD_TAIL line,
+        // and each child's bounds come from chunkChildBounds
+        // (B2: a leaf ModelEntity's bounds are its own mesh
+        // bounds — no subtree walk; only groups still pay
+        // the recursive measurement).
+        let boundsPhaseStartUptime = ProcessInfo.processInfo.systemUptime
         for (index, child) in nearChildren.enumerated() {
             if index > 0, index % 32 == 0 {
                 let fraction = Double(index) / Double(max(nearChildren.count, 1))
                 loadingProgress?.report(rawPercent: 93 + Int(fraction * 3), floor: 93, status: "最終調整をしています")
                 await Task.yield()
             }
-            let bounds = child.visualBounds(recursive: true, relativeTo: world)
+            let bounds = chunkChildBounds(child, relativeTo: world)
             let cellX = Int(floor(bounds.center.x / cell))
             let cellZ = Int(floor(bounds.center.z / cell))
             let key = Self.chunkCellKey(cellX: cellX, cellZ: cellZ)
@@ -1757,6 +1923,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 chunkUnionBounds.append((center: bounds.center, extents: bounds.extents))
                 chunkBounds.append((center: bounds.center, radius: simd_length(bounds.extents) * 0.5))
                 chunkAttached.append(true)
+                chunkAnchorModelCounts.append(0)
                 isNewAnchor = true
             }
             if !isNewAnchor {
@@ -1770,46 +1937,87 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // material (merging does not move any geometry, so the
         // union bounds above are the same either way).
         // batch80: at load, only anchors inside the
-        // load-merge boundary merge — the near radius plus the
-        // anchor's own bounds radius around the route start,
-        // which covers every anchor the first visibility
-        // sweeps can attach (850 m) with margin. Anchors
-        // beyond it (far cells the near pass reached through
-        // an origin-near child) queue a deferred merge
-        // instead of merging the whole route here — the old
-        // pass merged all 68 km and updateChunkVisibility
-        // then immediately detached everything past ~1 km,
-        // throwing most of that work away.
+        // load-merge boundary merge; anchors beyond it (far
+        // cells the near pass reached through an origin-near
+        // child) queue a deferred merge instead of merging
+        // the whole route here — the old pass merged all
+        // 68 km and updateChunkVisibility then immediately
+        // detached everything past ~1 km, throwing most of
+        // that work away. batch113 narrows the boundary from
+        // the near radius to the critical radius (below).
+        // batch113 (B1): the load-time merge boundary is the
+        // critical radius — the same 425 m the visibility
+        // sweep attaches immediately — plus the anchor's own
+        // bounds radius. batch80 merged out to the near
+        // radius, which made the 96–99% phase pay for anchors
+        // up to ~1.2 km away before the first frame could
+        // show them; those merges now queue as deferred
+        // anchorMerge work like the far anchors always did.
+        let loadMergeRadius: Float = 425
         var nearAnchorIndices: [Int] = []
         for (index, bounds) in chunkBounds.enumerated() {
             let distance = simd_distance(bounds.center, startPosition)
-            if distance <= nearRadius + bounds.radius {
+            if distance <= loadMergeRadius + bounds.radius {
                 nearAnchorIndices.append(index)
             } else {
                 deferredOrganizeQueue.append(.anchorMerge(anchorIndex: index, distanceFromStart: distance))
             }
         }
+        let boundsPhaseMs = (ProcessInfo.processInfo.systemUptime - boundsPhaseStartUptime) * 1_000
+        let mergePhaseStartUptime = ProcessInfo.processInfo.systemUptime
         let mergeResult = await mergeStaticLeavesUnderChunkAnchors(anchorIndices: nearAnchorIndices)
+        let mergePhaseMs = (ProcessInfo.processInfo.systemUptime - mergePhaseStartUptime) * 1_000
         // batch61: post-merge estimate of the render load the
         // 850 m visibility radius keeps live at the route
         // start, recorded with the merge outcome. batch66:
         // the per-anchor post-merge counts come from the
         // merge's survey pass (see anchorModelEntitiesAfter).
         // batch80: the merge result is parallel to
-        // nearAnchorIndices, not to chunkAnchors; every anchor
-        // inside the estimate's 850 m radius is inside the
-        // load-merge boundary, so the lookup always hits.
+        // nearAnchorIndices, not to chunkAnchors.
+        // batch113: chunkAnchorModelCounts is filled for
+        // EVERY anchor here — merged anchors from the merge
+        // result, deferred-merge anchors from a one-off
+        // survey (their subtrees are the near children's, so
+        // the walk is bounded by the near work itself) — and
+        // the estimate reads it uniformly. Under B1 the
+        // 425–850 m ring is re-parented but not yet merged,
+        // so its counts are the honest pre-merge totals; the
+        // old "every anchor inside 850 m was merged at load,
+        // so the lookup always hits" premise no longer holds.
         var afterCountByAnchor: [Int: Int] = [:]
         for (position, anchorIndex) in nearAnchorIndices.enumerated() {
             afterCountByAnchor[anchorIndex] = mergeResult.anchorModelEntitiesAfter[position]
+        }
+        var deferredAnchorLeafTotal = 0
+        for (index, anchor) in chunkAnchors.enumerated() {
+            if let after = afterCountByAnchor[index] {
+                chunkAnchorModelCounts[index] = after
+            } else {
+                var surveyLeaves: [Entity] = []
+                var surveyModelCount = 0
+                deferredAnchorLeafTotal += surveyChunkLeaves(anchor, leaves: &surveyLeaves, modelCount: &surveyModelCount)
+                chunkAnchorModelCounts[index] = surveyModelCount
+            }
         }
         var estimatedNearEntities = 0
         for (index, _) in chunkAnchors.enumerated() {
             let bounds = chunkBounds[index]
             if simd_distance(bounds.center, startPosition) < 850 + bounds.radius {
-                estimatedNearEntities += afterCountByAnchor[index] ?? 0
+                estimatedNearEntities += chunkAnchorModelCounts[index]
             }
         }
+        // batch113: the load tail's own numbers — how long
+        // the near re-parent/bounds phase and the load merge
+        // actually took, over how many near children and
+        // leaves — so the next "最終調整が長い" verdict is a
+        // measurement, not an impression (see the perf
+        // diagnosis' measurement plan). Rides the same
+        // one-shot queued lines as CHUNK_MERGE.
+        queuedLogLines.append(String(format: "LOAD_TAIL boundsMs=%.1f mergeMs=%.1f nearChildren=%d nearLeaves=%d deferredWork=%d",
+                                     boundsPhaseMs, mergePhaseMs,
+                                     nearChildren.count,
+                                     mergeResult.leavesBefore + deferredAnchorLeafTotal,
+                                     deferredOrganizeQueue.count))
         chunkMergeStats = ChunkMergeStats(
             leafModelEntitiesBefore: mergeResult.leavesBefore,
             leafModelEntitiesAfter: mergeResult.leavesBefore - mergeResult.mergedLeaves + mergeResult.mergedEntities,
@@ -1859,6 +2067,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // returns; the pass revalidates the build generation
         // and the world instance every batch, so a route
         // change abandons it with the old world.
+        deferredOrganizeRemaining = deferredOrganizeQueue.count
         if !deferredOrganizeQueue.isEmpty {
             let generation = buildGeneration
             let buildWorld = world
@@ -1867,6 +2076,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 await self.runDeferredOrganize(generation: generation, buildWorld: buildWorld)
             }
         }
+    }
+
+    /// batch113 (B2): bounds of one world child for chunk
+    /// cell assignment. A child that IS a leaf ModelEntity
+    /// needs no subtree walk: its visual bounds are its own
+    /// mesh's bounds under its world transform, which
+    /// RealityKit answers from the mesh's stored bounding
+    /// box. Only group children (plain Entities, or
+    /// ModelEntities with children of their own) still pay
+    /// the recursive measurement. The position-based
+    /// shortcut the diagnosis floated is NOT used: many
+    /// world children are baked-geometry entities whose
+    /// origin sits at the world zero while their triangles
+    /// live kilometres away, so an origin-plus-radius guess
+    /// would file them into the wrong cell entirely.
+    private func chunkChildBounds(_ child: Entity, relativeTo world: Entity) -> BoundingBox {
+        if child.children.isEmpty, child is ModelEntity {
+            return child.visualBounds(recursive: false, relativeTo: world)
+        }
+        return child.visualBounds(recursive: true, relativeTo: world)
     }
 
     /// batch80: packs a 250 m grid cell's coordinates into a
@@ -1901,62 +2130,119 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// a route change (rebuild replaces the world and bumps
     /// the generation) abandons the rest of the queue with
     /// the old world.
+    /// batch113 (A1/A2): two hard limits the batch80 pass did
+    /// not have. (1) No new slice starts while the train is
+    /// moving (lastUpdateSpeedKmh > 0.5): the pass waits,
+    /// re-checking every 200 ms, and advances only while the
+    /// train stands — at the origin before departure and at
+    /// every station dwell, which this timetable has in
+    /// abundance. The batch80 pass ran straight through the
+    /// drive on the same main actor as rendering, and one
+    /// dense item could take a whole frame or more; on
+    /// IPA #12 that read as "unplayably choppy". The anchor
+    /// merges — the heaviest items — are inside the same
+    /// gate, so they too only ever run at a standstill (A2).
+    /// (2) Each slice has a measured ~2 ms budget, checked
+    /// before every item: a slice ends (flush + yield) once
+    /// the budget is spent, so even at a standstill the pass
+    /// cannot monopolise the actor across a frame boundary.
+    /// A single item can still overrun the budget — items
+    /// are not divisible — which is what the per-item max on
+    /// the PERF_WINDOW line (deferredMaxItemMs) measures.
+    /// The queue is distance-ordered, so the work nearest
+    /// the train is always done first and the organized
+    /// frontier stays ahead of the 850 m attach radius.
     private func runDeferredOrganize(generation: Int, buildWorld: Entity) async {
         // Let the load's finishing frame present first.
         await Task.yield()
         guard generation == buildGeneration, world === buildWorld else { return }
         let queue = deferredOrganizeQueue.sorted { $0.distanceFromStart < $1.distanceFromStart }
         deferredOrganizeQueue.removeAll()
+        deferredOrganizeRemaining = queue.count
         let cell: Float = 250
         let identityExcluded = chunkMergeIdentityExclusions()
         var rejections = ChunkMergeRejectionStats()
         var leavesByAnchor: [Int: [Entity]] = [:]
-        var itemsSinceYield = 0
-        for item in queue {
+        var index = 0
+        while index < queue.count {
             if Task.isCancelled || generation != buildGeneration || world !== buildWorld {
                 return
             }
-            switch item {
-            case .child(let deferred):
-                organizeDeferredChild(
-                    deferred,
-                    cell: cell,
-                    buildWorld: buildWorld,
-                    leavesByAnchor: &leavesByAnchor
-                )
-            case .anchorMerge(let anchorIndex, _):
-                // Flush pending per-child merges first: the
-                // full-anchor survey below would otherwise
-                // meet leaves this pass already collected (the
-                // merge's identity walk skips leaves whose
-                // parent chain no longer reaches the anchor,
-                // so a double visit is safe but wasteful).
-                mergeDeferredLeaves(leavesByAnchor, identityExcluded: identityExcluded, rejections: &rejections)
-                leavesByAnchor.removeAll()
-                guard chunkAnchors.indices.contains(anchorIndex) else { continue }
-                let anchor = chunkAnchors[anchorIndex]
-                var leaves: [Entity] = []
-                var modelCount = 0
-                _ = surveyChunkLeaves(anchor, leaves: &leaves, modelCount: &modelCount)
-                mergeStaticLeavesInAnchor(
-                    anchor,
-                    leaves: leaves,
-                    identityExcluded: identityExcluded,
-                    mergedNameCounter: &chunkMergedNameCounter,
-                    mergedLeaves: &deferredMergeLeaves,
-                    mergedEntities: &deferredMergeEntities,
-                    rejections: &rejections
-                )
+            // A1: never start a slice while the train is
+            // moving. Sleep in short naps so a generation
+            // change or cancellation is honoured promptly.
+            if lastUpdateSpeedKmh > 0.5 {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                continue
             }
-            itemsSinceYield += 1
-            if itemsSinceYield >= 6 {
-                mergeDeferredLeaves(leavesByAnchor, identityExcluded: identityExcluded, rejections: &rejections)
-                leavesByAnchor.removeAll()
-                itemsSinceYield = 0
+            let sliceStartUptime = ProcessInfo.processInfo.systemUptime
+            var sliceItems = 0
+            // One slice: process items until the ~2 ms
+            // budget is spent (checked before each item
+            // after the slice's first, so a slice always
+            // makes progress and never starts an item it
+            // cannot afford).
+            while index < queue.count {
+                if sliceItems > 0, (ProcessInfo.processInfo.systemUptime - sliceStartUptime) * 1_000 >= 2 {
+                    break
+                }
+                if Task.isCancelled || generation != buildGeneration || world !== buildWorld {
+                    return
+                }
+                let item = queue[index]
+                let itemStartUptime = ProcessInfo.processInfo.systemUptime
+                switch item {
+                case .child(let deferred):
+                    organizeDeferredChild(
+                        deferred,
+                        cell: cell,
+                        buildWorld: buildWorld,
+                        leavesByAnchor: &leavesByAnchor
+                    )
+                case .anchorMerge(let anchorIndex, _):
+                    // Flush pending per-child merges first: the
+                    // full-anchor survey below would otherwise
+                    // meet leaves this pass already collected (the
+                    // merge's identity walk skips leaves whose
+                    // parent chain no longer reaches the anchor,
+                    // so a double visit is safe but wasteful).
+                    mergeDeferredLeaves(leavesByAnchor, identityExcluded: identityExcluded, rejections: &rejections)
+                    leavesByAnchor.removeAll()
+                    if chunkAnchors.indices.contains(anchorIndex) {
+                        let anchor = chunkAnchors[anchorIndex]
+                        var leaves: [Entity] = []
+                        var modelCount = 0
+                        _ = surveyChunkLeaves(anchor, leaves: &leaves, modelCount: &modelCount)
+                        let mergeLeavesBefore = deferredMergeLeaves
+                        let mergeEntitiesBefore = deferredMergeEntities
+                        mergeStaticLeavesInAnchor(
+                            anchor,
+                            leaves: leaves,
+                            identityExcluded: identityExcluded,
+                            mergedNameCounter: &chunkMergedNameCounter,
+                            mergedLeaves: &deferredMergeLeaves,
+                            mergedEntities: &deferredMergeEntities,
+                            rejections: &rejections
+                        )
+                        if chunkAnchorModelCounts.indices.contains(anchorIndex) {
+                            chunkAnchorModelCounts[anchorIndex] = modelCount
+                                - (deferredMergeLeaves - mergeLeavesBefore)
+                                + (deferredMergeEntities - mergeEntitiesBefore)
+                        }
+                    }
+                }
+                let itemMs = (ProcessInfo.processInfo.systemUptime - itemStartUptime) * 1_000
+                perfDeferredMaxItemMs = max(perfDeferredMaxItemMs, itemMs)
+                index += 1
+                sliceItems += 1
+                deferredOrganizeRemaining = queue.count - index
+            }
+            mergeDeferredLeaves(leavesByAnchor, identityExcluded: identityExcluded, rejections: &rejections)
+            leavesByAnchor.removeAll()
+            if index < queue.count {
                 await Task.yield()
             }
         }
-        mergeDeferredLeaves(leavesByAnchor, identityExcluded: identityExcluded, rejections: &rejections)
         // batch80: the deferred totals ride the every-flush
         // perf-log channel (the one-shot queued lines have
         // already gone out by now).
@@ -1973,7 +2259,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     }
 
     /// batch80: organizes one deferred child (see
-    /// runDeferredOrganize): real recursive bounds, packed
+    /// runDeferredOrganize): real bounds (batch113: via
+    /// chunkChildBounds), packed
     /// cell key, re-parent under the cell's anchor (created
     /// detached on first sight), union-bounds growth, the
     /// recorded enabled state restored, and the child's
@@ -1993,7 +2280,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             child.isEnabled = deferred.wasEnabled
             return
         }
-        let bounds = child.visualBounds(recursive: true, relativeTo: buildWorld)
+        // batch113 (B2): same bounds shortcut as the load
+        // pass — leaf ModelEntities skip the recursive walk.
+        let bounds = chunkChildBounds(child, relativeTo: buildWorld)
         let cellX = Int(floor(bounds.center.x / cell))
         let cellZ = Int(floor(bounds.center.z / cell))
         let key = Self.chunkCellKey(cellX: cellX, cellZ: cellZ)
@@ -2009,6 +2298,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             chunkUnionBounds.append((center: bounds.center, extents: bounds.extents))
             chunkBounds.append((center: bounds.center, radius: simd_length(bounds.extents) * 0.5))
             chunkAttached.append(false)
+            chunkAnchorModelCounts.append(0)
             // Force the next updateChunkVisibility to sweep,
             // so an in-range anchor attaches promptly instead
             // of waiting for the camera to move 120 m.
@@ -2023,6 +2313,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var leaves: [Entity] = []
         var modelCount = 0
         _ = surveyChunkLeaves(child, leaves: &leaves, modelCount: &modelCount)
+        // batch113: the child's ModelEntities join the
+        // anchor's recorded count (the batch merge below
+        // adjusts it back down by what it consumes).
+        if chunkAnchorModelCounts.indices.contains(anchorIndex) {
+            chunkAnchorModelCounts[anchorIndex] += modelCount
+        }
         if !leaves.isEmpty {
             leavesByAnchor[anchorIndex, default: []].append(contentsOf: leaves)
         }
@@ -2038,6 +2334,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     ) {
         for (anchorIndex, leaves) in leavesByAnchor {
             guard chunkAnchors.indices.contains(anchorIndex) else { continue }
+            // batch113: keep the anchor's recorded
+            // ModelEntity count in step with the merge
+            // (consumed leaves out, merged entities in).
+            let mergeLeavesBefore = deferredMergeLeaves
+            let mergeEntitiesBefore = deferredMergeEntities
             mergeStaticLeavesInAnchor(
                 chunkAnchors[anchorIndex],
                 leaves: leaves,
@@ -2047,6 +2348,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 mergedEntities: &deferredMergeEntities,
                 rejections: &rejections
             )
+            if chunkAnchorModelCounts.indices.contains(anchorIndex) {
+                chunkAnchorModelCounts[anchorIndex] += (deferredMergeEntities - mergeEntitiesBefore)
+                    - (deferredMergeLeaves - mergeLeavesBefore)
+            }
         }
     }
 
@@ -2346,17 +2651,22 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         for key in bucketKeys {
             guard let bucket = buckets[key] else { continue }
+            // batch113 (D2): drop the bucket from the
+            // dictionary before generating, so its baked
+            // arrays are released as soon as this iteration
+            // ends instead of every bucket of the anchor
+            // staying alive until the whole merge returns.
+            // The merge's memory peak becomes one bucket's
+            // geometry + one generated mesh, not the anchor's
+            // entire baked copy — the spike the jetsam case
+            // in the perf diagnosis rests on.
+            buckets[key] = nil
             guard bucket.leaves.count >= 2 else {
                 rejections.bucketTooSmall += bucket.leaves.count
                 continue
             }
-            var descriptor = MeshDescriptor(name: "chunk-merged")
-            descriptor.positions = MeshBuffers.Positions(bucket.positions)
-            descriptor.normals = MeshBuffers.Normals(bucket.normals)
-            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(bucket.uvs)
-            descriptor.primitives = .triangles(bucket.indices)
             // If generation fails the leaves stay untouched.
-            guard let mesh = try? MeshResource.generate(from: [descriptor]) else { continue }
+            guard let mesh = Self.generateMergedChunkMesh(positions: bucket.positions, normals: bucket.normals, uvs: bucket.uvs, indices: bucket.indices) else { continue }
             let merged = ModelEntity(mesh: mesh, materials: [bucket.material])
             mergedNameCounter += 1
             merged.name = "chunk-merged-\(mergedNameCounter)"
@@ -2366,6 +2676,27 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             mergedLeaves += bucket.leaves.count
             mergedEntities += 1
+        }
+    }
+
+    /// batch113 (D2): one merged mesh generation inside an
+    /// autoreleasepool, so the descriptor and its buffer
+    /// wrappers (Objective-C backed) drain per bucket
+    /// instead of accumulating until the caller's pool —
+    /// the frame's — happens to drain.
+    private static func generateMergedChunkMesh(
+        positions: [SIMD3<Float>],
+        normals: [SIMD3<Float>],
+        uvs: [SIMD2<Float>],
+        indices: [UInt32]
+    ) -> MeshResource? {
+        autoreleasepool {
+            var descriptor = MeshDescriptor(name: "chunk-merged")
+            descriptor.positions = MeshBuffers.Positions(positions)
+            descriptor.normals = MeshBuffers.Normals(normals)
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
+            descriptor.primitives = .triangles(indices)
+            return try? MeshResource.generate(from: [descriptor])
         }
     }
 
@@ -3099,6 +3430,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // batch59: the world is incomplete until the deferred
         // build lands; scene updates resume on the next tick.
         if buildInProgress { return }
+        // batch113: the deferred organize pass gates its
+        // slices on this (see runDeferredOrganize).
+        lastUpdateSpeedKmh = speedKmh
         // batch62: frame-cost accounting (see recordFramePerf).
         // The defer records on every exit path below, including
         // the samples-empty guard.
@@ -3125,7 +3459,13 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // crossover.
         let playerOnSiding = trafficSnapshot?.playerTrain?.trackID.hasSuffix("-siding") ?? false
         func playerTrackLateral(at chainage: Double) -> Float {
-            let base: Float = travelDirection == .up ? -2.1 : 2.1
+            // batch117: the scene is built in the travel frame
+            // (the down route is the same corridor traversed
+            // backwards, not mirrored), so left-hand running
+            // is lateral -2.1 in BOTH directions. The old
+            // up/down flip imported the geographic convention
+            // and put the down player on the right-hand track.
+            let base: Float = -2.1
             // batch42: on the running line the player follows
             // the island-station spread like every drawn track;
             // on a siding the fan takes over, rooted on the
@@ -3814,6 +4154,32 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     }
                     runStart = i
                     runSeaCoastal = coastal
+                }
+            }
+            // batch117: end-of-loop flush, the sentinel the
+            // sibling loops (apron, far ground) force with a
+            // key change at i == samples.count. This loop only
+            // emitted on a flag flip, so a side whose flag
+            // never flips - the inland side, never coastal -
+            // got NO slab at all, and every trailing
+            // non-coastal run (the sea side's in down
+            // sessions, which end off-coast) was dropped the
+            // same way. The missing slab is hidden wherever
+            // the wide apron and far ground overlap it, but
+            // in coastal windows the apron narrows to +-23 m
+            // and left a 23-75 m band on the inland side
+            // with no ground surface at all: the sky dome's
+            // blue lower half showed through as a "lake",
+            // with height-placed houses and trees standing
+            // in it. Emit the pending non-coastal run now.
+            // (If the final flip above just consumed the
+            // route end, runStart == samples.count and this
+            // is a no-op; a pending coastal run stays
+            // unbuilt by design - beach and sea cover it.)
+            if !runSeaCoastal, runStart < samples.count {
+                if let slab = ribbonEntity(name: "formation-ground-\(sideSign > 0 ? "r" : "l")-\(runStart)", width: 700, y: -0.09, tileLength: 12,
+                                           offsets: slabSpan.centers, material: slabMaterial, range: runStart..<samples.count, yOffsets: groundOffsets, widths: slabSpan.widths) {
+                    world.addChild(slab)
                 }
             }
         }
@@ -4802,7 +5168,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                        position: SIMD3<Float>(coilPoint.x, coilPoint.y + 0.20, coilPoint.z), material: coilMaterial, orientation: coilYaw)
             }
         }
-        let playerSideSign: Float = travelDirection == .up ? -1 : 1
+        // batch117: same travel-frame rule as the player's
+        // track lateral - the player's own signals stand on
+        // his left (-1) in both directions; the geographic
+        // flip put the down player's signals on his right.
+        // The ATS coils in placeSignal follow sideSign, so
+        // they move with the posts. Facing (faceSign) is
+        // unchanged - it was already correct.
+        let playerSideSign: Float = -1
         for target in preparedTargets(extras: approachPoints + departurePoints, terminalDepartures: terminalDeparturePoints) {
             guard let sample = bestSample(for: target) else { continue }
             let role = approachPoints.contains(where: { abs($0 - target) < 60 }) ? "home" : (departurePoints.contains(where: { abs($0 - target) < 60 }) ? "departure" : "block")
@@ -7275,16 +7648,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// parallel at `reachM`. Formation, trackbed, rails and an
     /// end buffer follow the divergence builder's recipe.
     /// Returns the branch's profile stations for theme scenery.
-    private func buildScenicBranch(name: String, junctionM: Double, side: Float, lengthM: Double, reachM: Double, easeM: Double) -> [ProfileStation] {
+    /// batch121: `junctionM` is a CANONICAL mainline chainage;
+    /// the branch is stepped out in the canonical direction
+    /// (toward increasing chainage) and converted into the
+    /// build's travel frame here, so the scenic spur leaves
+    /// the main line at the same geographic place in both
+    /// travel directions (before this, a down build grew the
+    /// spur at the mirrored chainage, ~40 km from the real
+    /// junction).
+    private func buildScenicBranch(name: String, junctionM: Double, side: Float, lengthM: Double, reachM: Double, easeM: Double, travelDirection: RegionalTravelDirection, routeLengthM: Double) -> [ProfileStation] {
         func offsetAt(_ t: Double) -> Float {
             let u = min(max(t / easeM, 0), 1)
             let s = u * u * (3 - 2 * u)
             return 2.1 + Float(reachM) * Float(s)
         }
+        let travelJunctionM = travelDirection == .up ? junctionM : routeLengthM - junctionM
+        let travelStep: Double = travelDirection == .up ? 1 : -1
         var stations: [ProfileStation] = []
         var t = 0.0
         while t <= lengthM {
-            stations.append(profileStation(at: junctionM + t, trackLateral: side * offsetAt(t)))
+            stations.append(profileStation(at: travelJunctionM + travelStep * t, trackLateral: side * offsetAt(t)))
             t += 8.5
         }
         let formationMaterial = Self.pbr(UIColor(red: 0.24, green: 0.28, blue: 0.24, alpha: 1), roughness: 1)
@@ -9602,7 +9985,18 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     private func buildZooAndPark(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
         guard let first = samples.first, let last = samples.last, first.distanceM <= 50_150, last.distanceM >= 57_200 else { return }
+        // batch121: the spur side is a GEOGRAPHIC side (the
+        // inland side, opposite the sea) and this formula is
+        // the canonical-to-travel lateral conversion that
+        // keeps it there — seaSideSign mirrors with direction,
+        // so the negated sign lands on the same geographic
+        // side in both builds. What was NOT geographic before
+        // this batch was the longitudinal placement: the
+        // junction chainages below are canonical and now go
+        // through td() like every other canonical anchor.
         let sideSign: Float = -seaSideSign(travelDirection: travelDirection)
+        let routeLengthM = last.distanceM
+        func td(_ canonical: Double) -> Double { travelDirection == .up ? canonical : routeLengthM - canonical }
         func cutout(_ texture: String) -> PhysicallyBasedMaterial {
             var m = Self.texturedPBR(.white, roughness: 0.9, textureName: texture)
             m.blending = .transparent(opacity: .init(floatLiteral: 1))
@@ -9616,7 +10010,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
         // ---- The zoo line ----
         let zooJunction = 50_150.0
-        let zooStations = buildScenicBranch(name: "zooline", junctionM: zooJunction, side: sideSign, lengthM: 2_300, reachM: 46, easeM: 550)
+        let zooStations = buildScenicBranch(name: "zooline", junctionM: zooJunction, side: sideSign, lengthM: 2_300, reachM: 46, easeM: 550, travelDirection: travelDirection, routeLengthM: routeLengthM)
         func zooOffset(_ t: Double) -> Float {
             let u = min(max(t / 550, 0), 1)
             return 2.1 + 46 * Float(u * u * (3 - 2 * u))
@@ -9630,8 +10024,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                                         size: SIMD3<Float>(2.8, 1.0, 8.6), ax: st.xAxis, ay: st.yAxis, az: -simd_cross(st.xAxis, st.yAxis))
         }
         if let platform = zooPlatformBatch.build(name: "zoo-platform", material: concreteMaterial) { world.addChild(platform) }
-        let zooHouse = groundOffsetPoint(self.sample(at: zooJunction + 1_150), lateral: sideSign * (zooOffset(1_150) + 10))
-        _ = addBox(parent: world, name: "zoo-station-house", size: SIMD3<Float>(9, 5.5, 13), position: SIMD3<Float>(zooHouse.x, zooHouse.y + 2.75, zooHouse.z), material: houseFacadeMaterial5, orientation: simd_quatf(angle: -self.sample(at: zooJunction + 1_150).heading, axis: SIMD3<Float>(0, 1, 0)))
+        let zooHouse = groundOffsetPoint(self.sample(at: td(zooJunction + 1_150)), lateral: sideSign * (zooOffset(1_150) + 10))
+        _ = addBox(parent: world, name: "zoo-station-house", size: SIMD3<Float>(9, 5.5, 13), position: SIMD3<Float>(zooHouse.x, zooHouse.y + 2.75, zooHouse.z), material: houseFacadeMaterial5, orientation: simd_quatf(angle: -self.sample(at: td(zooJunction + 1_150)).heading, axis: SIMD3<Float>(0, 1, 0)))
         // Paddocks with animals.
         let animalMaterials: [String: PhysicallyBasedMaterial] = [
             "elephant": cutout("scenery_zoo_elephant"),
@@ -9647,7 +10041,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         for (paddockIndex, paddock) in paddocks.enumerated() {
             let centerD = zooJunction + paddock.t
             let centerLat = sideSign * (zooOffset(paddock.t) + 30)
-            let centerSample = self.sample(at: centerD)
+            let centerSample = self.sample(at: td(centerD))
             let groundY = groundLevelM(at: centerSample)
             let yaw = simd_quatf(angle: -centerSample.heading, axis: SIMD3<Float>(0, 1, 0))
             let c = groundOffsetPoint(centerSample, lateral: centerLat)
@@ -9655,12 +10049,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             for fenceSide in [-1.0, 1.0] {
                 let fp = groundOffsetPoint(centerSample, lateral: centerLat + sideSign * Float(fenceSide) * 20)
                 _ = addBox(parent: world, name: "zoo-fence-along-\(paddockIndex)-\(Int(fenceSide))", size: SIMD3<Float>(0.06, 2.2, 32), position: SIMD3<Float>(fp.x, groundY + 1.1, fp.z), material: chainlink, orientation: yaw)
-                let cp = groundOffsetPoint(self.sample(at: centerD + fenceSide * 16), lateral: centerLat)
+                let cp = groundOffsetPoint(self.sample(at: td(centerD + fenceSide * 16)), lateral: centerLat)
                 _ = addBox(parent: world, name: "zoo-fence-cross-\(paddockIndex)-\(Int(fenceSide))", size: SIMD3<Float>(40, 2.2, 0.06), position: SIMD3<Float>(cp.x, groundY + 1.1, cp.z), material: chainlink, orientation: yaw)
             }
             for (animalIndex, species) in paddock.species.enumerated() {
                 guard let material = animalMaterials[species], let size = animalSizes[species] else { continue }
-                let aSample = self.sample(at: centerD + Double(animalIndex * 7 - 4))
+                let aSample = self.sample(at: td(centerD + Double(animalIndex * 7 - 4)))
                 let aPoint = groundOffsetPoint(aSample, lateral: centerLat + sideSign * Float(animalIndex * 6 - 3))
                 for cross in 0..<2 {
                     let board = ModelEntity(mesh: MeshResource.generatePlane(width: size, depth: size), materials: [material])
@@ -9686,7 +10080,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
 
         // ---- The theme park line ----
         let parkJunction = 55_500.0
-        let parkStations = buildScenicBranch(name: "parkline", junctionM: parkJunction, side: sideSign, lengthM: 1_700, reachM: 105, easeM: 900)
+        let parkStations = buildScenicBranch(name: "parkline", junctionM: parkJunction, side: sideSign, lengthM: 1_700, reachM: 105, easeM: 900, travelDirection: travelDirection, routeLengthM: routeLengthM)
         func parkOffset(_ t: Double) -> Float {
             let u = min(max(t / 900, 0), 1)
             return 2.1 + 105 * Float(u * u * (3 - 2 * u))
@@ -9702,9 +10096,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // Park ground, wheel and coaster share one frame.
         let parkD = parkJunction + 1_150
         let parkLat = sideSign * (parkOffset(1_150) + 80)
-        let parkSample = self.sample(at: parkD)
+        let parkSample = self.sample(at: td(parkD))
         let parkGroundY = groundLevelM(at: parkSample)
-        let parkFrame = profileStation(at: parkD, trackLateral: parkLat)
+        let parkFrame = profileStation(at: td(parkD), trackLateral: parkLat)
         let parkCenter = SIMD3<Float>(parkFrame.center.x, parkGroundY, parkFrame.center.z)
         let xAxis = parkFrame.xAxis
         let tangent = -simd_cross(parkFrame.xAxis, parkFrame.yAxis)
@@ -10190,8 +10584,36 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let up = travelDirection == .up
         let sideSign: Float = up ? -1 : 1
         let trackLat: Float = up ? -2.1 : 2.1
-        func gp(_ d: Double, _ lateral: Float) -> SIMD3<Float> { groundOffsetPoint(sample(at: d), lateral: lateral) }
-        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0)) }
+        // batch121 (2026-11-16, design study §1.4/§3.4): this
+        // builder is written in the CANONICAL (up) frame —
+        // every distance below is a canonical chainage, with
+        // the junction station at 0 and the zoo terminal at
+        // the line length, in BOTH travel directions. td()
+        // maps a canonical chainage into the current build's
+        // travel frame; travelRange() does the same for a
+        // span; outward is the canonical-forward direction in
+        // travel-frame forward units (for offsets past the
+        // terminal). Before this batch the constants were
+        // applied raw to the travel frame, so the down build
+        // put the terminal platform, the station house and
+        // the whole grounds at the junction end and the
+        // entrance at the terminal end — the world's two ends
+        // swapped, and a down train departing the zoo drove
+        // INTO the zoo grounds. The laterals need no such
+        // conversion: sideSign / trackLat already mirror with
+        // direction, which is exactly the canonical-to-travel
+        // lateral conversion, so the geography's sides were
+        // always consistent — only the longitudes were not.
+        let lineLengthM = samples.last?.distanceM ?? 2_500
+        func td(_ canonical: Double) -> Double { up ? canonical : lineLengthM - canonical }
+        func travelRange(_ canonicalStart: Double, _ canonicalEnd: Double) -> (start: Double, end: Double) {
+            let a = td(canonicalStart)
+            let b = td(canonicalEnd)
+            return (start: min(a, b), end: max(a, b))
+        }
+        let outward: Float = up ? 1 : -1
+        func gp(_ d: Double, _ lateral: Float) -> SIMD3<Float> { groundOffsetPoint(sample(at: td(d)), lateral: lateral) }
+        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -sample(at: td(d)).heading, axis: SIMD3<Float>(0, 1, 0)) }
         let postMat = Self.pbr(UIColor(red: 0.35, green: 0.36, blue: 0.37, alpha: 1), metallic: 0.6, roughness: 0.5)
 
         // Entrance zone: gate over the visitor path, info board,
@@ -10215,7 +10637,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         for car in 0..<3 {
             let p = gp(225 + Double(car) * 38, -sideSign * 13.5)
-            addParkedCar(name: "zoo-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 225 + Double(car) * 38).heading + Float.pi / 2, seed: car * 3 + 1)
+            addParkedCar(name: "zoo-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: td(225 + Double(car) * 38)).heading + Float.pi / 2, seed: car * 3 + 1)
         }
         // Park trees scattered along both sides, clear of the
         // paddock band and the station.
@@ -10253,7 +10675,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let steelMat = Self.pbr(UIColor(red: 0.30, green: 0.31, blue: 0.33, alpha: 1), metallic: 0.7, roughness: 0.5)
         var jointD = 12.5
         while jointD < 2_500 {
-            let s = sample(at: jointD)
+            let s = sample(at: td(jointD))
             for railSide: Float in [-0.72, 0.72] {
                 let outer: Float = railSide < 0 ? -0.095 : 0.095
                 let p = routeOffsetPoint(s, lateral: trackLat + railSide + outer)
@@ -10266,12 +10688,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
 
         // The six enclosures along the 30 km/h stretch.
-        buildZooPaddock(centerM: 560, sideSign: sideSign, species: 5, count: 6, hasCage: false, travelDirection: travelDirection)
-        buildZooPaddock(centerM: 770, sideSign: sideSign, species: 4, count: 3, hasCage: false, travelDirection: travelDirection)
-        buildZooPaddock(centerM: 990, sideSign: sideSign, species: 0, count: 2, hasCage: true, travelDirection: travelDirection)
-        buildZooPaddock(centerM: 1_230, sideSign: sideSign, species: 2, count: 2, hasCage: false, travelDirection: travelDirection)
-        buildZooPaddock(centerM: 1_490, sideSign: sideSign, species: 1, count: 2, hasCage: true, travelDirection: travelDirection)
-        buildZooPaddock(centerM: 1_710, sideSign: sideSign, species: 3, count: 2, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: td(560), sideSign: sideSign, species: 5, count: 6, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: td(770), sideSign: sideSign, species: 4, count: 3, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: td(990), sideSign: sideSign, species: 0, count: 2, hasCage: true, travelDirection: travelDirection)
+        buildZooPaddock(centerM: td(1_230), sideSign: sideSign, species: 2, count: 2, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: td(1_490), sideSign: sideSign, species: 1, count: 2, hasCage: true, travelDirection: travelDirection)
+        buildZooPaddock(centerM: td(1_710), sideSign: sideSign, species: 3, count: 2, hasCage: false, travelDirection: travelDirection)
         // batch32 (2026-11-14, user spec — replaces the
         // batch31 both-sides paddocks): the cross-section
         // through the enclosures is 檻・線路・山(森) —
@@ -10280,8 +10702,8 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // clearance limit. Two more paddocks fill the gaps
         // on the enclosure side (~110 m spacing), and the
         // opposite side becomes the ridge below.
-        buildZooPaddock(centerM: 880, sideSign: sideSign, species: 4, count: 4, hasCage: false, travelDirection: travelDirection)
-        buildZooPaddock(centerM: 1_360, sideSign: sideSign, species: 2, count: 3, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: td(880), sideSign: sideSign, species: 4, count: 4, hasCage: false, travelDirection: travelDirection)
+        buildZooPaddock(centerM: td(1_360), sideSign: sideSign, species: 2, count: 3, hasCage: false, travelDirection: travelDirection)
         // batch55 (2026-11-15, user: 「動物の檻以外なにもない
         // の不自然すぎ」「もっとオブジェクトの密度上げて」):
         // the eight enclosures stood as islands — between
@@ -10312,16 +10734,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                     let segLen = min(7.0, gap.to - fenceD)
                     let midD = fenceD + segLen / 2
                     let fp = gp(midD, sideSign * fenceLat)
-                    gapFenceBatch.addBox(center: SIMD3<Float>(fp.x, fp.y + 0.85, fp.z), size: SIMD3<Float>(0.03, 1.7, Float(segLen) + 0.05), yaw: -sample(at: midD).heading)
+                    gapFenceBatch.addBox(center: SIMD3<Float>(fp.x, fp.y + 0.85, fp.z), size: SIMD3<Float>(0.03, 1.7, Float(segLen) + 0.05), yaw: -sample(at: td(midD)).heading)
                     let postP = gp(fenceD, sideSign * fenceLat)
-                    gapPostBatch.addBox(center: SIMD3<Float>(postP.x, postP.y + 0.9, postP.z), size: SIMD3<Float>(0.09, 1.8, 0.09), yaw: -sample(at: fenceD).heading)
+                    gapPostBatch.addBox(center: SIMD3<Float>(postP.x, postP.y + 0.9, postP.z), size: SIMD3<Float>(0.09, 1.8, 0.09), yaw: -sample(at: td(fenceD)).heading)
                     fenceD += segLen
                 }
             }
             var hedgeD = gap.from + 3
             while hedgeD < gap.to - 2 {
                 let hp = gp(hedgeD, sideSign * 6.3)
-                gapHedgeBatch.addBox(center: SIMD3<Float>(hp.x, hp.y + 0.38, hp.z), size: SIMD3<Float>(1.1, 0.75, 3.2), yaw: -sample(at: hedgeD).heading)
+                gapHedgeBatch.addBox(center: SIMD3<Float>(hp.x, hp.y + 0.38, hp.z), size: SIMD3<Float>(1.1, 0.75, 3.2), yaw: -sample(at: td(hedgeD)).heading)
                 hedgeD += 7.6
             }
             for treeSlot in 0..<3 {
@@ -10342,7 +10764,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         while pathD < 1_960 {
             let midD = pathD + 7.6
             let pp = gp(midD, sideSign * 43.5)
-            pathBatch.addBox(center: SIMD3<Float>(pp.x, pp.y + 0.035, pp.z), size: SIMD3<Float>(3.2, 0.07, 15.4), yaw: -sample(at: midD).heading)
+            pathBatch.addBox(center: SIMD3<Float>(pp.x, pp.y + 0.035, pp.z), size: SIMD3<Float>(3.2, 0.07, 15.4), yaw: -sample(at: td(midD)).heading)
             pathD += 15.2
         }
         if let path = pathBatch.build(name: "zoo-visitor-path", material: Self.pbr(UIColor(red: 0.78, green: 0.78, blue: 0.76, alpha: 1), roughness: 1)) { world.addChild(path) }
@@ -10353,14 +10775,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             for postAlong in [-1.6, 1.6] {
                 for postLat in [-1.3, 1.3] {
                     let pp = gp(shelterD + postAlong, sideSign * (43.5 + Float(postLat)))
-                    shelterPostBatch.addBox(center: SIMD3<Float>(pp.x, pp.y + 1.25, pp.z), size: SIMD3<Float>(0.14, 2.5, 0.14), yaw: -sample(at: shelterD).heading)
+                    shelterPostBatch.addBox(center: SIMD3<Float>(pp.x, pp.y + 1.25, pp.z), size: SIMD3<Float>(0.14, 2.5, 0.14), yaw: -sample(at: td(shelterD)).heading)
                 }
             }
             let roofP = gp(shelterD, sideSign * 43.5)
-            shelterRoofBatch.addBox(center: SIMD3<Float>(roofP.x, roofP.y + 2.62, roofP.z), size: SIMD3<Float>(3.4, 0.12, 4.2), yaw: -sample(at: shelterD).heading)
+            shelterRoofBatch.addBox(center: SIMD3<Float>(roofP.x, roofP.y + 2.62, roofP.z), size: SIMD3<Float>(3.4, 0.12, 4.2), yaw: -sample(at: td(shelterD)).heading)
             let benchP = gp(shelterD + 3.4, sideSign * 41.8)
-            shelterRoofBatch.addBox(center: SIMD3<Float>(benchP.x, benchP.y + 0.45, benchP.z), size: SIMD3<Float>(0.45, 0.09, 1.9), yaw: -sample(at: shelterD + 3.4).heading)
-            shelterPostBatch.addBox(center: SIMD3<Float>(benchP.x, benchP.y + 0.21, benchP.z), size: SIMD3<Float>(0.3, 0.42, 1.5), yaw: -sample(at: shelterD + 3.4).heading)
+            shelterRoofBatch.addBox(center: SIMD3<Float>(benchP.x, benchP.y + 0.45, benchP.z), size: SIMD3<Float>(0.45, 0.09, 1.9), yaw: -sample(at: td(shelterD + 3.4)).heading)
+            shelterPostBatch.addBox(center: SIMD3<Float>(benchP.x, benchP.y + 0.21, benchP.z), size: SIMD3<Float>(0.3, 0.42, 1.5), yaw: -sample(at: td(shelterD + 3.4)).heading)
         }
         if let shelterPosts = shelterPostBatch.build(name: "zoo-shelter-posts", material: postMat) { world.addChild(shelterPosts) }
         if let shelterRoofs = shelterRoofBatch.build(name: "zoo-shelter-roofs", material: shelterWood) { world.addChild(shelterRoofs) }
@@ -10586,8 +11008,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // 動物園 terminal: platform, furniture, station house,
         // departure board and a buffer stop past the end.
         let whiteLine = Self.pbr(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.85)
-        buildOneStationPlatform(name: "platform-ZOO", start: 2_290, end: 2_500, trackLateral: trackLat, sideSign: sideSign, width: 5.0, whiteLineMaterial: whiteLine)
-        buildStationFurniture(name: "furniture-ZOO", centerChainage: 2_420, start: 2_290, end: 2_500, trackLateral: trackLat, sideSign: sideSign)
+        // batch121: the drawn span IS the stop-scoring zone —
+        // the canonical 200 m terminal span [2,300, 2,500]
+        // the adapter scores ZOO_END against (the platform
+        // used to be drawn 210 m, [2,290, 2,500], and in the
+        // down build at the wrong end of the line entirely).
+        let zooTerminalRange = travelRange(2_300, 2_500)
+        buildOneStationPlatform(name: "platform-ZOO", start: zooTerminalRange.start, end: zooTerminalRange.end, trackLateral: trackLat, sideSign: sideSign, width: 5.0, whiteLineMaterial: whiteLine)
+        buildStationFurniture(name: "furniture-ZOO", centerChainage: td(2_400), start: zooTerminalRange.start, end: zooTerminalRange.end, trackLateral: trackLat, sideSign: sideSign)
         let house = gp(2_440, sideSign * 13.5)
         _ = addBox(parent: world, name: "zoo-station-house", size: SIMD3<Float>(13, 4.2, 6.5), position: SIMD3<Float>(house.x, house.y + 2.1, house.z), material: Self.texturedPBR(.white, roughness: 0.85, textureName: "scenery_house_facade_5"), orientation: yawAt(2_440))
         _ = addBox(parent: world, name: "zoo-station-roof", size: SIMD3<Float>(13.8, 0.35, 7.3), position: SIMD3<Float>(house.x, house.y + 4.4, house.z), material: Self.pbr(UIColor(red: 0.38, green: 0.34, blue: 0.30, alpha: 1), roughness: 0.8), orientation: yawAt(2_440))
@@ -10598,19 +11026,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // People: entrance-path walkers and passengers (plus one
         // staff member) on the terminal platform.
         for w in 0..<2 {
-            let s0 = sample(at: 240 + Double(w) * 90)
+            let s0 = sample(at: td(240 + Double(w) * 90))
             let home = gp(240 + Double(w) * 90, sideSign * 14)
             let axis = SIMD3<Float>(sin(s0.heading), 0, -cos(s0.heading))
-            addPerson(position: home, yaw: atan2(axis.x, -axis.z), role: 3, mode: 1, routeDistanceM: 240 + Double(w) * 90, walkAxis: axis, range: 42, seedKey: "zooentrance-\(w)")
+            addPerson(position: home, yaw: atan2(axis.x, -axis.z), role: 3, mode: 1, routeDistanceM: td(240 + Double(w) * 90), walkAxis: axis, range: 42, seedKey: "zooentrance-\(w)")
         }
         let topVZ: Float = 0.3065 + 1.10
         for p in 0..<3 {
             let c = 2_400 + Double(p) * 22
-            let station = profileStation(at: c, trackLateral: trackLat)
+            let station = profileStation(at: td(c), trackLateral: trackLat)
             let pos = station.center + station.xAxis * (sideSign * 2.6) + station.yAxis * topVZ
-            let h = sample(at: c).heading
+            let h = sample(at: td(c)).heading
             let face = SIMD3<Float>(cos(h), 0, sin(h)) * -sideSign
-            addPerson(position: pos, yaw: atan2(face.x, -face.z), role: p == 1 ? 1 : 0, mode: 0, routeDistanceM: c, walkAxis: SIMD3<Float>(1, 0, 0), range: 0, seedKey: "zoostation-\(p)")
+            addPerson(position: pos, yaw: atan2(face.x, -face.z), role: p == 1 ? 1 : 0, mode: 0, routeDistanceM: td(c), walkAxis: SIMD3<Float>(1, 0, 0), range: 0, seedKey: "zoostation-\(p)")
         }
         // batch15 (2026-11-13, user verdict "動物園の焼け野原"):
         // the terminal stood alone in the dry field — the only
@@ -10627,7 +11055,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         for car in 0..<3 {
             let p = gp(2_320 + Double(car) * 42, -sideSign * 13.5)
-            addParkedCar(name: "zoo-terminal-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 2_320 + Double(car) * 42).heading + Float.pi / 2, seed: car * 3 + 5)
+            addParkedCar(name: "zoo-terminal-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: td(2_320 + Double(car) * 42)).heading + Float.pi / 2, seed: car * 3 + 5)
         }
         let annex = gp(2_330, sideSign * 16.5)
         _ = addBox(parent: world, name: "zoo-annex", size: SIMD3<Float>(9, 3.6, 6), position: SIMD3<Float>(annex.x, annex.y + 1.8, annex.z), material: Self.texturedPBR(.white, roughness: 0.85, textureName: "scenery_house_facade_5"), orientation: yawAt(2_330))
@@ -10655,14 +11083,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
 
         // Buffer stop on a short stub past the terminal.
-        let endSample = sample(at: 2_500)
+        let endSample = sample(at: td(2_500))
         let endPoint = routeOffsetPoint(endSample, lateral: trackLat)
         let forward = SIMD3<Float>(sin(endSample.heading), 0, -cos(endSample.heading))
-        let bufferPos = SIMD3<Float>(endPoint.x, endPoint.y, endPoint.z) + forward * 9
+        let bufferPos = SIMD3<Float>(endPoint.x, endPoint.y, endPoint.z) + forward * (9 * outward)
         _ = addBox(parent: world, name: "zoo-buffer-beam", size: SIMD3<Float>(1.9, 0.35, 0.3), position: SIMD3<Float>(bufferPos.x, bufferPos.y + 0.75, bufferPos.z), material: postMat, orientation: yawAt(2_500))
         for legSide: Float in [-0.7, 0.7] {
             let legPoint = routeOffsetPoint(endSample, lateral: trackLat + legSide)
-            let lp = SIMD3<Float>(legPoint.x, legPoint.y, legPoint.z) + forward * 9
+            let lp = SIMD3<Float>(legPoint.x, legPoint.y, legPoint.z) + forward * (9 * outward)
             _ = addBox(parent: world, name: "zoo-buffer-leg", size: SIMD3<Float>(0.22, 0.95, 0.22), position: SIMD3<Float>(lp.x, lp.y + 0.45, lp.z), material: postMat, orientation: yawAt(2_500))
         }
     }
@@ -10678,13 +11106,33 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// fairy-tale buildings and castle on a plaza pad), fishplates
     /// every 25 m (standard-length jointed rail, like the zoo
     /// line), and the テーマパーク terminal.
-    private func buildParkLineWorld(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
+        private func buildParkLineWorld(routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
         guard routeVariant == .parkLine else { return }
         let up = travelDirection == .up
         let sideSign: Float = up ? -1 : 1
         let trackLat: Float = up ? -2.1 : 2.1
-        func gp(_ d: Double, _ lateral: Float) -> SIMD3<Float> { groundOffsetPoint(sample(at: d), lateral: lateral) }
-        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -sample(at: d).heading, axis: SIMD3<Float>(0, 1, 0)) }
+        // batch121: canonical framing, exactly as in
+        // buildZooLineWorld — every distance below is a
+        // canonical (up-frame) chainage (junction 館川 at 0,
+        // the theme park terminal at the line length) and
+        // td() / travelRange() map it into the current
+        // build's travel frame. Before this batch the down
+        // build's ends were swapped: the entrance plaza and
+        // the 館川-side houses stood at the park end and the
+        // wheel, hotels and terminal platform at the 館川
+        // end, so a down train that had just left the theme
+        // park drove toward the wheel (the IPA #12 report
+        // that exposed the whole direction audit).
+        let lineLengthM = samples.last?.distanceM ?? 2_000
+        func td(_ canonical: Double) -> Double { up ? canonical : lineLengthM - canonical }
+        func travelRange(_ canonicalStart: Double, _ canonicalEnd: Double) -> (start: Double, end: Double) {
+            let a = td(canonicalStart)
+            let b = td(canonicalEnd)
+            return (start: min(a, b), end: max(a, b))
+        }
+        let outward: Float = up ? 1 : -1
+        func gp(_ d: Double, _ lateral: Float) -> SIMD3<Float> { groundOffsetPoint(sample(at: td(d)), lateral: lateral) }
+        func yawAt(_ d: Double) -> simd_quatf { simd_quatf(angle: -sample(at: td(d)).heading, axis: SIMD3<Float>(0, 1, 0)) }
         let postMat = Self.pbr(UIColor(red: 0.35, green: 0.36, blue: 0.37, alpha: 1), metallic: 0.6, roughness: 0.5)
         let pastels: [UIColor] = [
             UIColor(red: 0.96, green: 0.80, blue: 0.85, alpha: 1),
@@ -10743,7 +11191,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // Park direction sign facing the origin, park side:
         // posts under the board's lateral span, face plate
         // proud toward the approaching (departing) train.
-        let signStation = profileStation(at: 60, trackLateral: 0)
+        let signStation = profileStation(at: td(60), trackLateral: 0)
         let signTangent = -simd_cross(signStation.xAxis, signStation.yAxis)
         for postLat in [Float(9.9), Float(13.1)] {
             let pp = gp(60, sideSign * postLat)
@@ -10753,7 +11201,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         _ = addBox(parent: world, name: "park-origin-sign", size: SIMD3<Float>(4.6, 1.6, 0.1), position: SIMD3<Float>(signBase.x, signBase.y + 2.7, signBase.z), material: Self.pbr(pastels[0], roughness: 0.7), orientation: yawAt(60))
         _ = addBox(parent: world, name: "park-origin-sign-face", size: SIMD3<Float>(4.0, 1.15, 0.14), position: SIMD3<Float>(signBase.x, signBase.y + 2.7, signBase.z) - signTangent * 0.03, material: Self.pbr(UIColor(red: 0.98, green: 0.95, blue: 0.80, alpha: 1), roughness: 0.6), orientation: yawAt(60))
         // Banner poles flanking the entrance gate.
-        let gateStation = profileStation(at: 140, trackLateral: 0)
+        let gateStation = profileStation(at: td(140), trackLateral: 0)
         let gateTangent = -simd_cross(gateStation.xAxis, gateStation.yAxis)
         for (flagIndex, flagLat) in [Float(7.6), Float(20.4)].enumerated() {
             let fp = gp(140, sideSign * flagLat)
@@ -10764,7 +11212,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         for car in 0..<5 {
             let p = gp(150 + Double(car) * 38, -sideSign * 13.5)
-            addParkedCar(name: "park-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 150 + Double(car) * 38).heading + Float.pi / 2, seed: car * 2 + 2)
+            addParkedCar(name: "park-car-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: td(150 + Double(car) * 38)).heading + Float.pi / 2, seed: car * 2 + 2)
         }
         // Park trees along both sides (batch15: twice the
         // density — 30 m spacing instead of 60 m).
@@ -10795,7 +11243,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var fenceD = 330.0
         while fenceD <= 1_720 {
             let p = gp(fenceD, sideSign * 9.3)
-            parkFenceBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.8, p.z), size: SIMD3<Float>(1.5, 1.6, 15.4), yaw: -sample(at: fenceD).heading)
+            parkFenceBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.8, p.z), size: SIMD3<Float>(1.5, 1.6, 15.4), yaw: -sample(at: td(fenceD)).heading)
             fenceD += 15
         }
         if let fence = parkFenceBatch.build(name: "park-fence-hedge", material: foliageMaterials[0]) {
@@ -10807,11 +11255,11 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var bannerD = 385.0
         while bannerD <= 1_700 {
             let p = gp(bannerD, sideSign * 10.9)
-            bannerPoleBatch.addBox(center: SIMD3<Float>(p.x, p.y + 3.4, p.z), size: SIMD3<Float>(0.09, 6.8, 0.09), yaw: -sample(at: bannerD).heading)
-            let bannerStation = profileStation(at: bannerD, trackLateral: 0)
+            bannerPoleBatch.addBox(center: SIMD3<Float>(p.x, p.y + 3.4, p.z), size: SIMD3<Float>(0.09, 6.8, 0.09), yaw: -sample(at: td(bannerD)).heading)
+            let bannerStation = profileStation(at: td(bannerD), trackLateral: 0)
             let bannerTangent = -simd_cross(bannerStation.xAxis, bannerStation.yAxis)
             let bannerCenter = SIMD3<Float>(p.x, p.y + 5.1, p.z) + bannerTangent * 0.55
-            bannerBatches[bannerIndex % pastels.count].addBox(center: bannerCenter, size: SIMD3<Float>(0.05, 2.9, 0.95), yaw: -sample(at: bannerD).heading)
+            bannerBatches[bannerIndex % pastels.count].addBox(center: bannerCenter, size: SIMD3<Float>(0.05, 2.9, 0.95), yaw: -sample(at: td(bannerD)).heading)
             bannerIndex += 1
             bannerD += 110
         }
@@ -10861,7 +11309,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         world.addChild(carouselCrown)
         for carIndex in 0..<6 {
             let a = Float(carIndex) / 6 * Float.pi * 2
-            let st = profileStation(at: 700, trackLateral: trackLat)
+            let st = profileStation(at: td(700), trackLateral: trackLat)
             let tang = -simd_cross(st.xAxis, st.yAxis)
             let cp = SIMD3<Float>(carouselBase.x, carouselY + 1.0, carouselBase.z) + st.xAxis * (cos(a) * 5.2) + tang * (sin(a) * 5.2)
             _ = addBox(parent: world, name: "park-carousel-car-\(carIndex)", size: SIMD3<Float>(1.1, 0.9, 0.6), position: cp, material: Self.pbr(pastels[carIndex % pastels.count], roughness: 0.7), orientation: carouselYaw)
@@ -10869,7 +11317,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // Second row of parked cars at the entrance lot.
         for car in 0..<5 {
             let p = gp(169 + Double(car) * 38, -sideSign * 19.5)
-            addParkedCar(name: "park-car-b-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: 169 + Double(car) * 38).heading + Float.pi / 2, seed: car * 3 + 5)
+            addParkedCar(name: "park-car-b-\(car)", center: p, groundY: p.y + 0.06, yaw: -sample(at: td(169 + Double(car) * 38)).heading + Float.pi / 2, seed: car * 3 + 5)
         }
 
         // Fishplates at every 25 m joint (standard-length rail).
@@ -10877,7 +11325,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let steelMat = Self.pbr(UIColor(red: 0.30, green: 0.31, blue: 0.33, alpha: 1), metallic: 0.7, roughness: 0.5)
         var jointD = 12.5
         while jointD < 2_000 {
-            let s = sample(at: jointD)
+            let s = sample(at: td(jointD))
             for railSide: Float in [-0.72, 0.72] {
                 let outer: Float = railSide < 0 ? -0.095 : 0.095
                 let p = routeOffsetPoint(s, lateral: trackLat + railSide + outer)
@@ -10943,7 +11391,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         world.addChild(swingRoof)
         let swingCrown = zooPart(MeshResource.generateSphere(radius: 0.7), Self.pbr(UIColor(red: 0.98, green: 0.85, blue: 0.40, alpha: 1), metallic: 0.5, roughness: 0.35), SIMD3<Float>(swingBase.x, swingY + 12.1, swingBase.z), name: "park-swing-crown")
         world.addChild(swingCrown)
-        let swingStation = profileStation(at: 880, trackLateral: trackLat)
+        let swingStation = profileStation(at: td(880), trackLateral: trackLat)
         let swingTangent = -simd_cross(swingStation.xAxis, swingStation.yAxis)
         for chairIndex in 0..<8 {
             let a = Float(chairIndex) / 8 * Float.pi * 2
@@ -10971,7 +11419,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         world.addChild(carousel2Crown)
         for carIndex in 0..<6 {
             let a = Float(carIndex) / 6 * Float.pi * 2
-            let st2 = profileStation(at: 1_690, trackLateral: trackLat)
+            let st2 = profileStation(at: td(1_690), trackLateral: trackLat)
             let tang2 = -simd_cross(st2.xAxis, st2.yAxis)
             let cp = SIMD3<Float>(carousel2Base.x, carousel2Y + 1.0, carousel2Base.z) + st2.xAxis * (cos(a) * 4.8) + tang2 * (sin(a) * 4.8)
             _ = addBox(parent: world, name: "park-carousel2-car-\(carIndex)", size: SIMD3<Float>(1.1, 0.9, 0.6), position: cp, material: Self.pbr(pastels[(carIndex + 1) % pastels.count], roughness: 0.7), orientation: carousel2Yaw)
@@ -10994,7 +11442,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // the tour photos. The whole cluster moves to 58 m —
         // the wheel base lands ~21 m from the centreline, the
         // same viewing distance as the zoo paddocks.
-        let parkStation = profileStation(at: 1_280, trackLateral: 0)
+        let parkStation = profileStation(at: td(1_280), trackLateral: 0)
         let xAxis = parkStation.xAxis
         let tangent = -simd_cross(xAxis, parkStation.yAxis)
         let parkGround = gp(1_280, sideSign * 58)
@@ -11116,7 +11564,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 hroof.orientation = hroof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
             }
             let stroll = gp(clusterD, sideSign * 17)
-            addPerson(position: SIMD3<Float>(stroll.x, stroll.y, stroll.z), yaw: atan2(tangent.x, -tangent.z), role: 3, mode: 1, routeDistanceM: clusterD, walkAxis: tangent, range: 9, seedKey: "parkmidvis-\(clusterIndex)")
+            addPerson(position: SIMD3<Float>(stroll.x, stroll.y, stroll.z), yaw: atan2(tangent.x, -tangent.z), role: 3, mode: 1, routeDistanceM: td(clusterD), walkAxis: tangent, range: 9, seedKey: "parkmidvis-\(clusterIndex)")
         }
         // batch39: the far side was four identical green pads
         // on a green sheet — invisible in the photos. Now a
@@ -11154,7 +11602,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             var hrD = runStart
             while hrD <= runEnd {
                 let p = gp(hrD, -sideSign * 35.5)
-                hedgerowBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.5, p.z), size: SIMD3<Float>(1.2, 1.0, 15.4), yaw: -sample(at: hrD).heading)
+                hedgerowBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.5, p.z), size: SIMD3<Float>(1.2, 1.0, 15.4), yaw: -sample(at: td(hrD)).heading)
                 hrD += 15
             }
         }
@@ -11167,7 +11615,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         var roadD = 340.0
         while roadD <= 1_720 {
             let p = gp(roadD, -sideSign * 13.8)
-            serviceRoadBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.028, p.z), size: SIMD3<Float>(5.0, 0.05, 16.6), yaw: -sample(at: roadD).heading)
+            serviceRoadBatch.addBox(center: SIMD3<Float>(p.x, p.y + 0.028, p.z), size: SIMD3<Float>(5.0, 0.05, 16.6), yaw: -sample(at: td(roadD)).heading)
             roadD += 16
         }
         if let serviceRoad = serviceRoadBatch.build(name: "parkline-service-road", material: Self.pbr(UIColor(red: 0.32, green: 0.32, blue: 0.34, alpha: 1), roughness: 0.95)) {
@@ -11175,7 +11623,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         for (roadCarIndex, roadCarD) in [520.0, 700.0, 980.0, 1_180.0, 1_400.0, 1_580.0].enumerated() {
             let p = gp(roadCarD, -sideSign * 13.8)
-            addParkedCar(name: "parkline-road-car-\(roadCarIndex)", center: p, groundY: p.y + 0.06, yaw: -sample(at: roadCarD).heading, seed: roadCarIndex * 7 + 11)
+            addParkedCar(name: "parkline-road-car-\(roadCarIndex)", center: p, groundY: p.y + 0.06, yaw: -sample(at: td(roadCarD)).heading, seed: roadCarIndex * 7 + 11)
         }
         // Farmhouses among the fields, each with a barn.
         let farmFacades: [String] = ["scenery_house_facade_3", "scenery_house_facade_4", "scenery_house_facade_6"]
@@ -11197,7 +11645,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 _ = addBox(parent: world, name: "parkline-ad-post-\(boardIndex)", size: SIMD3<Float>(0.18, 3.4, 0.18), position: SIMD3<Float>(pp.x, pp.y + 1.7, pp.z), material: postMat, orientation: yawAt(boardD))
             }
             let bp = gp(boardD, -sideSign * 18.5)
-            let boardStation = profileStation(at: boardD, trackLateral: 0)
+            let boardStation = profileStation(at: td(boardD), trackLateral: 0)
             let boardTangent = -simd_cross(boardStation.xAxis, boardStation.yAxis)
             _ = addBox(parent: world, name: "parkline-ad-frame-\(boardIndex)", size: SIMD3<Float>(7.0, 2.6, 0.14), position: SIMD3<Float>(bp.x, bp.y + 3.6, bp.z), material: Self.pbr(pastels[(boardIndex + 1) % pastels.count], roughness: 0.7), orientation: yawAt(boardD))
             _ = addBox(parent: world, name: "parkline-ad-face-\(boardIndex)", size: SIMD3<Float>(6.5, 2.2, 0.18), position: SIMD3<Float>(bp.x, bp.y + 3.6, bp.z) - boardTangent * 0.02, material: Self.pbr(UIColor(red: 0.98, green: 0.95, blue: 0.80, alpha: 1), roughness: 0.6), orientation: yawAt(boardD))
@@ -11299,22 +11747,27 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let lat = Float(stableIndex("parkvislat-\(v)", count: 50)) - 25
             let home = parkCenter + tangent * along + xAxis * lat
             let axis = v % 2 == 0 ? tangent : xAxis
-            addPerson(position: SIMD3<Float>(home.x, parkGroundY, home.z), yaw: atan2(axis.x, -axis.z), role: 3, mode: 1, routeDistanceM: 1_280, walkAxis: axis, range: 11, seedKey: "parkvis-\(v)")
+            addPerson(position: SIMD3<Float>(home.x, parkGroundY, home.z), yaw: atan2(axis.x, -axis.z), role: 3, mode: 1, routeDistanceM: td(1_280), walkAxis: axis, range: 11, seedKey: "parkvis-\(v)")
         }
 
         // テーマパーク terminal: platform, furniture, pastel
         // station house and a buffer stop past the end.
         let whiteLine = Self.pbr(UIColor(red: 0.92, green: 0.92, blue: 0.90, alpha: 1), roughness: 0.85)
-        buildOneStationPlatform(name: "platform-PARK", start: 1_790, end: 2_000, trackLateral: trackLat, sideSign: sideSign, width: 5.0, whiteLineMaterial: whiteLine)
-        buildStationFurniture(name: "furniture-PARK", centerChainage: 1_920, start: 1_790, end: 2_000, trackLateral: trackLat, sideSign: sideSign)
+        // batch121: drawn span = the adapter's scoring zone,
+        // the canonical 200 m terminal span [1,800, 2,000]
+        // (was [1,790, 2,000], and at the wrong end of the
+        // line in the down build).
+        let parkTerminalRange = travelRange(1_800, 2_000)
+        buildOneStationPlatform(name: "platform-PARK", start: parkTerminalRange.start, end: parkTerminalRange.end, trackLateral: trackLat, sideSign: sideSign, width: 5.0, whiteLineMaterial: whiteLine)
+        buildStationFurniture(name: "furniture-PARK", centerChainage: td(1_900), start: parkTerminalRange.start, end: parkTerminalRange.end, trackLateral: trackLat, sideSign: sideSign)
         let topVP: Float = 0.3065 + 1.10
         for p in 0..<3 {
             let c = 1_900 + Double(p) * 22
-            let station = profileStation(at: c, trackLateral: trackLat)
+            let station = profileStation(at: td(c), trackLateral: trackLat)
             let pos = station.center + station.xAxis * (sideSign * 2.6) + station.yAxis * topVP
-            let h = sample(at: c).heading
+            let h = sample(at: td(c)).heading
             let face = SIMD3<Float>(cos(h), 0, sin(h)) * -sideSign
-            addPerson(position: pos, yaw: atan2(face.x, -face.z), role: p == 1 ? 1 : 3, mode: 0, routeDistanceM: c, walkAxis: SIMD3<Float>(1, 0, 0), range: 0, seedKey: "parkstation-\(p)")
+            addPerson(position: pos, yaw: atan2(face.x, -face.z), role: p == 1 ? 1 : 3, mode: 0, routeDistanceM: td(c), walkAxis: SIMD3<Float>(1, 0, 0), range: 0, seedKey: "parkstation-\(p)")
         }
         let house = gp(1_940, sideSign * 13.5)
         // 2026-11-12: the flat pastel material read as an
@@ -11325,14 +11778,14 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         _ = addBox(parent: world, name: "park-station-house", size: SIMD3<Float>(12, 4.6, 6.5), position: SIMD3<Float>(house.x, house.y + 2.3, house.z), material: Self.texturedPBR(UIColor(red: 0.96, green: 0.80, blue: 0.85, alpha: 1), roughness: 0.85, textureName: "scenery_house_facade_5"), orientation: yawAt(1_940))
         let houseRoof = addBox(parent: world, name: "park-station-roof", size: SIMD3<Float>(9.4, 9.4, 7.3), position: SIMD3<Float>(house.x, house.y + 4.6, house.z), material: Self.pbr(pastels[2], roughness: 0.7), orientation: yawAt(1_940))
         houseRoof.orientation = houseRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
-        let endSample = sample(at: 2_000)
+        let endSample = sample(at: td(2_000))
         let endPoint = routeOffsetPoint(endSample, lateral: trackLat)
         let forward = SIMD3<Float>(sin(endSample.heading), 0, -cos(endSample.heading))
-        let bufferPos = SIMD3<Float>(endPoint.x, endPoint.y, endPoint.z) + forward * 9
+        let bufferPos = SIMD3<Float>(endPoint.x, endPoint.y, endPoint.z) + forward * (9 * outward)
         _ = addBox(parent: world, name: "park-buffer-beam", size: SIMD3<Float>(1.9, 0.35, 0.3), position: SIMD3<Float>(bufferPos.x, bufferPos.y + 0.75, bufferPos.z), material: postMat, orientation: yawAt(2_000))
         for legSide: Float in [-0.7, 0.7] {
             let legPoint = routeOffsetPoint(endSample, lateral: trackLat + legSide)
-            let lp = SIMD3<Float>(legPoint.x, legPoint.y, legPoint.z) + forward * 9
+            let lp = SIMD3<Float>(legPoint.x, legPoint.y, legPoint.z) + forward * (9 * outward)
             _ = addBox(parent: world, name: "park-buffer-leg", size: SIMD3<Float>(0.22, 0.95, 0.22), position: SIMD3<Float>(lp.x, lp.y + 0.45, lp.z), material: postMat, orientation: yawAt(2_000))
         }
 
@@ -11372,7 +11825,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         addBus(name: "park-term-bus", position: SIMD3<Float>(busP.x, busP.y + 0.11, busP.z), orientation: yawAt(1_848), bodyMaterial: Self.pbr(UIColor(red: 0.15, green: 0.50, blue: 0.55, alpha: 1), metallic: 0.2, roughness: 0.4))
         for (termCarIndex, termCarD) in [1_905.0, 1_945.0].enumerated() {
             let p = gp(termCarD, sideSign * 33)
-            addParkedCar(name: "park-term-car-\(termCarIndex)", center: p, groundY: p.y + 0.06, yaw: -sample(at: termCarD).heading + Float.pi / 2, seed: termCarIndex * 5 + 21)
+            addParkedCar(name: "park-term-car-\(termCarIndex)", center: p, groundY: p.y + 0.06, yaw: -sample(at: td(termCarD)).heading + Float.pi / 2, seed: termCarIndex * 5 + 21)
         }
         // The park's main gate beside the station: two
         // towers, a beam and a sign across the plaza path.
@@ -11387,12 +11840,12 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         _ = addBox(parent: world, name: "park-term-gate-sign", size: SIMD3<Float>(7.5, 1.5, 0.12), position: SIMD3<Float>(gateBeamP.x, gateBeamP.y + 6.9, gateBeamP.z), material: Self.pbr(UIColor(red: 0.98, green: 0.95, blue: 0.80, alpha: 1), roughness: 0.6), orientation: yawAt(1_820))
         // Visitors walking the plaza between the station
         // and the gate, and banner poles along its edge.
-        let termStation = profileStation(at: 1_900, trackLateral: 0)
+        let termStation = profileStation(at: td(1_900), trackLateral: 0)
         let termTangent = -simd_cross(termStation.xAxis, termStation.yAxis)
         for v in 0..<5 {
             let vd = 1_845.0 + Double(v) * 22
             let home = gp(vd, sideSign * (20 + Float(v % 3) * 2.5))
-            addPerson(position: SIMD3<Float>(home.x, home.y, home.z), yaw: atan2(termTangent.x, -termTangent.z), role: 3, mode: 1, routeDistanceM: vd, walkAxis: termTangent, range: 13, seedKey: "parktermvis-\(v)")
+            addPerson(position: SIMD3<Float>(home.x, home.y, home.z), yaw: atan2(termTangent.x, -termTangent.z), role: 3, mode: 1, routeDistanceM: td(vd), walkAxis: termTangent, range: 13, seedKey: "parktermvis-\(v)")
         }
         for (termFlagIndex, termFlagD) in [1_800.0, 1_875.0, 1_950.0].enumerated() {
             let fp = gp(termFlagD, sideSign * 16.8)
@@ -11412,7 +11865,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             for carCol in 0..<5 {
                 let carD = 1_800.0 + Double(carCol) * 38
                 let p = gp(carD, -sideSign * (17 + Float(carRow) * 9.5))
-                addParkedCar(name: "park-term-park-car-\(carRow)-\(carCol)", center: p, groundY: p.y + 0.06, yaw: -sample(at: carD).heading + Float.pi / 2, seed: carRow * 13 + carCol * 3 + 31)
+                addParkedCar(name: "park-term-park-car-\(carRow)-\(carCol)", center: p, groundY: p.y + 0.06, yaw: -sample(at: td(carD)).heading + Float.pi / 2, seed: carRow * 13 + carCol * 3 + 31)
             }
         }
         let parkSignP = gp(1_775, -sideSign * 13.5)
@@ -11422,20 +11875,20 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // castle and two hotels on a green pad, so the last
         // photo of the tour faces the park, not the horizon.
         let skyBase = routeOffsetPoint(endSample, lateral: sideSign * 8)
-        let skyPos = SIMD3<Float>(skyBase.x, skyBase.y, skyBase.z) + forward * 74
+        let skyPos = SIMD3<Float>(skyBase.x, skyBase.y, skyBase.z) + forward * (74 * outward)
         _ = addBox(parent: world, name: "park-end-pad", size: SIMD3<Float>(95, 0.06, 42), position: SIMD3<Float>(skyPos.x, skyPos.y + 0.02, skyPos.z), material: Self.pbr(UIColor(red: 0.42, green: 0.55, blue: 0.33, alpha: 1), roughness: 1), orientation: yawAt(2_000))
         _ = addBox(parent: world, name: "park-end-castle", size: SIMD3<Float>(14, 26, 14), position: SIMD3<Float>(skyPos.x, skyPos.y + 13, skyPos.z), material: Self.pbr(pastels[1], roughness: 0.8), orientation: yawAt(2_000))
         let skyRoof = addBox(parent: world, name: "park-end-castle-roof", size: SIMD3<Float>(10.9, 10.9, 14.4), position: SIMD3<Float>(skyPos.x, skyPos.y + 26, skyPos.z), material: Self.pbr(UIColor(red: 0.30, green: 0.42, blue: 0.78, alpha: 1), roughness: 0.7), orientation: yawAt(2_000))
         skyRoof.orientation = skyRoof.orientation * simd_quatf(angle: Float.pi / 4, axis: SIMD3<Float>(0, 0, 1))
         for (skyHotelIndex, skyHotelLat) in [Float(-26), Float(30)].enumerated() {
             let hb = routeOffsetPoint(endSample, lateral: skyHotelLat)
-            let hp = SIMD3<Float>(hb.x, hb.y, hb.z) + forward * (88 + Float(skyHotelIndex) * 8)
+            let hp = SIMD3<Float>(hb.x, hb.y, hb.z) + forward * (outward * (88 + Float(skyHotelIndex) * 8))
             let hh: Float = skyHotelIndex == 0 ? 30 : 24
             _ = addBox(parent: world, name: "park-end-hotel-\(skyHotelIndex)", size: SIMD3<Float>(17, hh, 15), position: SIMD3<Float>(hp.x, hp.y + hh / 2, hp.z), material: Self.texturedPBR(pastels[(skyHotelIndex + 1) % pastels.count], roughness: 0.85, textureName: "scenery_office_facade_3"), orientation: yawAt(2_000))
         }
         for treeSide: Float in [-7, 7] {
             let tp = routeOffsetPoint(endSample, lateral: trackLat + treeSide)
-            let treePos = SIMD3<Float>(tp.x, tp.y, tp.z) + forward * 14
+            let treePos = SIMD3<Float>(tp.x, tp.y, tp.z) + forward * (14 * outward)
             buildZooTree(at: treePos, seed: treeSide > 0 ? 41 : 43)
         }
 
@@ -11523,7 +11976,6 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             _ = addBox(parent: world, name: "parkbg-tower-roof-\(towerIndex)", size: SIMD3<Float>(18, 0.5, 16), position: SIMD3<Float>(tb.x, tb.y + towerH + 0.25, tb.z), material: Self.pbr(UIColor(red: 0.40, green: 0.38, blue: 0.42, alpha: 1), roughness: 0.8), orientation: yawAt(towerSpot.0))
         }
     }
-
     // MARK: - People (batch14 photo billboards)
 
     /// One photo-billboard person: a thin card textured with an
@@ -14172,7 +14624,48 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // platform at Matsubaracho; buildStationSurroundings
                 // now provides the station-front buildings instead.
                 stripGeneratedPlatformParts(entity)
-                adjustGeneratedStationHeights(entity)
+                // batch117: at island stations the drawn tracks
+                // spread to +-4.0 (batch42) but the rigid GLB is
+                // authored against +-2.1, so its footbridge
+                // stairs (local Z +-[4.2, 6.2]) foul both spread
+                // tracks. Hand the height pass the spread at the
+                // station centre so it can shift the stairs
+                // outward with the tracks (zero elsewhere).
+                // batch118: the other multi-track archetypes
+                // foul their drawn loop tracks the same way and
+                // get their own remedies (all measurements in
+                // the batch118 record). The 4-track major and
+                // terminal GLBs' stairs (Z +-[8.4, 10.4])
+                // straddle the loop centre 9.64, so they shift
+                // INWARD by 2.6 (negative = inward) onto the
+                // inter-track platform at +-[5.8, 7.8]: 0.365 m
+                // clear of the loop gauge edge (8.165), 2.225 m
+                // clear of the main gauge edge (3.575), still
+                // under the footbridge deck (+-12.4) and clear
+                // of the canopy column row at +-8.1 (the same
+                // 0.21 m gap the authored layout keeps). The
+                // 3-track passing GLB's stairs (+-[6.3, 8.3])
+                // intrude only 0.135 m into the loop gauge,
+                // but no shift is clean there — inward is
+                // blocked by the platform-0 canopy column row
+                // (Z -6.0; its X 0 column sits inside the
+                // stair's X span and would pierce the block),
+                // outward overshoots the footbridge deck
+                // (ends +-10.3) — so those stairs are stripped
+                // instead: a missing stair is less wrong than
+                // a stair standing in the gauge.
+                let stairLateralShiftM: Float
+                var stripStairNodes = false
+                switch placement.asset {
+                case .station3TrackPassing:
+                    stairLateralShiftM = 0
+                    stripStairNodes = true
+                case .station4TrackMajor, .stationTerminal:
+                    stairLateralShiftM = -2.6
+                default:
+                    stairLateralShiftM = islandTrackSpread(at: canonicalStationCenter(stationId: placement.stationId, fallback: placement.chainageM))
+                }
+                adjustGeneratedStationHeights(entity, stairLateralShiftM: stairLateralShiftM, stripStairNodes: stripStairNodes)
                 entity.name = "generated-station-\(placement.stationId)-\(placement.trackCount)track-\(placement.platformCount)platform"
                 world.addChild(entity)
                 importedStationEntity = entity
@@ -14240,7 +14733,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// GLB is a single merged node named "station", so nothing
     /// matches there — the same known limitation as
     /// stripGeneratedPlatformParts.
-    private func adjustGeneratedStationHeights(_ entity: Entity) {
+    private func adjustGeneratedStationHeights(_ entity: Entity, stairLateralShiftM: Float = 0, stripStairNodes: Bool = false) {
         for child in Array(entity.children) {
             let name = child.name
             if name.hasPrefix("canopy_roof_")
@@ -14251,6 +14744,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             } else if name.hasPrefix("canopy_column_") {
                 child.scale.y *= 1.566
             } else if name.hasPrefix("footbridge_stair_") {
+                // batch118: archetypes whose stairs cannot be
+                // shifted clear of the drawn tracks (the
+                // 3-track passing GLB — see the call site) lose
+                // the stair nodes outright instead of keeping
+                // a block that stands in the vehicle gauge.
+                if stripStairNodes {
+                    child.removeFromParent()
+                    continue
+                }
                 // batch19 (2026-11-13): the generated stairs
                 // span local Y 2.70-5.70 in every station GLB —
                 // they were modelled as an upper flight only, so
@@ -14265,8 +14767,33 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 // 1.475, shift = 1.415 - 2.70*1.475 = -2.57.
                 child.scale.y *= 1.475
                 child.position.y -= 2.57
+                // batch117: follow the batch42 island spread
+                // like every drawn track and lineside part.
+                // The stair geometry is baked at local
+                // Z +-[4.2, 6.2] against unspread tracks
+                // (+-2.1, gauge edge 3.58); at a spread island
+                // station the tracks sit at +-4.0 (gauge edge
+                // 5.475), so the unshifted stairs intrude up
+                // to ~1.28 m into the vehicle gauge. Shifting
+                // outward by the spread (1.9 at the centre)
+                // lands them at +-[6.1, 8.1] - 0.63 m clear
+                // of the gauge edge, still under the
+                // footbridge deck (Z +-8.2). The side is read
+                // from the node name (footbridge_stair_-5.2 /
+                // footbridge_stair_5.2); node translations
+                // are zero and the geometry is baked, so the
+                // position shift moves the whole block.
+                // batch118: the shift is signed — positive
+                // moves the block outward (the island case
+                // above), negative moves it inward (the
+                // 4-track major / terminal case, +-[8.4, 10.4]
+                // -> +-[5.8, 7.8]; see the call site).
+                if stairLateralShiftM != 0 {
+                    let stairSide: Float = name.hasPrefix("footbridge_stair_-") ? -1 : 1
+                    child.position.z += stairSide * stairLateralShiftM
+                }
             }
-            adjustGeneratedStationHeights(child)
+            adjustGeneratedStationHeights(child, stairLateralShiftM: stairLateralShiftM, stripStairNodes: stripStairNodes)
         }
     }
 
@@ -14349,6 +14876,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // batch58), so appends through this handle are no longer
         // overwritten.
         lines.append(contentsOf: RailwayGeneratedAssetLoader.drainDiagnostics())
+        // batch119: traffic generation / advance failures
+        // recorded by the model ride the same drain.
+        lines.append(contentsOf: SimulatorModel.drainTrafficLogLines())
         // batch62: PERF_WINDOW lines ride the same every-flush
         // drain — pendingPerfLogLines gains one entry per 5 s
         // window and is empty otherwise, so this adds no
@@ -14493,6 +15023,33 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         // scenario (see trafficLookup(for:)) instead of being
         // rebuilt from ~800 plans on every frame.
         let scenarioLookup = trafficLookup(for: scenario)
+        // batch119: TRAFFIC_STATE counters for the pulled log,
+        // recomputed when the traffic snapshot changes and
+        // emitted on the PERF_WINDOW cadence (recordFramePerf).
+        // Before this, no log line recorded how many trains
+        // were active, oncoming, or inside the pose focus, so
+        // a device report of "no oncoming trains" could not be
+        // separated into a data problem (active = 0) and a
+        // rendering problem (focusIn > 0 but nothing seen).
+        // focusIn applies the pose sampler's own focus rule:
+        // same route path as the player, within 2,000 m.
+        if snapshot.fixedTick != lastTrafficStateTick {
+            lastTrafficStateTick = snapshot.fixedTick
+            var active = 0
+            var oncoming = 0
+            var focusIn = 0
+            let playerTrack = snapshot.playerTrain.flatMap { scenarioLookup.tracksByID[$0.trackID] }
+            for actor in snapshot.trains where actor.phase == .running || actor.phase == .dwelling {
+                active += 1
+                guard let playerTrack, let player = snapshot.playerTrain,
+                      let actorTrack = scenarioLookup.tracksByID[actor.trackID] else { continue }
+                if actorTrack.direction != playerTrack.direction { oncoming += 1 }
+                if actorTrack.routePathID == playerTrack.routePathID,
+                   abs(actor.positionM - player.positionM) <= 2_000 { focusIn += 1 }
+            }
+            let playerPos = snapshot.playerTrain.map { Int($0.positionM) } ?? -1
+            latestTrafficStateLine = "TRAFFIC_STATE t=\(Int(snapshot.simulationTimeSeconds)) active=\(active) oncoming=\(oncoming) focusIn=\(focusIn) playerPos=\(playerPos)"
+        }
         // batch64: sample with a focus on the player train —
         // only actors active at this instant and within 2 km
         // (network distance) of the player are posed at all.
@@ -14558,7 +15115,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                   let track = tracksByID[actor.trackID],
                   let chainage = projectedChainage(actor.routePathID, positionM: pose.positionM, routeVariant: routeVariant, direction: travelDirection),
                   chainage >= 0, chainage <= route.distanceM else { continue }
-            var lateralOffsetM = track.lateralOffsetM
+            // batch117: scenario track laterals are geographic
+            // (right of increasing chainage); the scene is
+            // built in the travel frame, so for a down session
+            // every geographic lateral flips sign BEFORE the
+            // spread/siding composition below (both functions
+            // are sign-symmetric, so negating the base negates
+            // the composed result).
+            let geographicSign: Double = travelDirection == .down ? -1 : 1
+            var lateralOffsetM = track.lateralOffsetM * geographicSign
             // batch49 (2026-11-14): EVERY train on this adapter
             // path takes the composed lateral the legacy path
             // below used. The adapter otherwise fed the RAW
@@ -14595,7 +15160,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // (projectedChainage returns nil for them). Only the
             // lateral handed to the projector changes — position
             // along the line, speed and spacing are untouched.
-            let base = Float(track.lateralOffsetM)
+            let base = Float(track.lateralOffsetM * geographicSign)
             if abs(track.lateralOffsetM) == 2.1 {
                 lateralOffsetM = Double(spreadTrackLateral(base, at: chainage))
             } else if abs(track.lateralOffsetM) == 9.64 {
@@ -14707,7 +15272,10 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 world.addChild(entity)
             }
             let sample = sample(at: chainage)
-            var lateral = Float(track.lateralOffsetM)
+            // batch117: geographic -> travel frame, as in
+            // the adapter path above.
+            let geographicSign: Float = travelDirection == .down ? -1 : 1
+            var lateral = Float(track.lateralOffsetM) * geographicSign
             // batch42: AI trains on a running track (|offset|
             // 2.1) follow the island-station spread at their own
             // chainage, so an opposing train threads the widened
@@ -15227,8 +15795,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// service; on the shuttle the junction's main-line
     /// platform is projected onto the branch origin, exactly
     /// as the adapter's bounds(forStop:) does). Returns nil
-    /// for variants whose signs are not built (zoo / park /
-    /// depot) or when the manifest has no such station.
+    /// for the depot variant (no passenger signs are built
+    /// there) or when the manifest has no such station.
+    /// batch121: the zoo / park junction stations (大野 S24 /
+    /// 館川 S26) now return the projected 200 m span at the
+    /// route's junction end, exactly the bounds the adapter
+    /// computes for those variants — before this the zoo /
+    /// park junction platform fell back to a span centred on
+    /// the (adjusted) stop target, so the drawn platform and
+    /// the stop data disagreed by up to ~95 m and the placed
+    /// train stood half off the full-height platform.
     private func canonicalPlatformBounds(stationId: String, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection, routeLengthM: Double) -> (start: Double, end: Double)? {
         guard let layout = Self.generatedLayoutsByID[stationId] else { return nil }
         let isBranchStation = layout.lineId == "BRANCH"
@@ -15254,6 +15830,19 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 baseStart = 0
                 baseEnd = 200
             }
+        case .zooLine:
+            // Only the junction station (大野, mainline
+            // chainage 50,710) has a platform on this variant;
+            // the synthetic zoo terminal is drawn by its own
+            // builder at the matching 200 m span.
+            guard abs(layout.chainageM - 50_710) < 1 else { return nil }
+            baseStart = 0
+            baseEnd = 200
+        case .parkLine:
+            // 館川, mainline chainage 55,161 — same shape.
+            guard abs(layout.chainageM - 55_161) < 1 else { return nil }
+            baseStart = 0
+            baseEnd = 200
         default:
             return nil
         }
@@ -15518,7 +16107,9 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             // the canonical ends the scoring and the boards
             // use. The target-centred span survives only as
             // the fallback for variants the manifest has no
-            // canonical bounds for (zoo / park / depot).
+            // canonical bounds for (depot; the zoo / park
+            // junction stations gained canonical bounds in
+            // batch121).
             let bounds = canonicalPlatformBounds(stationId: placement.stationId, routeVariant: routeVariant, travelDirection: travelDirection, routeLengthM: buildRouteLengthM)
             let start = bounds?.start ?? (placement.chainageM - length / 2)
             let end = bounds?.end ?? (placement.chainageM + length / 2)
@@ -15764,6 +16355,155 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 break
             }
         }
+        buildTerminalNameSigns(travelDirection: travelDirection)
+    }
+
+    /// batch115: station-name boards at the departure-side
+    /// platform end of the three terminals (S01 海袋 /
+    /// S28 鴨河 / B04 上総竜山). The IPA #12 verdict was
+    /// that at the 海袋 origin the platform end could not
+    /// be seen at all: the front stops 5 m inside the end,
+    /// so everything ahead of the cab is the low end ramp
+    /// (see the diagnosis). The white line now runs down
+    /// the ramp (buildOneStationPlatform), and this board
+    /// is the vertical element that makes the end READ as
+    /// a platform end from the cab: a 3.0 m × 0.7 m name
+    /// board on two steel posts, its top ~2.55 m above the
+    /// platform surface — real 駅名標 proportions — standing
+    /// 3 m inside the departure end, facing the train that
+    /// departs from (or terminates at) the terminal.
+    ///
+    /// Placement is computed in the build's travel frame
+    /// from the canonical bounds, and the two cases are
+    /// mirror images: the build's ORIGIN terminal (bounds
+    /// start at ~0) takes the board at bounds.end − 3 with
+    /// its face turned back toward the standing train; the
+    /// FAR terminal takes it at bounds.start + 3, which is
+    /// the same physical departure end the opposite
+    /// direction's build sees as its origin case. Stop
+    /// targets, platform spans and station data are
+    /// untouched.
+    ///
+    /// The board's face carries the station name — no
+    /// bundled photograph can show a fictional station's
+    /// name, so the face texture is rendered at build time
+    /// (terminalNameBoardTexture). The posts use the
+    /// bundled steel photo texture via texturedPBR, so the
+    /// assembly is a textured object, not a flat-colour
+    /// procedural one. Entity names carry "sign", which
+    /// keeps every part out of the chunk static merge.
+    private func buildTerminalNameSigns(travelDirection: RegionalTravelDirection) {
+        let terminalRomaji = ["S01": "KAIBUKURO", "S28": "KAMOGAWA", "B04": "KAZUSA-RYUZAN"]
+        // The player's track in the travel frame and the
+        // platform outside it — the same lateral rule
+        // buildStationPlatforms and update() use.
+        let baseTrack: Float = travelDirection == .up ? -2.1 : 2.1
+        let sideSign: Float = baseTrack < 0 ? -1 : 1
+        let postMaterial = Self.texturedPBR(UIColor(red: 0.62, green: 0.64, blue: 0.66, alpha: 1), roughness: 0.5, textureName: "scenery_steel")
+        for placement in stationModelPlacements {
+            guard let romaji = terminalRomaji[placement.stationId],
+                  let bounds = canonicalPlatformBounds(stationId: placement.stationId) else { continue }
+            let signChainage: Double
+            let faceBackToTrain: Bool
+            if bounds.start < 100 {
+                signChainage = bounds.end - 3
+                faceBackToTrain = true
+            } else if bounds.end > buildRouteLengthM - 100 {
+                signChainage = bounds.start + 3
+                faceBackToTrain = false
+            } else {
+                continue
+            }
+            // Platform surface height at the sign, in the
+            // profile frame of the player's track — the same
+            // ramp law buildOneStationPlatform builds the
+            // slab with (6 m ramps, top 0.30 + 1.1065 × ramp
+            // in v above the track-centre datum).
+            let ramp = min(min(signChainage - bounds.start, bounds.end - signChainage) / 6.0, 1)
+            let topV: Float = 0.30 + (0.3065 + 1.10 - 0.30) * Float(max(ramp, 0))
+            let station = profileStation(at: signChainage, trackLateral: baseTrack)
+            let heading = sample(at: signChainage).heading
+            var yaw = simd_quatf(angle: -heading, axis: SIMD3<Float>(0, 1, 0))
+            if faceBackToTrain {
+                yaw = yaw * simd_quatf(angle: Float.pi, axis: SIMD3<Float>(0, 1, 0))
+            }
+            func platformPoint(u: Float, v: Float) -> SIMD3<Float> {
+                station.center + station.xAxis * u + station.yAxis * v
+            }
+            // The board spans the platform laterally, centred
+            // 3.42 m from the track centre: inside both the
+            // 4.5 m and the 6.0 m terminal platform widths
+            // (face at 1.52 m), clear of the vehicle gauge.
+            let boardCentreU = sideSign * 3.42
+            for postIndex in 0..<2 {
+                let postU = boardCentreU + (postIndex == 0 ? -1.35 : 1.35)
+                let post = ModelEntity(mesh: FallbackCylinderMesh.make(height: 2.5, radius: 0.05), materials: [postMaterial])
+                post.name = "terminal-namesign-post-\(placement.stationId)-\(postIndex)"
+                post.position = platformPoint(u: postU, v: topV + 1.25)
+                post.orientation = simd_quatf(angle: -heading, axis: SIMD3<Float>(0, 1, 0))
+                world.addChild(post)
+            }
+            var boardMaterial = PhysicallyBasedMaterial()
+            if let texture = terminalNameBoardTexture(stationId: placement.stationId, name: placement.name, romaji: romaji) {
+                boardMaterial.baseColor = .init(tint: .white, texture: .init(texture))
+            } else {
+                boardMaterial.baseColor = .init(tint: .white, texture: nil)
+            }
+            boardMaterial.roughness = .init(floatLiteral: 0.6)
+            _ = addBox(
+                parent: world,
+                name: "terminal-namesign-board-\(placement.stationId)",
+                size: SIMD3<Float>(3.0, 0.7, 0.06),
+                position: platformPoint(u: boardCentreU, v: topV + 2.2),
+                material: boardMaterial,
+                orientation: yaw,
+                censusTexture: "terminal-name-board"
+            )
+        }
+    }
+
+    /// batch115: rendered faces for the terminal name
+    /// boards, cached per station (builds are rare and the
+    /// render is a 1024×256 CoreGraphics pass). White board,
+    /// the station name large and black, and the company
+    /// navy band (RGB 30,58,110 — the TOO RAILWAY colour)
+    /// along the bottom carrying the romaji name in white.
+    private static var terminalNameBoardTextures: [String: TextureResource] = [:]
+
+    private func terminalNameBoardTexture(stationId: String, name: String, romaji: String) -> TextureResource? {
+        if let cached = Self.terminalNameBoardTextures[stationId] { return cached }
+        let size = CGSize(width: 1024, height: 256)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { _ in
+            UIColor.white.setFill()
+            UIRectFill(CGRect(origin: .zero, size: size))
+            UIColor(red: 30.0 / 255, green: 58.0 / 255, blue: 110.0 / 255, alpha: 1).setFill()
+            UIRectFill(CGRect(x: 0, y: size.height - 56, width: size.width, height: 56))
+            let nameStyle = NSMutableParagraphStyle()
+            nameStyle.alignment = .center
+            (name as NSString).draw(
+                in: CGRect(x: 0, y: 30, width: size.width, height: 150),
+                withAttributes: [
+                    .font: UIFont.boldSystemFont(ofSize: 118),
+                    .foregroundColor: UIColor.black,
+                    .paragraphStyle: nameStyle,
+                ]
+            )
+            let romajiStyle = NSMutableParagraphStyle()
+            romajiStyle.alignment = .center
+            (romaji as NSString).draw(
+                in: CGRect(x: 0, y: size.height - 50, width: size.width, height: 44),
+                withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 34, weight: .semibold),
+                    .foregroundColor: UIColor.white,
+                    .paragraphStyle: romajiStyle,
+                ]
+            )
+        }
+        guard let cgImage = image.cgImage,
+              let texture = try? TextureResource.generate(from: cgImage, options: .init(semantic: .color)) else { return nil }
+        Self.terminalNameBoardTextures[stationId] = texture
+        return texture
     }
 
     private func buildOneStationPlatform(name: String, start: Double, end: Double, trackLateral: Float, sideSign: Float, width: Float, whiteLineMaterial: PhysicallyBasedMaterial, serveOuterTrack: Bool = false) {
@@ -15838,8 +16578,21 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
         // Tactile band and white safety line on the full-height
         // part of the platform top.
+        // batch115: the white line also runs down the end
+        // ramps (includeRamps). At a terminal origin the
+        // train front stops 5 m inside the end, so the only
+        // platform ahead of the cab is the last metres of
+        // ramp — and with no line or band on it, that grey
+        // slope read as plain ballast and the platform end
+        // was invisible (IPA #12 verdict; see the diagnosis
+        // in hidden_files/diag_s01_platform_2026-11-16.md).
+        // The strip's height already follows tops[], i.e.
+        // the ramp profile, so extending it is purely a
+        // matter of not skipping the ramp points. The
+        // tactile band stays full-height-only: its blocks
+        // belong on the level boarding area, not the slope.
         let tactileInner = edgeOffset + 0.30
-        func topStrip(name: String, innerU: Float, outerU: Float, lift: Float, material: PhysicallyBasedMaterial) {
+        func topStrip(name: String, innerU: Float, outerU: Float, lift: Float, material: PhysicallyBasedMaterial, includeRamps: Bool = false) {
             var stripPositions: [SIMD3<Float>] = []
             var stripNormals: [SIMD3<Float>] = []
             var stripIndices: [UInt32] = []
@@ -15847,7 +16600,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             var previousInStrip = false
             for (index, chainage) in chainages.enumerated() {
                 let ramp = min(min(chainage - start, end - chainage) / rampLength, 1)
-                guard ramp >= 0.99 else { previousInStrip = false; continue }
+                guard includeRamps || ramp >= 0.99 else { previousInStrip = false; continue }
                 let station = profileStation(at: chainage, trackLateral: trackLateral)
                 let v = tops[index] + lift
                 let a = station.center + station.xAxis * (sideSign * innerU) + station.yAxis * v
@@ -15874,7 +16627,7 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             world.addChild(entity)
         }
         topStrip(name: "\(name)-tactile", innerU: tactileInner, outerU: tactileInner + 0.30, lift: 0.012, material: tactileMaterial)
-        topStrip(name: "\(name)-whiteline", innerU: edgeOffset + 0.08, outerU: edgeOffset + 0.18, lift: 0.006, material: whiteLineMaterial)
+        topStrip(name: "\(name)-whiteline", innerU: edgeOffset + 0.08, outerU: edgeOffset + 0.18, lift: 0.006, material: whiteLineMaterial, includeRamps: true)
         if serveOuterTrack {
             // batch15: this platform's outer face serves the
             // loop track 1.52 m beyond it, so it gets the same
@@ -16070,13 +16823,26 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     }
 
     private func sceneFidelityCorridor(for route: RailwayRouteProfile) -> SceneCorridorSpecification {
-        let platforms = fictionalTerminalPlatforms(for: route)
+        // batch118: the fidelity layer is no longer handed any
+        // platform specification. The only spec it ever
+        // received was the fictional terminal placeholder
+        // (side +1, offset 3.4 m, width 3.6 m, canopy, the
+        // last 210 m of EVERY route variant): in the layer's
+        // centreline frame its slab spans lateral [1.6, 5.2]
+        // and its inner canopy column lands at 1.76, inside
+        // the +2.1 running track's swept envelope
+        // [0.625, 3.575], and its synthetic pedestrians stood
+        // on the same phantom slab. The app builds the real
+        // terminal platforms itself (buildStationPlatforms),
+        // so the layer draws none. fictionalTerminalPlatforms
+        // survives only as the landmark-avoidance reservation
+        // in fictionalCorridorLandmarks, which draws nothing.
         return SceneCorridorSpecification(
             trackGaugeM: route.trackGaugeMm / 1_000,
             sleeperSpacingM: 0.60,
             catenarySpacingM: 45,
             overheadContactWireHeightM: 5.2,
-            platforms: platforms,
+            platforms: [],
             generateUrbanScenery: true
         )
     }
