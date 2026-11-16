@@ -189,15 +189,19 @@ def main() -> None:
         require(station.get("platformCount") == len(station.get("platforms", [])),
                 f"platform count mismatch for {station.get('stationId')}")
     hub = next((station for station in stations if station.get("stationId") == "S12"), None)
-    require(hub is not None and hub.get("trackCount") == 5 and hub.get("platformCount") == 4,
-            "five-track/four-platform hub topology missing")
+    # 2026-11-16 data correction (user decision, delegated): S12's
+    # data claimed a 5th track the procedural world never drew
+    # (2 running lines + 2 fan loops = 4). trackCount now records
+    # the drawn 4; the archetype and its 5-track GLB are unchanged.
+    require(hub is not None and hub.get("trackCount") == 4 and hub.get("platformCount") == 4,
+            "four-track/four-platform hub topology missing")
 
     selected = [path for path in glbs if path.parent.name == "HighFidelityAssets"]
     require({path.name for path in selected} == {"commuter_train_car_detailed.glb", "driver_cab_interior_detailed.glb"},
             "unexpected add-on high-fidelity resource set; only two selected models are intended")
     print(f"PASS: {len(glbs)} unique embedded GLB 2.0 files, {total_primitives} colored or textured triangle primitives, zero external URIs")
     print("PASS: every primitive has loader-compatible uniform COLOR_0 or an embedded PBR base-color texture; selected add-on car/cab resources appear once")
-    print("PASS: 32 unique station layouts (28 mainline, 4 branch), platform counts match, S12 is 5-track/4-platform")
+    print("PASS: 32 unique station layouts (28 mainline, 4 branch), platform counts match, S12 is 4-track/4-platform")
 
     # 2026-11-07 scenery/station quality revision checks.
     # (a) All scenery textures must be 512x512 PNGs. The set grew from the
