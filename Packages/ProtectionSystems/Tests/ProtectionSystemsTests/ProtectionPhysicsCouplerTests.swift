@@ -114,8 +114,10 @@ final class ProtectionPhysicsCouplerTests: XCTestCase {
         _ = try session.step(FictionalLiveProtectionSession.Input(
             fixedTick: 1, timeSeconds: 1, frontPositionM: 100, speedKmh: 40, trainLengthM: 80, driver: power
         ))
+        // batch71: the EB vigilance brake threshold is 60 s (was 12 s),
+        // so the second step must arrive more than 60 s after the first.
         let latched = try session.step(FictionalLiveProtectionSession.Input(
-            fixedTick: 2, timeSeconds: 14, frontPositionM: 180, speedKmh: 40, trainLengthM: 80, driver: power
+            fixedTick: 2, timeSeconds: 62, frontPositionM: 180, speedKmh: 40, trainLengthM: 80, driver: power
         ))
         XCTAssertTrue(latched.command.actingSystems.contains("eb"))
         XCTAssertEqual(latched.command.intervention, .emergencyBrakeCutTraction)
