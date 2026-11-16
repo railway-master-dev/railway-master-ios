@@ -338,6 +338,10 @@ final class SimulatorModel: ObservableObject {
     private var trafficBuildFailedGeneration: UInt64?
     private var trafficBuildLastFailureTick: UInt64 = 0
     private var trafficBuildFailureCount = 0
+    /// batch119: the advance catch below can fire on every
+    /// traffic advance for a whole session; the pulled log
+    /// gets the failure once per engine, not once per tick.
+    private var trafficAdvanceFailureLogged = false
     // batch51 (2026-11-14): private(set) so ContentView can hand
     // THIS assembled scenario (diagram v4 + branch shuttles +
     // depot movements + the tour meet train) to the scene. Until
@@ -637,7 +641,26 @@ final class SimulatorModel: ObservableObject {
         // make each frame slower the speed degrades gracefully
         // instead of spiralling. On a healthy 60 fps device
         // realDelta is ~0.017 s and none of this ever binds.
-        let maxSubstepsPerFrame = 240
+        // batch113 (2026-11-16, IPA #12 perf diagnosis): the
+        // cap drops 240 -> 48. On the real device the 240 cap
+        // was the spiral's second half: after any stall (a
+        // heavy scene frame), the next frame tried to run up
+        // to 2.0 s of full simulation — traffic, signals,
+        // coordinators — in one go, guaranteeing another
+        // stall. 48 substeps is 0.4 s of simulation: 24x the
+        // healthy-frame need (2 substeps at 60 fps), so normal
+        // hitches still catch up within a frame or two, while
+        // a post-stall catch-up is bounded to a fifth of the
+        // old work. The dropped backlog still just drops (the
+        // min() below): position only ever advances through
+        // simulationTick, so nothing teleports — the sim
+        // degrades to slow motion under overload, as batch7
+        // designed. The CI tour is teleport-based and needs
+        // only ~4 s of sim per spot against a 420 s per-spot
+        // READY cap, so the lower ceiling costs it nothing;
+        // the app tests advance in <= 0.5 s steps and none pin
+        // absolute sim time across a > 0.4 s single jump.
+        let maxSubstepsPerFrame = 48
         fixedStepAccumulator = min(fixedStepAccumulator, Double(maxSubstepsPerFrame) * fixedStep)
         while fixedStepAccumulator + 1e-12 >= fixedStep, runPhase == .running {
             fixedStepAccumulator -= fixedStep
@@ -1019,9 +1042,16 @@ final class SimulatorModel: ObservableObject {
                     }
                     trafficBuildFailureCount += 1
                     trafficBuildLastFailureTick = tick
+                    // batch119: surface the latch's exhaustion
+                    // in the pulled log (the latch's behaviour
+                    // itself is unchanged — see batch105/109).
+                    if trafficBuildFailureCount == 3 {
+                        Self.noteTrafficLog("TRAFFIC_GEN_FAIL latched=1 attempts=3")
+                    }
                 } else {
                     trafficBuildFailedGeneration = nil
                     trafficBuildFailureCount = 0
+                    trafficAdvanceFailureLogged = false
                 }
             }
         }
@@ -1059,6 +1089,14 @@ final class SimulatorModel: ObservableObject {
             trafficSnapshot = snapshot
         } catch {
             storageNotice = "架空交通AIの同期を継続できませんでした。路線ID・向き・キロ程を確認してください。"
+            // batch119: this catch used to be the whole
+            // record — a session whose advance threw on every
+            // tick ran train-less with nothing in the pulled
+            // log to distinguish it from an empty diagram.
+            if !trafficAdvanceFailureLogged {
+                trafficAdvanceFailureLogged = true
+                Self.noteTrafficLog("TRAFFIC_ADVANCE_FAIL error=\(String(describing: error).prefix(160))")
+            }
         }
     }
 
@@ -3382,7 +3420,7 @@ final class SimulatorModel: ObservableObject {
             direction: travelDirection == .up ? .up : .down,
             routePositionM: bogieRoute
         ) else { return false }
-        return !FictionalTrackImpactSchedule.turnouts(containing: located.line, chainageM: located.chainageM).isEmpty
+        return !FictionalTrackImpactSchedule.turnouts(containing: located.line, chainageM: located.chainageM, path: trackImpactPath).isEmpty
     }
 
     private var trackImpactPath: FictionalPlayablePath {
@@ -4203,8 +4241,42 @@ final class SimulatorModel: ObservableObject {
                 throw SimulationSaveStateError.incompatibleSave
             }
         }
+        // batch119: the timetable candidate is built before
+        // the traffic candidate (it used to be built after):
+        // a restored session's traffic scenario is anchored
+        // to its own timetable (see reset()), so the saved
+        // engine state must be validated against the scenario
+        // generated for THIS session's anchor, not whatever
+        // scenario the previous session happened to install.
+        let candidateTimetable: RegionalTimetableSelection?
+        if variant == .depotTransfer {
+            candidateTimetable = nil
+            guard saved.timetable.serviceID == nil else { throw SimulationSaveStateError.incompatibleSave }
+        } else {
+            guard let network = timetableNetwork else { throw SimulationSaveStateError.incompatibleSave }
+            candidateTimetable = try RegionalTimetableAdapter.selectRun(
+                network: network,
+                category: category,
+                direction: direction,
+                calendar: calendar,
+                daypart: daypart,
+                initialDelayMinutes: saved.timetable.initialDelayMinutes,
+                routeOriginStationID: trip.stops.first?.stationID ?? ""
+            )
+            guard candidateTimetable?.plannedTrip.tripID == saved.timetable.serviceID,
+                  abs(Double(candidateTimetable?.routeOriginDelaySeconds ?? 0) - saved.timetable.departureDelaySeconds) < 1e-6 else {
+                throw SimulationSaveStateError.incompatibleSave
+            }
+        }
+        /// The restored session's traffic clock zero, derived
+        /// exactly as gameClockAnchorDaySeconds derives it
+        /// live (origin departure − 30 s); the 05:30 zero for
+        /// the schedule-less depot transfer.
+        let restoredServiceDayStart: Double = candidateTimetable.flatMap { selection in
+            selection.simulatedTrip.stationEvents.first(where: { $0.stationID == selection.routeOriginStationID })?.departureSeconds
+        }.map { Double($0) - Self.originDepartureSessionSeconds } ?? Self.trafficServiceDayZero
         var candidateTraffic = try runtime.traffic.map { snapshot -> TrafficSimulationEngine in
-            guard let scenario = trafficScenario ?? Self.makeTrafficScenario() else {
+            guard let scenario = Self.makeTrafficScenario(serviceDayStart: restoredServiceDayStart) else {
                 throw SimulationSaveStateError.incompatibleSave
             }
             var engine = try TrafficSimulationEngine(scenario: scenario)
@@ -4230,26 +4302,6 @@ final class SimulatorModel: ObservableObject {
             guard ats.acknowledgementTimeoutSeconds.isFinite, ats.acknowledgementTimeoutSeconds > 0,
                   ats.lastObservedTimeSeconds.isFinite, (0...saved.simulation.simulationTimeSeconds).contains(ats.lastObservedTimeSeconds),
                   ats.deadlineSeconds.map({ $0.isFinite && $0 >= 0 }) ?? true else {
-                throw SimulationSaveStateError.incompatibleSave
-            }
-        }
-        let candidateTimetable: RegionalTimetableSelection?
-        if variant == .depotTransfer {
-            candidateTimetable = nil
-            guard saved.timetable.serviceID == nil else { throw SimulationSaveStateError.incompatibleSave }
-        } else {
-            guard let network = timetableNetwork else { throw SimulationSaveStateError.incompatibleSave }
-            candidateTimetable = try RegionalTimetableAdapter.selectRun(
-                network: network,
-                category: category,
-                direction: direction,
-                calendar: calendar,
-                daypart: daypart,
-                initialDelayMinutes: saved.timetable.initialDelayMinutes,
-                routeOriginStationID: trip.stops.first?.stationID ?? ""
-            )
-            guard candidateTimetable?.plannedTrip.tripID == saved.timetable.serviceID,
-                  abs(Double(candidateTimetable?.routeOriginDelaySeconds ?? 0) - saved.timetable.departureDelaySeconds) < 1e-6 else {
                 throw SimulationSaveStateError.incompatibleSave
             }
         }
@@ -4323,12 +4375,15 @@ final class SimulatorModel: ObservableObject {
         engine = candidateEngine
         blockSystem = candidateBlocks
         scheduleEngine = candidateSchedule
-        if trafficScenario == nil {
-            trafficScenario = Self.makeTrafficScenario()
-            // batch64: scenario installed by the restore —
-            // advance the generation the pose caches key on.
-            TrafficScenarioGeneration.advance()
-        }
+        // batch119: install the restored session's own
+        // anchored scenario (not whatever scenario the
+        // previous session used), so a later lazy engine
+        // rebuild advances the same world the restored
+        // engine runs on.
+        trafficScenario = Self.makeTrafficScenario(serviceDayStart: restoredServiceDayStart)
+        // batch64: scenario installed by the restore —
+        // advance the generation the pose caches key on.
+        TrafficScenarioGeneration.advance()
         trafficEngine = candidateTraffic
         atsSystem = candidateATS
         rebuildProtectionSession()
@@ -4502,7 +4557,19 @@ final class SimulatorModel: ObservableObject {
         atsSystem = try? EducationalATSConfirmation(acknowledgementTimeoutSeconds: 5)
         rebuildProtectionSession()
         scheduleEngine = Self.makeSchedule(route: route, train: train, blocks: blockSystem)
-        trafficScenario = Self.makeTrafficScenario()
+        // batch119: the scenario is generated on THIS
+        // session's clock zero — the display anchor for a
+        // scheduled service (rebuildStopScoringSession above
+        // has already installed the timetable selection), the
+        // 05:30 service-day zero for free-running modes,
+        // which is what gameClockAnchorDaySeconds returns
+        // there. Before this, the scenario always ran on
+        // 05:30 while batch108 had moved only the DISPLAY
+        // clock, so diagram trains moved off up to a full
+        // service day later than the clock on screen implied
+        // and early sessions were empty by construction.
+        trafficScenario = Self.makeTrafficScenario(serviceDayStart: gameClockAnchorDaySeconds)
+        trafficAdvanceFailureLogged = false
         // batch64: scenario (re)installed — advance the
         // generation the pose caches key on.
         TrafficScenarioGeneration.advance()
@@ -4569,37 +4636,73 @@ final class SimulatorModel: ObservableObject {
         return LoadedRailwayRoute(profile: fallback, blockSystem: makeBlocks(route: fallback), issues: [warning] + fallback.validateData())
     }
 
+    /// The traffic clock zero for a session with no player
+    /// timetable: the fictional service-day start, 05:30.
+    /// batch119: scheduled sessions generate their scenario
+    /// on their own anchor instead (see makeTrafficScenario).
+    private static let trafficServiceDayZero = 19_800.0
+
     /// batch66: the assembled scenario is a pure function of
     /// the bundled resources and the (process-constant) launch
-    /// arguments — it takes no inputs, and a full read of the
-    /// generation path (loadBundledRegionalNetwork,
-    /// FictionalOperationsPlan.loadBundled,
+    /// arguments — and, since batch119, of the session's
+    /// service-day start. A full read of the generation path
+    /// (loadBundledRegionalNetwork, FictionalOperationsPlan.loadBundled,
     /// generatedDiagramTrains) shows no randomness, no clock
     /// and no UUID use; the only environment read is
     /// ProcessInfo's argument list (the -RMTour meet train),
     /// which cannot change during a process. reset() used to
     /// regenerate all 798 diagram trains on every route
-    /// selection for an identical result, so the value is now
+    /// selection for an identical result, so the value is
     /// built once per process and reused. TrafficScenario is a
     /// struct, every caller receives the value (copy-on-write),
     /// nothing mutates a scenario in place, and the per-reset
     /// engine rebuild / validation still run as before. A nil
-    /// result is not cached (assigning nil leaves the cache
-    /// empty), so a transient load failure still retries.
-    private static var cachedTrafficScenario: TrafficScenario?
+    /// result is not cached, so a transient load failure
+    /// still retries.
+    /// batch119: the cache is keyed by the service-day start.
+    /// Free-running modes keep the 05:30 zero (19,800), so
+    /// their scenario is byte-identical to the pre-batch119
+    /// one; a scheduled session's scenario is generated on
+    /// its display anchor (gameClockAnchorDaySeconds), with
+    /// trains that departed before the anchor placed en
+    /// route by generatedDiagramTrains. The alternative —
+    /// pre-rolling a 05:30 engine to the anchor inside
+    /// reset() — was costed and rejected for every anchor in
+    /// the selectable range: the engine steps at 120 Hz with
+    /// a full separation scan per tick (~806 trains × 8
+    /// tracks), so even the earliest anchor (a 06:00
+    /// departure, 212,400 ticks) costs tens of seconds of
+    /// blocked reset time, a 09:00 departure 1.5M ticks, and
+    /// an evening one ~5M ticks.
+    private static var cachedTrafficScenarios: [Int: TrafficScenario] = [:]
 
-    private static func makeTrafficScenario() -> TrafficScenario? {
-        if let cachedTrafficScenario { return cachedTrafficScenario }
-        let scenario = buildTrafficScenario()
-        cachedTrafficScenario = scenario
+    private static func makeTrafficScenario(serviceDayStart: Double = trafficServiceDayZero) -> TrafficScenario? {
+        let key = Int(serviceDayStart.rounded())
+        if let cached = cachedTrafficScenarios[key] { return cached }
+        let scenario = buildTrafficScenario(serviceDayStart: Double(key))
+        if let scenario {
+            // Anchors vary by chosen trip, but sessions run
+            // one at a time; keep the cache to a handful of
+            // entries so trying many departures cannot grow
+            // it without bound.
+            if cachedTrafficScenarios.count >= 8 { cachedTrafficScenarios.removeAll() }
+            cachedTrafficScenarios[key] = scenario
+        }
         return scenario
     }
 
-    private static func buildTrafficScenario() -> TrafficScenario? {
-        guard let source = try? TrafficScenarioLibrary.loadBundledRegionalNetwork() else { return nil }
-        // Game clock zero represents the fictional service-day first departure (05:30).
-        // All subsystems then share the same relative seconds and fixed-tick count.
-        let serviceDayStart = 19_800.0
+    private static func buildTrafficScenario(serviceDayStart: Double) -> TrafficScenario? {
+        guard let source = try? TrafficScenarioLibrary.loadBundledRegionalNetwork() else {
+            // batch119: a failed scenario build used to be a
+            // silent nil — the session simply had no trains.
+            noteTrafficLog("TRAFFIC_GEN_FAIL stage=scenario-load")
+            return nil
+        }
+        // Game clock zero for this scenario: the session's
+        // service-day start (05:30 for free-running modes,
+        // the player's display anchor for scheduled ones).
+        // All subsystems then share the same relative seconds
+        // and fixed-tick count.
         return TrafficScenario(
             scenarioID: source.scenarioID,
             routeID: source.routeID,
@@ -4717,10 +4820,18 @@ final class SimulatorModel: ObservableObject {
     /// loaded, the bundled sample trains are kept (shifted) so
     /// traffic still runs.
     private static func generatedDiagramTrains(serviceDayStart: Double, sourceTrains: [AITrainPlan]) -> [AITrainPlan] {
+        // batch119: every plan below is first expressed with
+        // its ABSOLUTE day-second departure and then passed
+        // through anchoredPlan, which shifts post-anchor
+        // departures onto the session clock (the pre-batch119
+        // behaviour) and places pre-anchor departures en
+        // route at the anchor (or drops them if their run
+        // already completed). In the 05:30 frame no departure
+        // precedes the zero, so the output is unchanged there.
         let depotTrains = sourceTrains.filter { $0.operationKind != .passengerService }
-            .map { Self.shiftedTrain($0, serviceDayStart: serviceDayStart) }
+            .compactMap { Self.anchoredPlan($0, departureDaySeconds: $0.departureTimeSeconds, serviceDayStart: serviceDayStart) }
         guard let plan = FictionalOperationsPlan.loadBundled() else {
-            return sourceTrains.map { Self.shiftedTrain($0, serviceDayStart: serviceDayStart) }
+            return sourceTrains.compactMap { Self.anchoredPlan($0, departureDaySeconds: $0.departureTimeSeconds, serviceDayStart: serviceDayStart) }
         }
         let mainlineLength = plan.network.mainlineLengthKm * 1_000
         let mainlineChainage: [String: Double] = Dictionary(
@@ -4818,10 +4929,10 @@ final class SimulatorModel: ObservableObject {
                     destinationPosition = 0
                 }
                 while minute <= lastMinute {
-                    trains.append(AITrainPlan(
+                    let diagramPlan = AITrainPlan(
                         id: "v4-\(service.category.rawValue)-\(pattern.direction.rawValue)-\(pattern.daypart.rawValue)-\(minute)",
                         trackID: trackID,
-                        departureTimeSeconds: max(0, Double(minute * 60) - serviceDayStart),
+                        departureTimeSeconds: Double(minute * 60),
                         startPositionM: startPosition,
                         destinationPositionM: destinationPosition,
                         maximumSpeedMps: maximumSpeed,
@@ -4833,7 +4944,10 @@ final class SimulatorModel: ObservableObject {
                         servicePeriod: period,
                         operationKind: .passengerService,
                         scheduledTripDurationSeconds: durationSeconds
-                    ))
+                    )
+                    if let anchored = Self.anchoredPlan(diagramPlan, departureDaySeconds: Double(minute * 60), serviceDayStart: serviceDayStart) {
+                        trains.append(anchored)
+                    }
                     minute += pattern.intervalMinutes
                 }
             }
@@ -4868,10 +4982,10 @@ final class SimulatorModel: ObservableObject {
                 } else {
                     period = .night
                 }
-                trains.append(AITrainPlan(
+                let branchPlan = AITrainPlan(
                     id: "v4-branch-\(isUp ? "up" : "down")-\(minute)",
                     trackID: trackID,
-                    departureTimeSeconds: max(0, Double(minute * 60) - serviceDayStart),
+                    departureTimeSeconds: Double(minute * 60),
                     startPositionM: startPosition,
                     destinationPositionM: destinationPosition,
                     maximumSpeedMps: 13.9,
@@ -4883,7 +4997,10 @@ final class SimulatorModel: ObservableObject {
                     servicePeriod: period,
                     operationKind: .passengerService,
                     scheduledTripDurationSeconds: nil
-                ))
+                )
+                if let anchored = Self.anchoredPlan(branchPlan, departureDaySeconds: Double(minute * 60), serviceDayStart: serviceDayStart) {
+                    trains.append(anchored)
+                }
                 minute += 30
             }
         }
@@ -4916,8 +5033,19 @@ final class SimulatorModel: ObservableObject {
         // the dead first half hour before the real 06:00
         // diagram flow has crossed the line. Tour sessions are
         // excluded so the photo tour keeps today's behaviour.
+        // batch119: the seeds bridge a dead window that only
+        // exists in the 05:30 frame. A scheduled session's
+        // scenario is generated on its own anchor, where the
+        // diagram itself already populates the line (see
+        // anchoredPlan), so emitting the seeds there too
+        // would double-populate it with unscheduled locals
+        // whose fixed 05:30-frame positions can conflict with
+        // converted diagram trains at platforms. The seeds
+        // therefore stay exclusive to the default frame,
+        // where free-running sessions still need the bridge.
         let seedTourArguments = ProcessInfo.processInfo.arguments
-        if !seedTourArguments.contains("-RMTour"),
+        if serviceDayStart == Self.trafficServiceDayZero,
+           !seedTourArguments.contains("-RMTour"),
            !seedTourArguments.contains("-RMZooTour"),
            !seedTourArguments.contains("-RMParkTour"),
            let seedMaximumSpeed = localSeedMaximumSpeedMps {
@@ -5101,8 +5229,214 @@ final class SimulatorModel: ObservableObject {
         return trains
     }
 
+    /// batch119: expresses one plan on the session clock.
+    /// The plan's departureTimeSeconds and the
+    /// departureDaySeconds argument both carry the plan's
+    /// ABSOLUTE day-second departure (every call site builds
+    /// plans that way since batch119). A departure at or
+    /// after the service-day start is shifted exactly as
+    /// before (shiftedTrain). An earlier departure is placed
+    /// en route at the start — position, remaining stops
+    /// and remaining schedule derived by enRoutePlacement —
+    /// and the returned plan departs at t = 0 from that
+    /// position: the batch90 seed form, generalised from
+    /// eight hand-placed locals to every diagram train. A
+    /// train whose run completed before the start returns
+    /// nil; it is not in the world at the anchor, exactly
+    /// as the engine would have completed and despawned it.
+    private static func anchoredPlan(_ plan: AITrainPlan, departureDaySeconds: Double, serviceDayStart: Double) -> AITrainPlan? {
+        if departureDaySeconds >= serviceDayStart {
+            return shiftedTrain(plan, serviceDayStart: serviceDayStart)
+        }
+        let elapsed = serviceDayStart - departureDaySeconds
+        guard let placement = enRoutePlacement(of: plan, elapsedSeconds: elapsed) else { return nil }
+        let remainingRoute = abs(plan.destinationPositionM - placement.startPositionM)
+        // Scenario validation (TrafficModels.validate): a
+        // passenger run of 20 km or more must carry a
+        // duration, and any passenger duration it carries
+        // must be at least 3,600 s. Below 20 km remaining
+        // the duration is dropped instead — the batch90
+        // seeds established that an uncapped short remainder
+        // runs at the same stop-to-stop braking-curve pace,
+        // while stretching a short remainder up to a
+        // 3,600 s cap would make the train visibly dawdle.
+        var duration = placement.remainingDurationSeconds
+        if plan.operationKind == .passengerService {
+            if remainingRoute < 20_000 {
+                duration = nil
+            } else if let remaining = duration {
+                duration = max(3_600, remaining)
+            } else {
+                duration = 3_600
+            }
+        }
+        return AITrainPlan(
+            id: plan.id,
+            trackID: plan.trackID,
+            departureTimeSeconds: 0,
+            startPositionM: placement.startPositionM,
+            destinationPositionM: plan.destinationPositionM,
+            maximumSpeedMps: plan.maximumSpeedMps,
+            accelerationMps2: plan.accelerationMps2,
+            brakingDecelerationMps2: plan.brakingDecelerationMps2,
+            lengthM: plan.lengthM,
+            stops: placement.stops,
+            serviceType: plan.serviceType,
+            servicePeriod: plan.servicePeriod,
+            operationKind: plan.operationKind,
+            scheduledTripDurationSeconds: duration
+        )
+    }
+
+    /// batch119: derives where a train is `elapsedSeconds`
+    /// after its departure, in the engine's own terms. With
+    /// a schedule duration, the engine's cap targets arrival
+    /// at departure + duration, so moving time is budgeted
+    /// pro-rata across segments at the cap's average pace;
+    /// without one, each segment runs its acceleration /
+    /// cruise / braking trapezoid at the plan's maximum
+    /// speed. Dwells are exact in both models. The result
+    /// feeds a seed-form plan, so a small placement error
+    /// degrades gracefully: the engine's separation
+    /// enforcement resolves any overlap on the first ticks,
+    /// and the stop list is rebuilt as the stops strictly
+    /// ahead of the placed position, so the train can never
+    /// be sent back to a stop behind it. Returns nil when
+    /// the run completed before the anchor instant.
+    private static func enRoutePlacement(of plan: AITrainPlan, elapsedSeconds: Double) -> (startPositionM: Double, stops: [TrafficTrainStop], remainingDurationSeconds: Double?)? {
+        let start = plan.startPositionM
+        let destination = plan.destinationPositionM
+        let sign = destination >= start ? 1.0 : -1.0
+        let totalRoute = abs(destination - start)
+        guard totalRoute > 0.35 else { return nil }
+        let stops = plan.stops
+        let totalDwell = stops.reduce(0.0) { $0 + $1.dwellSeconds }
+        let duration = plan.scheduledTripDurationSeconds
+        if let duration, elapsedSeconds >= duration { return nil }
+        let movingTotal = duration.map { max(1, $0 - totalDwell) } ?? 0
+
+        // Segment boundaries: start, each stop, destination.
+        var points: [Double] = [start]
+        points.append(contentsOf: stops.map(\.positionM))
+        points.append(destination)
+
+        func segmentTime(_ index: Int) -> Double {
+            let segment = abs(points[index + 1] - points[index])
+            if duration != nil { return movingTotal * segment / totalRoute }
+            return trapezoid(segment: segment, tau: 0, plan: plan).time
+        }
+        func travelled(inSegment index: Int, tau: Double) -> Double {
+            let segment = abs(points[index + 1] - points[index])
+            if duration != nil { return min(segment, tau * (totalRoute / movingTotal)) }
+            return trapezoid(segment: segment, tau: tau, plan: plan).distance
+        }
+
+        var clock = 0.0
+        for index in 0..<(points.count - 1) {
+            let from = points[index]
+            if elapsedSeconds < clock + segmentTime(index) {
+                // Running inside this segment, approaching
+                // stops[index] (or the destination on the
+                // final segment).
+                let position = from + sign * travelled(inSegment: index, tau: elapsedSeconds - clock)
+                guard abs(destination - position) > 0.35 else { return nil }
+                let remainingStops = stops.enumerated().filter { entry in
+                    entry.offset >= index && (entry.element.positionM - position) * sign > 0.5
+                }.map(\.element)
+                return (position, remainingStops, duration.map { $0 - elapsedSeconds })
+            }
+            clock += segmentTime(index)
+            // Dwell at the stop just reached (the final
+            // point is the destination: no dwell, run over).
+            if index < stops.count {
+                let dwell = stops[index].dwellSeconds
+                if elapsedSeconds < clock + dwell {
+                    // Dwelling at stops[index]: re-express
+                    // the remaining dwell as a first stop 1 m
+                    // ahead — the batch47 tour-meet form, so
+                    // the engine creeps forward and holds for
+                    // exactly the time left at the anchor.
+                    let stopPosition = stops[index].positionM
+                    let synthetic = stopPosition + sign * 1
+                    let remainingStops = stops.enumerated().filter { entry in
+                        entry.offset > index && (entry.element.positionM - stopPosition) * sign > 1.5
+                    }.map(\.element)
+                    if (destination - synthetic) * sign >= 0 {
+                        let dwellStop = TrafficTrainStop(positionM: synthetic, dwellSeconds: clock + dwell - elapsedSeconds)
+                        return (stopPosition, [dwellStop] + remainingStops, duration.map { $0 - elapsedSeconds })
+                    }
+                    return (stopPosition, remainingStops, duration.map { $0 - elapsedSeconds })
+                }
+                clock += dwell
+            }
+        }
+        return nil
+    }
+
+    /// Acceleration / cruise / braking trapezoid for one
+    /// segment at the plan's maximum speed: the total time
+    /// to traverse it, and the distance covered `tau`
+    /// seconds in. Mirrors the braking-curve pace the
+    /// engine's advanceTrain follows between stops.
+    private static func trapezoid(segment: Double, tau: Double, plan: AITrainPlan) -> (time: Double, distance: Double) {
+        let vmax = plan.maximumSpeedMps
+        let accel = plan.accelerationMps2
+        let brake = plan.brakingDecelerationMps2
+        let accelDistance = vmax * vmax / (2 * accel)
+        let brakeDistance = vmax * vmax / (2 * brake)
+        if segment >= accelDistance + brakeDistance {
+            let time = vmax / accel + vmax / brake + (segment - accelDistance - brakeDistance) / vmax
+            let distance: Double
+            if tau <= vmax / accel {
+                distance = 0.5 * accel * tau * tau
+            } else if tau >= time - vmax / brake {
+                let remaining = max(0, time - tau)
+                distance = segment - 0.5 * brake * remaining * remaining
+            } else {
+                distance = accelDistance + vmax * (tau - vmax / accel)
+            }
+            return (time, min(segment, distance))
+        }
+        let peak = (2 * segment / (1 / accel + 1 / brake)).squareRoot()
+        let time = peak / accel + peak / brake
+        let distance: Double
+        if tau <= peak / accel {
+            distance = 0.5 * accel * tau * tau
+        } else {
+            let remaining = max(0, time - tau)
+            distance = segment - 0.5 * brake * remaining * remaining
+        }
+        return (time, min(segment, distance))
+    }
+
+    /// batch119: traffic failure lines for the pulled demo
+    /// log. The scene drains this queue in
+    /// flushPulledLogIfNeeded, the same channel the asset
+    /// loader's diagnostics ride (batch58), so a failure
+    /// reaches demo-drive-log.txt instead of dying inside a
+    /// try? or a transient on-screen notice.
+    private static var pendingTrafficLogLines: [String] = []
+
+    private static func noteTrafficLog(_ line: String) {
+        pendingTrafficLogLines.append(line)
+    }
+
+    static func drainTrafficLogLines() -> [String] {
+        defer { pendingTrafficLogLines.removeAll() }
+        return pendingTrafficLogLines
+    }
+
     private static func makeTrafficEngine(from scenario: TrafficScenario) -> TrafficSimulationEngine? {
-        try? TrafficSimulationEngine(scenario: scenario)
+        do {
+            return try TrafficSimulationEngine(scenario: scenario)
+        } catch {
+            // batch119: was a bare try? — an invalid scenario
+            // silently meant a train-less session (see
+            // noteTrafficUnavailableIfNeeded, which only
+            // reaches the screen).
+            noteTrafficLog("TRAFFIC_GEN_FAIL error=\(String(describing: error).prefix(160))")
+            return nil
+        }
     }
 
     /// batch101: makeTrafficEngine swallows the engine's
