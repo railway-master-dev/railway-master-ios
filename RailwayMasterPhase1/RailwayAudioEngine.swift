@@ -184,6 +184,11 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
         // buffers on the pre-attached players.
         sampledMotor.attachHandler = { [weak self] node, format in self?.attachLicensedSamplePlayer(node, format: format) }
         sampledMotor.runAttachHandler = { [weak self] node, varispeed, format in self?.attachLicensedRunPlayer(node, varispeed: varispeed, format: format) }
+        // batch114: the motor players take the same
+        // varispeed chain as the run player (player ->
+        // varispeed -> licensed mixer) so the bands can be
+        // pitch-driven (see SampledMotorSound).
+        sampledMotor.motorAttachHandler = { [weak self] node, varispeed, format in self?.attachLicensedRunPlayer(node, varispeed: varispeed, format: format) }
         sampledMotor.startHandler = { [weak self] in self?.start() }
         sampledMotor.preattachIfNeeded()
         preattachBundledPlayers()
@@ -407,6 +412,20 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     private var bundledPools: [(format: AVAudioFormat, players: [AVAudioPlayerNode])] = []
     private var bundledPoolCursors: [Int] = []
     private let bundledPoolSize = 4
+    /// batch114: track impacts (rail joints and turnout
+    /// variants) get their OWN one-shot pool, separate from
+    /// bundledPools. The shared pool's four voices serve
+    /// every stereo one-shot in the game, so a joint's
+    /// 5-second p1 tail was cut whenever a point sound,
+    /// horn or door cue took the voice in round-robin
+    /// (diagnosis J3) — and at speed the joints cut each
+    /// other too (a ~1 s firing interval against a ~5 s
+    /// sample). Six dedicated voices mean a joint tail is
+    /// only ever displaced by a sixth newer joint, never by
+    /// another cue family.
+    private var trackImpactPools: [(format: AVAudioFormat, players: [AVAudioPlayerNode])] = []
+    private var trackImpactPoolCursors: [Int] = []
+    private let trackImpactPoolSize = 6
     private var bundledSampleBuffers: [String: AVAudioPCMBuffer] = [:]
 
     private func loadBundledBuffer(named name: String) -> AVAudioPCMBuffer? {
@@ -481,6 +500,22 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
             bundledPools.append((format: buffer.format, players: players))
             bundledPoolCursors.append(0)
         }
+        // batch114: the dedicated track-impact pools are
+        // probed from the joint samples themselves, so their
+        // formats are guaranteed to exist even if they ever
+        // diverge from the door probes' format.
+        for name in ["joint_prim_p1", "joint_clack"] {
+            guard let buffer = loadBundledBuffer(named: name),
+                  !trackImpactPools.contains(where: { $0.format == buffer.format }) else { continue }
+            var players: [AVAudioPlayerNode] = []
+            for _ in 0..<trackImpactPoolSize {
+                let player = AVAudioPlayerNode()
+                attachLicensedSamplePlayer(player, format: buffer.format)
+                players.append(player)
+            }
+            trackImpactPools.append((format: buffer.format, players: players))
+            trackImpactPoolCursors.append(0)
+        }
     }
     /// Schedules a bundled WAV sample on a pre-attached player and
     /// reports BOTH its duration and whether anything was actually
@@ -533,6 +568,56 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
         player.scheduleBuffer(buffer, at: nil, options: [])
         player.play()
         return (duration, true)
+    }
+
+    /// batch114: schedules a track-impact sample on the
+    /// dedicated pool at an explicit voice volume (see
+    /// trackImpactVolume for the law). Mirrors
+    /// scheduleBundledSample's discipline exactly — route
+    /// through start(), never touch a player against a
+    /// failed start, stop the taken voice before scheduling
+    /// — because that discipline is what the batch81 crash
+    /// hardening established for every cue path. Returns
+    /// whether anything actually sounded, so playTrackImpact
+    /// can fall back to the shared pool (the pre-batch114
+    /// path) instead of going silent if the dedicated pool
+    /// is somehow unavailable.
+    @discardableResult
+    private func scheduleTrackImpactSample(named name: String, volume: Float) -> Bool {
+        guard isEnabled else { return false }
+        guard let buffer = loadBundledBuffer(named: name) else { return false }
+        guard let poolIndex = trackImpactPools.firstIndex(where: { $0.format == buffer.format }) else { return false }
+        if !engine.isRunning { start() }
+        guard engine.isRunning else { return false }
+        let cursor = trackImpactPoolCursors[poolIndex]
+        trackImpactPoolCursors[poolIndex] = cursor + 1
+        let player = trackImpactPools[poolIndex].players[cursor % trackImpactPools[poolIndex].players.count]
+        player.stop()
+        player.volume = min(1, max(0, volume))
+        player.scheduleBuffer(buffer, at: nil, options: [])
+        player.play()
+        return true
+    }
+
+    /// batch114: joint-family voice volume from the
+    /// tracker's intensity. The intensity used to be
+    /// computed in playTrackImpact and then used ONLY as a
+    /// gate — every joint sounded at the shared pool's
+    /// fixed 0.65 whatever the speed (diagnosis J1) — and
+    /// the p1 recording itself sits ~13 dB under the motor
+    /// bands (J2). The law: outputVolume × lift × (0.8 +
+    /// 0.2 × gain), capped at 1.0. The 0.8 floor keeps
+    /// low-speed joints at about today's level (the verdict
+    /// was "too quiet", never "too loud when slow"); the
+    /// gain term lets them grow with speed as the tracker
+    /// intends; the lift is ×1.9 for the p1 / turnout paths
+    /// (inside the diagnosis' ×1.4–2.0), which at full
+    /// intensity lands on the 1.0 cap — +3.7 dB over the
+    /// old fixed 0.65, the most the player-volume headroom
+    /// allows. The low-speed clack takes lift ×1.15: its
+    /// recording is already ~8 dB hotter than p1.
+    private func trackImpactVolume(gain: Float, lift: Float) -> Float {
+        min(1, outputVolume * lift * (0.8 + 0.2 * gain))
     }
 
     /// Plays a bundled WAV sample through the licensed-sample mixer and
@@ -743,21 +828,35 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
             }
             return
         }
+        // batch114: the joint paths (turnout variants,
+        // low-speed clack, p1) now play on the dedicated
+        // track-impact pool at the intensity-driven volume
+        // (trackImpactVolume) instead of the shared pool's
+        // fixed 0.65. The point-clatter branch above stays
+        // on the shared pool at the old level — it was not
+        // part of the verdict, and its priority rule is
+        // unchanged. Fallbacks stay recording-to-recording
+        // (never synthesis), as batch79/97 established: if
+        // the dedicated pool cannot sound a sample, the
+        // shared pool tries it the pre-batch114 way.
         if insideTurnout {
             let variants = ["joint_prim_p45_0_0", "joint_prim_p45_0_1", "joint_prim_p45_1_0", "joint_prim_p45_1_1"]
             let name = variants[jointVariantCursor % variants.count]
             jointVariantCursor += 1
-            _ = playBundledSampleOneShot(named: name)
+            if !scheduleTrackImpactSample(named: name, volume: trackImpactVolume(gain: gain, lift: 1.9)) {
+                _ = playBundledSampleOneShot(named: name)
+            }
         } else if Double(latestSnapshot.speedMetersPerSecond) * 3.6 < Self.lowSpeedJointClackMaxKmh {
             // batch97: 低速域は台車1台分の打音を台車ごとに鳴らす
             // （転送側の全台車化は SimulatorModel 側）。打音が
             // 鳴らなければ従来の p1 へ落とす（素材欠落時に
             // 継目が完全無音になるのを避けるための実録同士の
             // フォールバックで、合成へは落とさない）。
-            if !playBundledSampleOneShot(named: "joint_clack") {
+            if !scheduleTrackImpactSample(named: "joint_clack", volume: trackImpactVolume(gain: gain, lift: 1.15)),
+               !scheduleTrackImpactSample(named: "joint_prim_p1", volume: trackImpactVolume(gain: gain, lift: 1.9)) {
                 _ = playBundledSampleOneShot(named: "joint_prim_p1")
             }
-        } else {
+        } else if !scheduleTrackImpactSample(named: "joint_prim_p1", volume: trackImpactVolume(gain: gain, lift: 1.9)) {
             _ = playBundledSampleOneShot(named: "joint_prim_p1")
         }
     }
@@ -1009,6 +1108,7 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
         if sampledMotor.attachHandler == nil {
             sampledMotor.attachHandler = { [weak self] node, format in self?.attachLicensedSamplePlayer(node, format: format) }
             sampledMotor.runAttachHandler = { [weak self] node, varispeed, format in self?.attachLicensedRunPlayer(node, varispeed: varispeed, format: format) }
+            sampledMotor.motorAttachHandler = { [weak self] node, varispeed, format in self?.attachLicensedRunPlayer(node, varispeed: varispeed, format: format) }
             sampledMotor.startHandler = { [weak self] in self?.start() }
         }
         sampledMotor.update(snapshot: latestSnapshot, settings: effective, isEnabled: isEnabled, engineRunning: engine.isRunning)
