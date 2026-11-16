@@ -4148,7 +4148,15 @@ final class SimulatorModel: ObservableObject {
             }
             var engine = try TrafficSimulationEngine(scenario: scenario)
             try engine.restoreState(from: snapshot)
-            guard abs(snapshot.simulationTimeSeconds - saved.simulation.simulationTimeSeconds) < 1e-6 else {
+            // The traffic engine advances at 30 Hz (every 4th
+            // physics tick), so its snapshot time legitimately
+            // trails the host clock by up to 4 ticks. Demanding
+            // 1e-6 here rejected every save taken between traffic
+            // advances (CI #418: a 0.5 s save carried a 0.475 s
+            // traffic snapshot and loadGame refused it).
+            let trafficClockLag = saved.simulation.simulationTimeSeconds - snapshot.simulationTimeSeconds
+            guard trafficClockLag >= -1e-9,
+                  trafficClockLag <= 4 * TrainPhysics.PhysicsConstants.fixedTimeStepSeconds + 1e-9 else {
                 throw SimulationSaveStateError.incompatibleSave
             }
             return engine
