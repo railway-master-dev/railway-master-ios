@@ -34,7 +34,13 @@ struct RegionalRouteSelectionSheet: View {
                         }
                     }
                     Picker("方向", selection: $direction) {
-                        ForEach(RegionalTravelDirection.allCases) { item in
+                        // batch121: list 上り first. The case
+                        // carrying that title is .down since the
+                        // titles flipped to the real convention
+                        // (上り = toward the origin / junction),
+                        // so the order is spelled out instead of
+                        // relying on allCases declaration order.
+                        ForEach([RegionalTravelDirection.down, .up]) { item in
                             Text(item.title).tag(item)
                         }
                     }
