@@ -169,17 +169,6 @@ private enum MainlineAlignmentZone {
         }
     }
 
-    /// Maximum gradient for the zone, in permille (BVE-measured:
-    /// Toyoko +/-25-35 in the city, Tojo +/-10 in the suburbs).
-    var gradientAmplitude: Double {
-        switch self {
-        case .urbanCore: return 25
-        case .fringe: return 18
-        case .suburban: return 10
-        case .rural: return 6
-        case .coastal: return 5
-        }
-    }
 }
 
 private func mainlineZone(at localM: Double) -> MainlineAlignmentZone {
@@ -195,22 +184,97 @@ private func mainlineZone(at localM: Double) -> MainlineAlignmentZone {
     return .coastal
 }
 
-/// Zone gradient amplitude, blended linearly over +/-250 m at each
-/// zone boundary so neighbouring 250 m sections do not step by the
-/// full amplitude difference. Boundaries are (chainage, from, to).
-private func mainlineGradientAmplitude(at localM: Double) -> Double {
-    let blendHalfWidth = 250.0
-    let boundaries: [(Double, Double, Double)] = [
-        (4_200, 25, 18), (6_000, 18, 10), (22_600, 10, 18), (25_800, 18, 6),
-        (38_500, 6, 5), (40_500, 5, 10), (43_600, 10, 5), (48_600, 5, 6), (53_000, 6, 5)
-    ]
-    for (boundary, from, to) in boundaries {
-        if abs(localM - boundary) < blendHalfWidth {
-            let t = (localM - (boundary - blendHalfWidth)) / (blendHalfWidth * 2)
-            return from + (to - from) * t
-        }
+/// Canonical mainline grade table (up frame, permille). Everything
+/// not listed is level. Ruling grade 10 permille on the tunnel-1
+/// climb; ordinary grades <= 5 permille; both tunnels at +2 permille
+/// drainage grade; both termini at about 0 m. This replaces the old
+/// zone-amplitude sine (urban core amplitude 25 permille, no level
+/// section anywhere, 81 m of elevation range) with a localised,
+/// realistic profile.
+private let mainlineGradeSpans: [(startM: Double, endM: Double, permille: Double)] = [
+    (2_000, 4_200, -5),     // fringe dip (cutting under the viaduct belt)
+    (4_200, 6_500, 5),      //   back to datum
+    (12_500, 15_500, 10),   // hill climb to tunnel 1 (ruling grade)
+    (15_500, 17_800, 3),    //   climb eases
+    (17_800, 19_250, 2),    // tunnel 1
+    (19_250, 25_800, -5),   // descent to Touou-Chihara (S12)
+    (25_800, 32_000, 3),    // rural rolling
+    (32_000, 38_500, -3),   //
+    (38_500, 40_500, -2),   // settle to sea level, coastal window 1
+    (40_500, 42_100, 8),    // climb to tunnel 2
+    (42_100, 43_600, 2),    // tunnel 2
+    (43_600, 48_600, -3.5), // cliff descent, coastal window 2
+    (53_000, 56_500, 1.5),  // coastal window 3, gentle
+    (56_500, 60_000, -1.5)  //   back to about 0 at Kamogawa (S28)
+]
+
+/// The grade table's raw value at a chainage: the containing span's
+/// permille, or 0 (level) outside every span.
+private func mainlineTableGrade(at localM: Double) -> Double {
+    for span in mainlineGradeSpans where localM >= span.startM && localM < span.endM {
+        return span.permille
     }
-    return mainlineZone(at: localM).gradientAmplitude
+    return 0
+}
+
+/// Mainline gradient for one 250 m section, sampled at its midpoint
+/// `localM` (the same point the old sine sampled). The value is
+/// built from the table (see `mainlineGradeSpans`), smoothed by a
+/// boundary blend, and flattened by the station pad:
+/// - Boundary blend: within +/-375 m of a span boundary, linearly
+///   blend from the previous span's value to the next. The blend
+///   must span at least two sections on each side: sections are
+///   sampled at their midpoints, so a +/-125 m blend would land
+///   exactly on its own endpoints (t = 0 and t = 1) at the two
+///   neighbouring midpoints and smooth nothing — the full span
+///   step (up to 10 permille) would survive between adjacent
+///   sections. At +/-375 m the per-section step stays at about
+///   3.3 permille even for the ruling-grade step, which is also
+///   what keeps the car-body pitch tracking the local gradient
+///   (the pitch test's 0.002 rad tolerance).
+/// - Station pad: a section whose midpoint lies within +/-200 m
+///   of a station chainage (the 200 m platform span plus a margin
+///   that keeps every platform section level for any station
+///   position) is level — real railways hold station throats at
+///   or near level, and every stop, dwell and restart then
+///   happens on the level. Outside the pad the grade fades back
+///   in linearly over the next 400 m, for the same
+///   midpoint-sampling reason as the boundary blend: a hard
+///   pad edge inside the 10 permille climb would otherwise step
+///   0 -> 10 permille between adjacent sections (the pitch test
+///   measures that step at about 0.0025 rad against a 0.002
+///   tolerance). The fade is kept as short as the step limit
+///   allows — a longer fade flattens so much of the line (a
+///   station every ~2.2 km) that the elevation range collapses
+///   below the pinned "line is not flat" bounds. Station
+///   positions come from the `stations` parameter the factory
+///   already passes in (up frame); no second copy of the
+///   chainage list is hardcoded here.
+private func mainlineGradePermille(at localM: Double, stations: [RegionalRouteStop]) -> Double {
+    var boundaries: [Double] = []
+    for span in mainlineGradeSpans {
+        if !boundaries.contains(span.startM) { boundaries.append(span.startM) }
+        if !boundaries.contains(span.endM) { boundaries.append(span.endM) }
+    }
+    var grade = mainlineTableGrade(at: localM)
+    for boundary in boundaries where abs(localM - boundary) < 375 {
+        let previous = mainlineTableGrade(at: boundary - 1)
+        let next = mainlineTableGrade(at: boundary + 1)
+        let t = (localM - (boundary - 375)) / 750
+        grade = previous + (next - previous) * t
+        break
+    }
+    var nearestStationDistance = Double.greatestFiniteMagnitude
+    for station in stations {
+        nearestStationDistance = min(nearestStationDistance, abs(localM - station.positionM))
+    }
+    if nearestStationDistance <= 200 {
+        return 0
+    }
+    if nearestStationDistance < 600 {
+        return grade * (nearestStationDistance - 200) / 400
+    }
+    return grade
 }
 
 enum RegionalRouteFactory {
@@ -649,14 +713,14 @@ enum RegionalRouteFactory {
             if activeRegion?.kind == .mainline {
                 speedLimit = min(speedLimit, mainlineZone(at: localM).speedCapKmh)
             }
-            // Mainline gradients follow the zone amplitude (city
-            // +/-25 permille down to coast/rural +/-5-6), blended at
-            // zone boundaries; branch and depot keep the old profile
-            // so the through-branch/branch-shuttle equality holds.
+            // Mainline gradients come from the canonical grade
+            // table (see `mainlineGradePermille`): ruling grade
+            // 10 permille, station pads level, everything unlisted
+            // level. Branch and depot keep the old profile so the
+            // through-branch/branch-shuttle equality holds.
             let gradient: Double
             if activeRegion?.kind == .mainline {
-                let amplitude = mainlineGradientAmplitude(at: localM)
-                gradient = amplitude * (sin(localM / 1_430 + 0.8) * 0.667 + sin(localM / 6_200 + 2.1) * 0.333)
+                gradient = mainlineGradePermille(at: localM, stations: stations)
             } else if activeRegion?.kind == .zoo {
                 gradient = sin(localM / 1_900 + 0.5) * 1.8
             } else if activeRegion?.kind == .park {

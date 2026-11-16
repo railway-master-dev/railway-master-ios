@@ -3580,14 +3580,29 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// Ground level under the track, one value per sample. A viaduct
     /// is where the line rides high above its valley floor: the datum
     /// is the lowest track elevation within +/-1.5 km, and a zone
-    /// opens where the track sits >= 10 m above it (measured: three
-    /// zones, about 10.5 km of the 60 km mainline, tallest pier
-    /// about 33 m in the downtown climb). Short runs are dropped and
-    /// gaps under 300 m are merged, tunnels and the coast are
-    /// excluded, and stations get filled ground with 300 m tapers so
-    /// no station, house, tower or pole ever floats. The tapers are
-    /// smoothstep blends centred on each zone edge, so the ground is
-    /// a continuous ramp (an embankment approach) rather than a step.
+    /// opens where the track sits >= 10 m above it (measured on the
+    /// old sine profile: three zones, about 10.5 km of the 60 km
+    /// mainline, tallest pier about 33 m in the downtown climb).
+    /// Short runs are dropped and gaps under 300 m are merged,
+    /// tunnels and the coast are excluded, and stations get filled
+    /// ground with 300 m tapers so no station, house, tower or pole
+    /// ever floats. The tapers are smoothstep blends centred on each
+    /// zone edge, so the ground is a continuous ramp (an embankment
+    /// approach) rather than a step.
+    ///
+    /// Urban exception (user decision, 2026-11-16): the urban core
+    /// viaduct is an engineered structure — level track carried on
+    /// piers through the city — not a terrain artefact. The old
+    /// terrain rule only produced it because the sine profile
+    /// climbed steeply through the city; the realistic grade table
+    /// (max 10 permille, stations level) can never lift the track
+    /// 10 m above a rolling-minimum datum there, so the datum would
+    /// catch up and the viaduct (and its under-viaduct shops) would
+    /// vanish. Samples inside the engineered span below are
+    /// therefore forced into the zone with their datum pinned to
+    /// elevation - lift, and everything downstream (zone runs,
+    /// edges, tapers, station fill, deck/piers, under-viaduct bays)
+    /// runs through the same machinery as a terrain zone.
     private func computeViaductGround(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) -> [Float] {
         guard samples.count > 1 else { return samples.map(\.elevationM) }
         let datumWindowM = 1_500.0
@@ -3596,6 +3611,16 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         let mergeGapM = 300.0
         let taperM = 300.0
         let stationHalfWidthM = 250.0
+        // Engineered urban viaduct (geographic chainage, see the
+        // doc comment above): S01 terminal (0 m) and S04 (6,000 m)
+        // sit just outside the span and keep filled ground via the
+        // station logic, as do S02/S03 inside it; the inter-station
+        // intervals carry the viaduct at a constant 11 m lift —
+        // enough for under-viaduct bays (lift >= 2.6 m) and shop
+        // bays (lift >= 4.5 m).
+        let engineeredUrbanSpanStartM = 350.0
+        let engineeredUrbanSpanEndM = 5_900.0
+        let engineeredUrbanLiftM: Float = 11
         // 1. Valley-floor datum: rolling minimum of the elevation.
         var datum = [Float](repeating: 0, count: samples.count)
         for i in samples.indices {
@@ -3612,14 +3637,37 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             }
             datum[i] = low
         }
-        // 2. Raw zones, excluding tunnels and the coast.
+        // 1b. Engineered urban viaduct: mark the samples inside the
+        // engineered span (geographic chainage, so both travel
+        // directions agree — the same isMainlineSection +
+        // chainageFromCenter pattern the tunnel/coast guards use;
+        // tunnel/coast exclusions kept even though no tunnel or
+        // coastal window exists inside the span today) and pin
+        // their datum to elevation - lift, so the existing edge
+        // tapers and station fill in step 5 yield ground at about
+        // elevation - 11 inside the zone. The forced samples form
+        // one contiguous ~5.55 km run, so the merge/min-run step
+        // below keeps them exactly like a terrain zone.
+        var engineered = [Bool](repeating: false, count: samples.count)
+        for i in samples.indices {
+            guard isMainlineSection(distanceM: samples[i].distanceM, routeVariant: routeVariant, travelDirection: travelDirection) else { continue }
+            let chainage = chainageFromCenter(distanceM: samples[i].distanceM, route: route, travelDirection: travelDirection)
+            guard chainage >= engineeredUrbanSpanStartM, chainage <= engineeredUrbanSpanEndM else { continue }
+            if isTunnelChainage(chainage) { continue }
+            if isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) { continue }
+            engineered[i] = true
+            datum[i] = min(datum[i], samples[i].elevationM - engineeredUrbanLiftM)
+        }
+        // 2. Raw zones, excluding tunnels and the coast. Engineered
+        // urban samples are forced in; everywhere else the terrain
+        // threshold rule is untouched.
         var inZone = [Bool](repeating: false, count: samples.count)
         for i in samples.indices {
             guard isMainlineSection(distanceM: samples[i].distanceM, routeVariant: routeVariant, travelDirection: travelDirection) else { continue }
             let chainage = chainageFromCenter(distanceM: samples[i].distanceM, route: route, travelDirection: travelDirection)
             if isTunnelChainage(chainage) { continue }
             if isCoastal(distanceM: samples[i].distanceM, route: route, routeVariant: routeVariant, travelDirection: travelDirection) { continue }
-            inZone[i] = samples[i].elevationM - datum[i] >= zoneThresholdM
+            inZone[i] = engineered[i] || samples[i].elevationM - datum[i] >= zoneThresholdM
         }
         // 3. Merge gaps under 300 m, drop runs under 300 m.
         var runs: [(Int, Int)] = []
@@ -17424,7 +17472,15 @@ private final class RailwaySceneWorld: RenderingStateApplying {
     /// and the added tracks read as the terminal's platform
     /// and stabling roads for future shunting.
     private func buildTerminalThroats(route: RailwayRouteProfile, routeVariant: RegionalRouteVariant, travelDirection: RegionalTravelDirection) {
-        guard routeVariant == .mainline || routeVariant == .throughBranch else { return }
+        // batch107: the branch shuttle joins — its terminus
+        // B04 (branch_terminal) gets the scaled single-track
+        // throat in the placement loop below. On the shuttle
+        // only branch_terminal placements are treated (see
+        // the loop): the junction station projected onto the
+        // branch origin is a through station of the main
+        // line, and its throat belongs to the mainline
+        // builds.
+        guard routeVariant == .mainline || routeVariant == .throughBranch || routeVariant == .branchShuttle else { return }
         guard !samples.isEmpty else { return }
         let railSteel = Self.pbr(UIColor(red: 0.52, green: 0.57, blue: 0.60, alpha: 1), metallic: 0.85, roughness: 0.36)
         let runningBand = Self.pbr(UIColor(red: 0.78, green: 0.82, blue: 0.85, alpha: 1), metallic: 0.95, roughness: 0.12)
@@ -17618,7 +17674,17 @@ private final class RailwaySceneWorld: RenderingStateApplying {
         }
 
         for placement in stationModelPlacements {
-            guard placement.archetype == "terminal_3platform" || placement.archetype == "junction_3platform" else { continue }
+            // batch107: branch_terminal joins the treated
+            // archetypes (B04 — 4 tracks / 3 platforms /
+            // turnback in the layout data, drawn as a bare
+            // single-line end until now). On the branch
+            // shuttle ONLY branch_terminal is treated: the
+            // junction station's placement is projected onto
+            // the branch origin (canonicalPlatformBounds),
+            // and a four-track mainline throat there would
+            // invent tracks the branch world does not have.
+            guard placement.archetype == "terminal_3platform" || placement.archetype == "junction_3platform" || placement.archetype == "branch_terminal" else { continue }
+            if routeVariant == .branchShuttle && placement.archetype != "branch_terminal" { continue }
             // batch75: the throat anchors on the LINE END the
             // canonical platform touches, not on
             // placement.chainageM. batch69 wrote this builder
@@ -17654,8 +17720,27 @@ private final class RailwaySceneWorld: RenderingStateApplying {
             let endSign: Double = atLowEnd ? -1 : 1
             let tag = placement.stationId
             let loopT = loopTarget(atStationCenter: stationCenter)
-            let runningLaterals: [Float] = [-2.1, 2.1]
-            let allLaterals: [Float] = [-loopT, -2.1, 2.1, loopT]
+            // batch107: a branch terminal's throat is scaled
+            // to its single-track approach. The running pair
+            // collapses to the one branch line — its lateral
+            // is the direction-dependent single offset
+            // buildTrack.offsetsFor uses, NOT a ±2.1 constant
+            // pair — and the loop pair becomes one pair of
+            // terminal sidings at ±10.5 m from that base: the
+            // drawn 6.0 m platforms end 7.52 m from the
+            // running centre, so a siding centre must sit
+            // past 7.52 + 2.3 (its own trackbed half-width)
+            // for the beds to clear the slabs.
+            let isBranchTerminal = placement.archetype == "branch_terminal"
+            let branchBaseLateral: Float = travelDirection == .up ? -2.1 : 2.1
+            let branchSidingOffset: Float = 10.5
+            let runningLaterals: [Float] = isBranchTerminal ? [branchBaseLateral] : [-2.1, 2.1]
+            let allLaterals: [Float]
+            if isBranchTerminal {
+                allLaterals = [branchBaseLateral - branchSidingOffset, branchBaseLateral, branchBaseLateral + branchSidingOffset]
+            } else {
+                allLaterals = [-loopT, -2.1, 2.1, loopT]
+            }
 
             // -- Formation apron over the extrapolated throat.
             var apronStations: [ProfileStation] = []
@@ -17681,6 +17766,51 @@ private final class RailwaySceneWorld: RenderingStateApplying {
                 }
                 stations.append(profileStation(at: c + endSign * 105, trackLateral: lateral))
                 trackStrips(prefix: "terminal-ext-\(tag)-\(Int(lateral * 10))", stations: stations, bedY: 0.185)
+            }
+
+            // -- batch107: the branch terminal's siding pair.
+            // Each siding leaves the single running line on a
+            // 340 m S-curve on the approach side of the
+            // platform span (the throatFan easement length;
+            // the fan completes exactly at the platform end,
+            // 200 m before the line end), then runs parallel
+            // at its target lateral through the span to the
+            // buffers. The S-curve is the drawn divergence
+            // the B04-crossover span in
+            // FictionalTrackImpactSchedule registers (branch
+            // chainages 7,460-7,800). bedY matches the
+            // mainline crossover's 0.195 so the fanning bed
+            // rides over the running trackbed instead of
+            // z-fighting it where the laterals still agree.
+            if isBranchTerminal {
+                for sidingTarget in [branchBaseLateral - branchSidingOffset, branchBaseLateral + branchSidingOffset] {
+                    var stations: [ProfileStation] = []
+                    var d = c - endSign * 540
+                    while (d - c) * endSign < 105 {
+                        let beforeEnd = (c - d) * endSign
+                        let u = min(max((540 - beforeEnd) / 340, 0), 1)
+                        let lat = branchBaseLateral + (sidingTarget - branchBaseLateral) * Float(smoothstep(u))
+                        stations.append(profileStation(at: d, trackLateral: lat))
+                        d += endSign * 8.5
+                    }
+                    stations.append(profileStation(at: c + endSign * 105, trackLateral: sidingTarget))
+                    trackStrips(prefix: "terminal-siding-\(tag)-\(Int(sidingTarget * 10))", stations: stations, bedY: 0.195)
+                }
+                // Switch stands at the shared toe, one beside
+                // each switch — the mainline crossover's toe
+                // treatment, at the crossover's ±4.7 m offset
+                // from the running centre it serves (here the
+                // single branch line).
+                let toeChainage = c - endSign * 540
+                for toeLateral in [branchBaseLateral - 4.7, branchBaseLateral + 4.7] {
+                    let toeSample = sample(at: toeChainage)
+                    let toeYaw = simd_quatf(angle: -toeSample.heading, axis: SIMD3<Float>(0, 1, 0))
+                    let toePoint = routeOffsetPoint(toeSample, lateral: toeLateral)
+                    _ = addBox(parent: world, name: "terminal-switchstand-\(tag)-\(Int(toeLateral * 10))", size: SIMD3<Float>(0.55, 0.95, 0.4),
+                               position: SIMD3<Float>(toePoint.x, toeSample.elevationM + 0.42, toePoint.z), material: headMaterial, orientation: toeYaw)
+                    _ = addBox(parent: world, name: "terminal-switchtarget-\(tag)-\(Int(toeLateral * 10))", size: SIMD3<Float>(0.3, 0.3, 0.03),
+                               position: SIMD3<Float>(toePoint.x, toeSample.elevationM + 1.05, toePoint.z), material: plateMaterial, orientation: toeYaw)
+                }
             }
 
             // -- Buffer stops closing all four tracks at the

@@ -322,6 +322,22 @@ final class SimulatorModel: ObservableObject {
     private var memoizedTimetableSelectionKey: String?
     private var appliedTimetableDepartureDelaySeconds = 0
     private var trafficEngine: TrafficSimulationEngine?
+    /// batch105: lazy traffic-engine build failure latch, keyed
+    /// on the scenario generation. The build is deterministic
+    /// per scenario (TrafficSimulationEngine.init only validates
+    /// the immutable scenario value, and a failed init throws
+    /// before it can advance the generation), so a failure can
+    /// never succeed on a retry against the same generation.
+    /// Every scenario assignment advances
+    /// TrafficScenarioGeneration (init / reset / restore — the
+    /// same obligation the pose caches already rely on), which
+    /// is exactly when a retry becomes meaningful again; a
+    /// future assignment site must advance it too, or this
+    /// latch (like the pose caches) would keep the old
+    /// scenario's verdict.
+    private var trafficBuildFailedGeneration: UInt64?
+    private var trafficBuildLastFailureTick: UInt64 = 0
+    private var trafficBuildFailureCount = 0
     // batch51 (2026-11-14): private(set) so ContentView can hand
     // THIS assembled scenario (diagram v4 + branch shuttles +
     // depot movements + the tour meet train) to the scene. Until
@@ -972,8 +988,42 @@ final class SimulatorModel: ObservableObject {
         // same engine, from the same cached scenario — so a
         // model advanced without a prior reset (tests, a
         // restored session) behaves exactly as before.
+        // (step/tick hoisted above the build: the latch below
+        // needs the current tick; the values are unchanged.)
+        let step = TrainPhysics.PhysicsConstants.fixedTimeStepSeconds
+        let tick = UInt64(max(0, (simulationTime / step).rounded()))
         if trafficEngine == nil, let scenario = trafficScenario {
-            trafficEngine = Self.makeTrafficEngine(from: scenario)
+            // batch105: latch a failed build to the scenario
+            // generation with a bounded backoff (see
+            // trafficBuildFailedGeneration). Before this, a
+            // deterministically invalid scenario re-ran the
+            // full 798-train validation on every 120 Hz tick
+            // for the whole session. The successful path is
+            // unchanged: a build that succeeds leaves
+            // trafficEngine non-nil and the latch state is
+            // never read again.
+            let generation = TrafficScenarioGeneration.current
+            let latched = trafficBuildFailedGeneration == generation && trafficBuildFailureCount >= 3
+            // Backoff between attempts: 0.5 s, 2 s, 8 s of
+            // simulation time (60 / 240 / 960 ticks at 120 Hz),
+            // at most 3 attempts per generation.
+            let backoffTicks: UInt64 = [0, 60, 240, 960][min(trafficBuildFailureCount, 3)]
+            let due = trafficBuildFailedGeneration != generation
+                || tick >= trafficBuildLastFailureTick + backoffTicks
+            if !latched && due {
+                trafficEngine = Self.makeTrafficEngine(from: scenario)
+                if trafficEngine == nil {
+                    if trafficBuildFailedGeneration != generation {
+                        trafficBuildFailedGeneration = generation
+                        trafficBuildFailureCount = 0
+                    }
+                    trafficBuildFailureCount += 1
+                    trafficBuildLastFailureTick = tick
+                } else {
+                    trafficBuildFailedGeneration = nil
+                    trafficBuildFailureCount = 0
+                }
+            }
         }
         // batch101: if the build just failed (or the scenario
         // itself never loaded), say so once instead of returning
@@ -986,8 +1036,6 @@ final class SimulatorModel: ObservableObject {
         // every tick and pinned a permanent "AI sync failed"
         // warning on those routes (CI #412). Skip traffic there.
         guard routeVariant != .zooLine, routeVariant != .parkLine else { return }
-        let step = TrainPhysics.PhysicsConstants.fixedTimeStepSeconds
-        let tick = UInt64(max(0, (simulationTime / step).rounded()))
         // Advance traffic at 30 Hz of simulation time rather than
         // on every 120 Hz physics tick (2026-11-12): the engine
         // catches up internally in one call, and snapshot
@@ -2752,8 +2800,9 @@ final class SimulatorModel: ObservableObject {
     /// 閉扉時は「開いていた側」を呼び出し側が渡す。Primrose が
     /// 鳴らなかった場合のみ kozu セットへ、それも駄目なら合成へ。
     /// batch108: 鳴った実録サンプルの長さ（秒）を返すよう変更
-    /// （合成フォールバック時は 0）。発車シーケンスが閉扉音の
-    /// 終了後に知らせブザーを鳴らすために使う。
+    /// （合成フォールバック時は 0）。batch109: 知らせブザーは
+    /// 閉扉音の長さではなく閉まり切ってから 0.5〜5 秒のランダム
+    /// 遅延で鳴るため、この戻り値はブザー予約には使わない。
     @discardableResult
     private func playDoorSound(open: Bool, side: GameModeDoorState = .unknown) -> TimeInterval {
         if let name = bundledDoorSampleName(open: open, side: side),
@@ -2799,9 +2848,9 @@ final class SimulatorModel: ObservableObject {
         if wasOpen {
             // batch67: 従来は合成 playDoor 直呼びで実録の閉扉音を
             // 経由しなかった。playDoorSound に統一する。
-            let closeSeconds = playDoorSound(open: false, side: closingSide)
+            playDoorSound(open: false, side: closingSide)
             playDepartureBellIfAtStation()
-            scheduleDepartureBuzzerIfArmed(closeSoundSeconds: closeSeconds)
+            scheduleDepartureBuzzerIfArmed()
         }
         gameModeHostNotice = "架空ゲームのドア状態を「\(pending.state.rawValue)」に更新しました。物理モデルのドアではありません。"
     }
@@ -2835,9 +2884,11 @@ final class SimulatorModel: ObservableObject {
     //   3. When the bell has finished, the doors close through
     //      the existing host-effect path (resistance stock still
     //      waits out its recorded door chime first).
-    //   4. When the doors land fully closed and the close sound
-    //      has finished, the notification buzzer sounds once
-    //      (scheduleDepartureBuzzerIfArmed).
+    //   4. When the doors land fully closed, the notification
+    //      buzzer is scheduled (scheduleDepartureBuzzerIfArmed);
+    //      batch109: it sounds 0.5–5.0 s later (random) and is
+    //      not a departure condition — the player may already
+    //      be moving when it sounds.
     // The player may depart as soon as the doors are closed;
     // nothing holds the train until the scheduled second.
     private var autoDoorServedStationID: String?
@@ -2854,7 +2905,8 @@ final class SimulatorModel: ObservableObject {
     /// notification buzzer is owed once the doors land closed.
     private var departureBuzzerArmed = false
     /// batch108: session time at which the notification buzzer
-    /// sounds (close landing + close-sound length).
+    /// sounds. batch109: close landing + a random 0.5–5.0 s
+    /// delay (see scheduleDepartureBuzzerIfArmed).
     private var departureBuzzerAt: Double?
 
     /// batch108: scheduled origin departure, in session seconds.
@@ -2941,24 +2993,32 @@ final class SimulatorModel: ObservableObject {
     }
 
     /// batch108: arms the notification buzzer when a departure
-    /// sequence's close lands. The buzzer itself fires from
-    /// applyPendingDepartureBuzzerIfDue once the door-close
-    /// sound has finished. No dedicated buzzer recording exists
+    /// sequence's close lands. No dedicated buzzer recording exists
     /// anywhere in the sound libraries (the Primrose set's
     /// [Buzzer] section is empty and no buzzer-named file is
     /// bundled), so the sequence reuses the app's synthesized
     /// door-warning buzzer via playDoorChime — the closest
     /// existing bundled sound.
-    private func scheduleDepartureBuzzerIfArmed(closeSoundSeconds: Double) {
+    /// batch109 (user correction, 2026-11-16): the buzzer is NOT
+    /// a departure condition — traction already unlocks the
+    /// moment the doors land closed (see doorInterlockActive).
+    /// It exists only for the realism of a conductor being
+    /// present, so it sounds once per stop at a random delay of
+    /// 0.5–5.0 s after the doors finish closing, drawn once per
+    /// close with the standard library randomness (the same
+    /// pattern as the point-sound pick, Bool.random() in
+    /// RailwayAudioEngine). The schedule runs on simulationTime,
+    /// and firing depends on the time alone: departing before
+    /// the buzzer sounds does not cancel it.
+    private func scheduleDepartureBuzzerIfArmed() {
         guard departureBuzzerArmed else { return }
         departureBuzzerArmed = false
-        departureBuzzerAt = simulationTime + max(closeSoundSeconds, 0)
+        departureBuzzerAt = simulationTime + Double.random(in: 0.5...5.0)
     }
 
     private func applyPendingDepartureBuzzerIfDue() {
         guard let buzzerAt = departureBuzzerAt, simulationTime >= buzzerAt else { return }
         departureBuzzerAt = nil
-        guard gameModeDoorState == .closed else { return }
         audio.playDoorChime()
     }
 
@@ -3017,10 +3077,11 @@ final class SimulatorModel: ObservableObject {
                     // Opening cancels any chime-timed closure in progress.
                     pendingDoorClose = nil
                     // batch108: 開扉は発車シーケンスの残りも取り消す
-                    // （閉扉待ち・ブザー予約が開いたドアで発火しない）。
+                    // （閉扉待ち・武装が開いたドアで発火しない）。
+                    // batch109: 予約済みのブザーは取り消さない —
+                    // 発車済みでも鳴るのが仕様（車掌の存在感）。
                     departureSequenceCloseAt = nil
                     departureBuzzerArmed = false
-                    departureBuzzerAt = nil
                     gameModeDoorState = state
                     if !wasOpen {
                         departureBellPlayedForCurrentStop = false
@@ -3038,9 +3099,9 @@ final class SimulatorModel: ObservableObject {
                 } else if pendingDoorClose == nil {
                     gameModeDoorState = state
                     if wasOpen {
-                        let closeSeconds = playDoorSound(open: false, side: closingSide)
+                        playDoorSound(open: false, side: closingSide)
                         playDepartureBellIfAtStation()
-                        scheduleDepartureBuzzerIfArmed(closeSoundSeconds: closeSeconds)
+                        scheduleDepartureBuzzerIfArmed()
                     }
                     gameModeHostNotice = "架空ゲームのドア状態を「\(state.rawValue)」に更新しました。物理モデルのドアではありません。"
                 }
