@@ -4,12 +4,24 @@ import XCTest
 final class FictionalTrackImpactTests: XCTestCase {
     func testTurnoutSpansCoverJunctionDepotAndStations() {
         let spans = FictionalTrackImpactSchedule.turnouts
-        XCTAssertTrue(spans.contains { $0.role == .branchJunction && $0.line == .main })
-        XCTAssertTrue(spans.contains { $0.role == .branchJunction && $0.line == .branch })
-        XCTAssertTrue(spans.contains { $0.role == .depotLead && $0.line == .depotSpur })
-        XCTAssertTrue(spans.contains { $0.role == .depotLead && $0.line == .main })
-        XCTAssertTrue(spans.contains { $0.role == .stationConnection })
-        XCTAssertTrue(spans.contains { $0.role == .yardLadder })
+        // batch120: only drawn turnouts are registered. The
+        // placeholder junction/depot spans (branchJunction,
+        // depotLead and yardLadder roles) are gone — no
+        // session world draws a turnout at any of their
+        // chainages, so they fired clatter over plain track.
+        XCTAssertTrue(spans.allSatisfy { $0.role == .stationConnection })
+        let phantomIDs = [
+            "depot-throat-main", "depot-lead", "depot-yard-ladder",
+            "branch-junction-main", "branch-junction-branch",
+            "zoo-junction", "park-junction"
+        ]
+        for id in phantomIDs {
+            XCTAssertFalse(spans.contains { $0.id == id }, "\(id) must stay deleted")
+        }
+        XCTAssertTrue(spans.filter { $0.line == .depotSpur }.isEmpty)
+        XCTAssertTrue(spans.filter { $0.line == .zoo }.isEmpty)
+        XCTAssertTrue(spans.filter { $0.line == .park }.isEmpty)
+        XCTAssertEqual(Set(spans.filter { $0.line == .branch }.map(\.id)), ["B04-crossover"])
         // batch78: the drawn terminal crossovers are registered
         // with their full S-curve length (toes 560–690 m from
         // each line end); every other span stays a compact
@@ -27,15 +39,18 @@ final class FictionalTrackImpactTests: XCTestCase {
         // passing stations are registered with their true
         // transition lengths (entry 240 m, exit 300 m — the
         // lateral-transition portions of the 340 m fan
-        // easements, see FictionalTrackImpactSchedule). The
-        // set is the 14 uncovered fan stations x 2 plus one
-        // fan span per terminal; S15 keeps its placeholder
-        // loop spans and is deliberately not in the set.
+        // easements, see FictionalTrackImpactSchedule).
+        // batch120: S15 joins the set — its placeholder loop
+        // spans were deleted in the same change, so the set
+        // is all 15 fan stations x 2 plus one fan span per
+        // terminal, and the length assertions below now
+        // cover S15's registration too.
         let fanIDs: Set<String> = [
             "S03-entry", "S03-exit", "S04-entry", "S04-exit",
             "S06-entry", "S06-exit", "S07-entry", "S07-exit",
             "S09-entry", "S09-exit", "S11-entry", "S11-exit",
             "S12-entry", "S12-exit", "S14-entry", "S14-exit",
+            "S15-entry", "S15-exit",
             "S17-entry", "S17-exit", "S19-entry", "S19-exit",
             "S22-entry", "S22-exit", "S23-entry", "S23-exit",
             "S24-entry", "S24-exit", "S27-entry", "S27-exit",
@@ -54,6 +69,12 @@ final class FictionalTrackImpactTests: XCTestCase {
         XCTAssertTrue(fanSpans.contains { $0.id == "S03-entry" && $0.startM == 3_431 && $0.endM == 3_671 })
         XCTAssertTrue(fanSpans.contains { $0.id == "S01-exit" && $0.startM == 240 && $0.endM == 540 })
         XCTAssertTrue(fanSpans.contains { $0.id == "S28-entry" && $0.startM == 59_460 && $0.endM == 59_700 })
+        // batch120: S15's spans are the fan derivation at
+        // its 30,677 centre — the drawn transitions — not
+        // the deleted placeholder pair ([30,491, 30,515] /
+        // [30,825, 30,851]).
+        XCTAssertTrue(fanSpans.contains { $0.id == "S15-entry" && $0.startM == 30_237 && $0.endM == 30_477 })
+        XCTAssertTrue(fanSpans.contains { $0.id == "S15-exit" && $0.startM == 30_817 && $0.endM == 31_117 })
         XCTAssertTrue(spans.filter { !$0.id.hasSuffix("-crossover") && !fanIDs.contains($0.id) }.allSatisfy { $0.lengthM >= 16 && $0.lengthM <= 40 })
         // No two spans on a line overlap: the tracker fires
         // once per span entered, so an overlap (or a nest)
@@ -65,17 +86,24 @@ final class FictionalTrackImpactTests: XCTestCase {
             }
         }
         // batch105: 51 -> 41 after the phantom placeholder
-        // loop spans (S05/S10/S20/S25/B02) were deleted; only
-        // S15's placeholder spans remain, on its drawn fan.
+        // loop spans (S05/S10/S20/S25/B02) were deleted.
         // batch107: 41 -> 42 — B04-crossover registers the
         // branch terminal's drawn siding divergence.
-        XCTAssertEqual(spans.count, 42)
+        // batch120: 42 -> 35 — the seven phantom junction/
+        // depot spans are deleted; S15's placeholder pair is
+        // replaced by its two fan spans (count-neutral).
+        XCTAssertEqual(spans.count, 35)
         XCTAssertEqual(Set(spans.map(\.id)).count, spans.count)
     }
 
     func testCrossingATurnoutFiresPointClatterForEachBogieInEitherDirection() {
-        let forward = impacts(path: .depotTransfer, direction: .up, from: 0, to: 70, speed: 12, cars: 2)
-        let clatters = forward.filter { $0.kind == .pointClatter && $0.sourceID == "depot-lead" }
+        // batch120: this test used to run over the depot
+        // path's depot-lead span, which is deleted (no
+        // turnout is drawn in the depot session world). It
+        // now runs over S03's drawn entry fan on the
+        // mainline path — same tracker semantics.
+        let forward = impacts(path: .mainline, direction: .up, from: 3_400, to: 3_750, speed: 12, cars: 2)
+        let clatters = forward.filter { $0.kind == .pointClatter && $0.sourceID == "S03-entry" }
         let bogies = Set(clatters.map(\.bogieIndex))
         XCTAssertTrue(bogies.isSuperset(of: [0, 1]))
         let first = clatters.filter { $0.bogieIndex == 0 }.map(\.routePositionM).min() ?? 0
@@ -83,31 +111,49 @@ final class FictionalTrackImpactTests: XCTestCase {
         XCTAssertGreaterThan(second, first + 10, "The rear bogie reaches the frog later")
         XCTAssertGreaterThan(clatters[0].intensity, 0.4)
 
-        let back = impacts(path: .depotTransfer, direction: .down, from: 1_900, to: 1_990, speed: 10, cars: 1)
-        XCTAssertTrue(back.contains { $0.kind == .pointClatter && $0.sourceID == "depot-lead" })
+        let back = impacts(path: .mainline, direction: .down, from: 56_250, to: 56_600, speed: 10, cars: 1)
+        XCTAssertTrue(back.contains { $0.kind == .pointClatter && $0.sourceID == "S03-entry" })
 
-        let stopped = impacts(path: .depotTransfer, direction: .up, from: 0, to: 70, speed: 0, cars: 2)
+        let stopped = impacts(path: .mainline, direction: .up, from: 3_400, to: 3_750, speed: 0, cars: 2)
         XCTAssertTrue(stopped.isEmpty)
     }
 
     func testInsideTurnoutOnlyWhileABogieIsInTheSpan() {
+        // batch120: re-based on S03-entry [3,431, 3,671)
+        // after the depot-lead span it used was deleted.
         var tracker = FictionalTrackImpactTracker(carCount: 1)
-        let before = tracker.advance(routePositionM: 0, speedMps: 10, path: .depotTransfer, direction: .up)
+        let before = tracker.advance(routePositionM: 3_400, speedMps: 10, path: .mainline, direction: .up)
         XCTAssertFalse(before.insideTurnout)
         var inside = false
         var outsideAgain = false
-        var position = 0.5
-        while position < 80 {
-            let frame = tracker.advance(routePositionM: position, speedMps: 10, path: .depotTransfer, direction: .up)
+        var position = 3_400.5
+        while position < 3_750 {
+            let frame = tracker.advance(routePositionM: position, speedMps: 10, path: .mainline, direction: .up)
             let leadBogie = position - FictionalTrackImpactSchedule.bogieInsetM
-            if leadBogie >= 14 && leadBogie < 40 {
+            if leadBogie >= 3_431 && leadBogie < 3_671 {
                 if frame.insideTurnout { inside = true }
             }
-            if position > 60 && !frame.insideTurnout { outsideAgain = true }
+            if position > 3_690 && !frame.insideTurnout { outsideAgain = true }
             position += 0.5
         }
         XCTAssertTrue(inside)
         XCTAssertTrue(outsideAgain)
+    }
+
+    func testS28CrossoverFiresOnMainlineButNotOnThroughBranch() {
+        // batch120: the S28 terminal throat is not drawn in
+        // the throughBranch world, so its crossover span is
+        // scoped to the paths whose worlds draw it.
+        let chainage = 59_375.0
+        let onMainline = FictionalTrackImpactSchedule.turnouts(containing: .main, chainageM: chainage, path: .mainline)
+        XCTAssertTrue(onMainline.contains { $0.id == "S28-crossover" })
+        let onThrough = FictionalTrackImpactSchedule.turnouts(containing: .main, chainageM: chainage, path: .throughBranch)
+        XCTAssertFalse(onThrough.contains { $0.id == "S28-crossover" })
+
+        let through = impacts(path: .throughBranch, direction: .up, from: 59_200, to: 59_600, speed: 12, cars: 1)
+        XCTAssertFalse(through.contains { $0.kind == .pointClatter && $0.sourceID == "S28-crossover" })
+        let main = impacts(path: .mainline, direction: .up, from: 59_200, to: 59_600, speed: 12, cars: 1)
+        XCTAssertTrue(main.contains { $0.kind == .pointClatter && $0.sourceID == "S28-crossover" })
     }
 
     func testJointedRailClicksEvery25MetresAndOpenMainlineDoesNot() {
