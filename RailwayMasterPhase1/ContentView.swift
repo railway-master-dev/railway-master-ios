@@ -167,6 +167,13 @@ struct ContentView: View {
                         Spacer()
                         // Air / electric state as small text only, top-right.
                         VStack(alignment: .trailing, spacing: 1) {
+                            // batch108: 時刻表示（現在時刻＋停車駅の
+                            // 予定発／次駅の予定着）。ダイヤのない
+                            // モードでは予定行は出ない。
+                            Text(model.gameClockText)
+                            if let scheduleLine = model.hudScheduleLine {
+                                Text(scheduleLine)
+                            }
                             Text("MR \(Int(model.telemetry.mainReservoirPressureKPa.rounded())) · BP \(Int(model.telemetry.brakePipePressureKPa.rounded())) · BC \(Int(model.telemetry.brakeCylinderPressureKPa.rounded())) kPa")
                             Text("引張 \(Int(model.telemetry.tractionForceN / 1_000)) kN · 制動 \(Int(model.telemetry.brakingForceN / 1_000)) kN")
                             if model.telemetry.isWheelSlipActive || model.telemetry.isBrakeSlipActive {

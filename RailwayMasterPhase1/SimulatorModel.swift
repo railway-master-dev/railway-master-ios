@@ -154,6 +154,14 @@ final class SimulatorModel: ObservableObject {
     @Published private(set) var gameModeSession: GameModeSession?
     @Published private(set) var gameModeHostNotice: String?
     @Published private(set) var gameModeDoorState: GameModeDoorState = .closed
+    /// batch108: door interlock condition — the doors are not
+    /// fully closed (open, or a chime-timed closure is still
+    /// pending and the doors have not landed yet). While this
+    /// holds, the physics tick and the audio snapshot both see
+    /// an interlocked command (see simulationTick / advance).
+    private var doorInterlockActive: Bool {
+        gameModeDoorState != .closed || pendingDoorClose != nil
+    }
     @Published private(set) var saveSlots: [SaveSlotSummary] = []
 
     var gameModeContext: RegionalGameModeContext {
@@ -621,6 +629,7 @@ final class SimulatorModel: ObservableObject {
             simulationTick(dt: fixedStep)
         }
         applyPendingDoorCloseIfDue()
+        applyPendingDepartureBuzzerIfDue()
         updateAutomaticDoorCycle()
         refreshPublishedTelemetry()
         if let latestOperationsSnapshot { operationsSnapshot = latestOperationsSnapshot }
@@ -633,6 +642,16 @@ final class SimulatorModel: ObservableObject {
                 throttleNotch: 0,
                 brakeNotch: max(appliedDrivingControls.brakeNotch, 7),
                 emergencyBrake: appliedDrivingControls.emergencyBrake || latestOperationsSnapshot?.atsStatus?.automaticBrakeCommanded == true
+            )
+        } else if doorInterlockActive {
+            // batch108: the audio snapshot follows the same
+            // interlocked command as the physics tick, so the
+            // motor sound stays silent while the doors are open
+            // even though the driver's handle is notched up.
+            effectiveControls = TrainControls(
+                throttleNotch: 0,
+                brakeNotch: max(appliedDrivingControls.brakeNotch, 4),
+                emergencyBrake: appliedDrivingControls.emergencyBrake
             )
         } else {
             effectiveControls = controls
@@ -776,6 +795,19 @@ final class SimulatorModel: ObservableObject {
                 // 確認済みのパターン制動は常用（B7）のまま。
                 emergencyBrake: atsBrake || patternBrakeEmergency
             )
+        } else if doorInterlockActive {
+            // batch108: door interlock (user directive,
+            // 2026-11-16). While the doors are not fully closed
+            // the train cannot depart: traction is zeroed in the
+            // effective command — the same mechanism the
+            // protection interventions use, so the motor sound,
+            // which follows the applied command, stays silent —
+            // and a brake hold with a B4 floor keeps the train
+            // standing even if the driver releases the brake on
+            // a grade (B4 ≈ 0.57 m/s² of the ~1.0 m/s² service
+            // brake, against ≈ 0.25 m/s² for the steepest 25‰
+            // grade on the network).
+            effectiveControls = TrainControls(throttleNotch: 0, brakeNotch: max(4, controls.brakeNotch), emergencyBrake: false)
         } else if stationHold || passingWaitHolding || maintenanceEffects.departureHeld || activeIncidentEffects.departureHeld {
             effectiveControls = TrainControls(throttleNotch: 0, brakeNotch: max(1, controls.brakeNotch), emergencyBrake: false)
         } else {
@@ -2658,6 +2690,12 @@ final class SimulatorModel: ObservableObject {
 
     func setGameModeSession(_ session: GameModeSession?) {
         gameModeSession = session
+        // batch108: a session change abandons any departure
+        // sequence in flight (the auto cycle does not run while
+        // a game-mode session is in charge).
+        departureSequenceCloseAt = nil
+        departureBuzzerArmed = false
+        departureBuzzerAt = nil
         if session == nil {
             pendingDoorClose = nil
             gameModeDoorState = .closed
@@ -2713,28 +2751,39 @@ final class SimulatorModel: ObservableObject {
     /// batch79: 開扉側（GameModeDoorState）を音選択まで通す。
     /// 閉扉時は「開いていた側」を呼び出し側が渡す。Primrose が
     /// 鳴らなかった場合のみ kozu セットへ、それも駄目なら合成へ。
-    private func playDoorSound(open: Bool, side: GameModeDoorState = .unknown) {
+    /// batch108: 鳴った実録サンプルの長さ（秒）を返すよう変更
+    /// （合成フォールバック時は 0）。発車シーケンスが閉扉音の
+    /// 終了後に知らせブザーを鳴らすために使う。
+    @discardableResult
+    private func playDoorSound(open: Bool, side: GameModeDoorState = .unknown) -> TimeInterval {
         if let name = bundledDoorSampleName(open: open, side: side),
-           audio.playBundledSampleOneShot(named: name) {
-            return
+           let seconds = audio.playBundledSampleOneShotWithDuration(named: name) {
+            return seconds
         }
         if let fallback = doorFallbackSampleName(open: open),
-           audio.playBundledSampleOneShot(named: fallback) {
-            return
+           let seconds = audio.playBundledSampleOneShotWithDuration(named: fallback) {
+            return seconds
         }
         audio.playDoor(open: open)
+        return 0
     }
 
     /// batch67: 発車メロディ（発車ベル）。停車中の駅でドアが
     /// 閉まった瞬間に、その駅キーで1回だけ鳴らす。従来は
     /// DepartureMelodyCatalog が設定シートのテストボタンにしか
     /// 繋がっておらず、発車シーケンスでは一度も鳴らなかった。
-    private func playDepartureBellIfAtStation() {
-        guard !departureBellPlayedForCurrentStop else { return }
-        guard engine.speedMps * 3.6 < 0.5 else { return }
-        guard let stop = activeStops.first(where: { abs($0.positionM - engine.positionM) <= Self.arrivalToleranceM }) else { return }
+    /// batch108: メロディの長さを返すよう変更。自動ドアサイクルの
+    /// 発車シーケンスは閉扉の前にこれを呼び、戻り値の長さだけ
+    /// 待ってから閉扉する。閉扉側からの呼び出し（ゲームモード
+    /// 駆動の閉扉など）は従来どおり閉扉時に鳴らし、シーケンスが
+    /// 先に鳴らした停車ではフラグにより二重発音しない。
+    @discardableResult
+    private func playDepartureBellIfAtStation() -> Double {
+        guard !departureBellPlayedForCurrentStop else { return 0 }
+        guard engine.speedMps * 3.6 < 0.5 else { return 0 }
+        guard let stop = activeStops.first(where: { abs($0.positionM - engine.positionM) <= Self.arrivalToleranceM }) else { return 0 }
         departureBellPlayedForCurrentStop = true
-        audio.playDepartureChime(stationID: stop.stationID)
+        return audio.playDepartureChime(stationID: stop.stationID)
     }
 
     /// Applies a door closure that was held back until the recorded door
@@ -2750,8 +2799,9 @@ final class SimulatorModel: ObservableObject {
         if wasOpen {
             // batch67: 従来は合成 playDoor 直呼びで実録の閉扉音を
             // 経由しなかった。playDoorSound に統一する。
-            playDoorSound(open: false, side: closingSide)
+            let closeSeconds = playDoorSound(open: false, side: closingSide)
             playDepartureBellIfAtStation()
+            scheduleDepartureBuzzerIfArmed(closeSoundSeconds: closeSeconds)
         }
         gameModeHostNotice = "架空ゲームのドア状態を「\(pending.state.rawValue)」に更新しました。物理モデルのドアではありません。"
     }
@@ -2770,19 +2820,172 @@ final class SimulatorModel: ObservableObject {
     // whichever comes first. The game-mode host notice is
     // cleared after each automatic operation — these are the
     // train's real doors now, not a game overlay state.
+    //
+    // batch108 (user directive, 2026-11-16): the close side of
+    // the cycle is now a departure SEQUENCE, and the old
+    // "close as soon as the train moves off" trigger is gone —
+    // the door interlock (see simulationTick) makes moving off
+    // with the doors open impossible, so closing is purely
+    // sequence/timer-driven:
+    //   1. Trigger: at the origin, the scheduled departure
+    //      − 12 s (the session clock is anchored 30 s before
+    //      the scheduled origin departure, so this is session
+    //      t = 18); at later stops, the end of the 12 s dwell.
+    //   2. The departure bell plays (playDepartureBellIfAtStation).
+    //   3. When the bell has finished, the doors close through
+    //      the existing host-effect path (resistance stock still
+    //      waits out its recorded door chime first).
+    //   4. When the doors land fully closed and the close sound
+    //      has finished, the notification buzzer sounds once
+    //      (scheduleDepartureBuzzerIfArmed).
+    // The player may depart as soon as the doors are closed;
+    // nothing holds the train until the scheduled second.
     private var autoDoorServedStationID: String?
+    /// batch108: the departure-sequence trigger time (session
+    /// seconds) for the currently open doors — despite the name
+    /// it no longer closes the doors directly; it starts the
+    /// bell → close → buzzer sequence.
     private var autoDoorCloseAt: Double?
+    /// batch108: session time at which the sequence issues the
+    /// door close (set once the departure bell has been played;
+    /// the close waits for the bell to finish).
+    private var departureSequenceCloseAt: Double?
+    /// batch108: the sequence has issued its close and the
+    /// notification buzzer is owed once the doors land closed.
+    private var departureBuzzerArmed = false
+    /// batch108: session time at which the notification buzzer
+    /// sounds (close landing + close-sound length).
+    private var departureBuzzerAt: Double?
+
+    /// batch108: scheduled origin departure, in session seconds.
+    /// The session clock is anchored so the chosen trip's
+    /// (delay-adjusted) origin departure falls exactly here —
+    /// the session starts 30 s before departure.
+    private static let originDepartureSessionSeconds = 30.0
+
+    /// batch108: true for the scheduled passenger services
+    /// (mainline / through-branch / branch shuttle) with a
+    /// timetable selection. Depot, zoo and park free running
+    /// have no player schedule: no sequence anchor and no HUD
+    /// station times.
+    private var hasPlayerSchedule: Bool {
+        switch routeVariant {
+        case .mainline, .throughBranch, .branchShuttle:
+            return timetableSelection != nil
+        case .depotTransfer, .zooLine, .parkLine:
+            return false
+        }
+    }
+
+    /// batch108: the chosen trip's origin event in the simulated
+    /// (delay-adjusted) timetable — the same diagram data the
+    /// stop scoring and the AI traffic are built from
+    /// (FictionalOperationsPlan via the canonical network).
+    private var scheduledOriginEvent: RailwayTimetable.SimulatedStationEvent? {
+        guard hasPlayerSchedule, let selection = timetableSelection else { return nil }
+        return selection.simulatedTrip.stationEvents.first(where: { $0.stationID == selection.routeOriginStationID })
+    }
+
+    private var scheduledOriginDepartureDaySeconds: Int? {
+        scheduledOriginEvent?.departureSeconds
+    }
+
+    private func scheduledEvent(forStationID stationID: String) -> RailwayTimetable.SimulatedStationEvent? {
+        guard hasPlayerSchedule, let selection = timetableSelection else { return nil }
+        return selection.simulatedTrip.stationEvents.first(where: { $0.stationID == stationID && $0.kind == .stop })
+    }
+
+    /// batch108: time of day (seconds after midnight) at
+    /// simulationTime 0. Scheduled services anchor to the
+    /// chosen trip's origin departure − 30 s; free-running
+    /// modes keep the traffic clock's zero (05:30 = 19,800 s),
+    /// the same zero the AI scenario runs on.
+    var gameClockAnchorDaySeconds: Double {
+        if let originDeparture = scheduledOriginDepartureDaySeconds {
+            return Double(originDeparture) - Self.originDepartureSessionSeconds
+        }
+        return 19_800
+    }
+
+    /// batch108: formats seconds-after-midnight as HH:MM:SS.
+    /// Hours are not wrapped at 24 — the timetable's own
+    /// convention allows next-day times past 86,400 s, and the
+    /// clock and the schedule lines share the same base.
+    static func formatGameClock(daySeconds: Double) -> String {
+        let total = max(0, Int(daySeconds.rounded()))
+        return String(format: "%02d:%02d:%02d", total / 3_600, (total % 3_600) / 60, total % 60)
+    }
+
+    /// batch108: current game time for the driving HUD.
+    var gameClockText: String {
+        Self.formatGameClock(daySeconds: gameClockAnchorDaySeconds + simulationTime)
+    }
+
+    /// batch108: the timetable line for the driving HUD — while
+    /// stopped at a station, that station's scheduled departure
+    /// (発); while running, the next stop's scheduled arrival
+    /// (着). Nil for modes without a schedule, and at the final
+    /// stop (no departure remains).
+    var hudScheduleLine: String? {
+        guard hasPlayerSchedule else { return nil }
+        if engine.speedMps * 3.6 <= 0.5,
+           let stop = activeStops.first(where: { abs($0.positionM - engine.positionM) <= Self.arrivalToleranceM }),
+           stop.stationID != activeStops.last?.stationID,
+           let event = scheduledEvent(forStationID: stop.stationID) {
+            return "\(stop.name) 発 \(Self.formatGameClock(daySeconds: Double(event.departureSeconds)))"
+        }
+        guard activeStops.indices.contains(nextStopIndex) else { return nil }
+        let next = activeStops[nextStopIndex]
+        guard let event = scheduledEvent(forStationID: next.stationID) else { return nil }
+        return "\(next.name) 着 \(Self.formatGameClock(daySeconds: Double(event.arrivalSeconds)))"
+    }
+
+    /// batch108: arms the notification buzzer when a departure
+    /// sequence's close lands. The buzzer itself fires from
+    /// applyPendingDepartureBuzzerIfDue once the door-close
+    /// sound has finished. No dedicated buzzer recording exists
+    /// anywhere in the sound libraries (the Primrose set's
+    /// [Buzzer] section is empty and no buzzer-named file is
+    /// bundled), so the sequence reuses the app's synthesized
+    /// door-warning buzzer via playDoorChime — the closest
+    /// existing bundled sound.
+    private func scheduleDepartureBuzzerIfArmed(closeSoundSeconds: Double) {
+        guard departureBuzzerArmed else { return }
+        departureBuzzerArmed = false
+        departureBuzzerAt = simulationTime + max(closeSoundSeconds, 0)
+    }
+
+    private func applyPendingDepartureBuzzerIfDue() {
+        guard let buzzerAt = departureBuzzerAt, simulationTime >= buzzerAt else { return }
+        departureBuzzerAt = nil
+        guard gameModeDoorState == .closed else { return }
+        audio.playDoorChime()
+    }
 
     private func updateAutomaticDoorCycle() {
         guard !demoDriveEnabled, gameModeSession == nil else { return }
         guard runPhase == .running || runPhase == .arrived else { return }
         let speedKmh = engine.speedMps * 3.6
         if gameModeDoorState.isOpen {
-            let dwellElapsed = autoDoorCloseAt.map { simulationTime >= $0 } ?? false
-            if dwellElapsed || speedKmh > 0.5 {
+            // batch108: the bell has played; issue the close
+            // once it has finished.
+            if let closeAt = departureSequenceCloseAt {
+                if simulationTime >= closeAt {
+                    departureSequenceCloseAt = nil
+                    handleGameModeHostEffects([.setGameDoorState(.closed)])
+                    gameModeHostNotice = nil
+                }
+                return
+            }
+            // batch108: sequence trigger — play the departure
+            // bell first, then close when the bell ends and let
+            // the buzzer sound on the close landing.
+            let triggerReached = autoDoorCloseAt.map { simulationTime >= $0 } ?? false
+            if triggerReached {
                 autoDoorCloseAt = nil
-                handleGameModeHostEffects([.setGameDoorState(.closed)])
-                gameModeHostNotice = nil
+                let bellSeconds = playDepartureBellIfAtStation()
+                departureBuzzerArmed = true
+                departureSequenceCloseAt = simulationTime + bellSeconds
             }
             return
         }
@@ -2790,7 +2993,14 @@ final class SimulatorModel: ObservableObject {
               let stop = activeStops.first(where: { abs($0.positionM - engine.positionM) <= Self.arrivalToleranceM }),
               stop.stationID != autoDoorServedStationID else { return }
         autoDoorServedStationID = stop.stationID
-        autoDoorCloseAt = simulationTime + 12
+        if stop.stationID == activeStops.first?.stationID, scheduledOriginDepartureDaySeconds != nil {
+            // batch108: at the origin the sequence is anchored
+            // to the timetable: bell at departure − 12 s (the
+            // doors opened at departure − 30 s, session start).
+            autoDoorCloseAt = Self.originDepartureSessionSeconds - 12
+        } else {
+            autoDoorCloseAt = simulationTime + 12
+        }
         handleGameModeHostEffects([.setGameDoorState(travelDirection == .up ? .openRight : .openLeft)])
         gameModeHostNotice = nil
     }
@@ -2806,6 +3016,11 @@ final class SimulatorModel: ObservableObject {
                 if state.isOpen {
                     // Opening cancels any chime-timed closure in progress.
                     pendingDoorClose = nil
+                    // batch108: 開扉は発車シーケンスの残りも取り消す
+                    // （閉扉待ち・ブザー予約が開いたドアで発火しない）。
+                    departureSequenceCloseAt = nil
+                    departureBuzzerArmed = false
+                    departureBuzzerAt = nil
                     gameModeDoorState = state
                     if !wasOpen {
                         departureBellPlayedForCurrentStop = false
@@ -2823,8 +3038,9 @@ final class SimulatorModel: ObservableObject {
                 } else if pendingDoorClose == nil {
                     gameModeDoorState = state
                     if wasOpen {
-                        playDoorSound(open: false, side: closingSide)
+                        let closeSeconds = playDoorSound(open: false, side: closingSide)
                         playDepartureBellIfAtStation()
+                        scheduleDepartureBuzzerIfArmed(closeSoundSeconds: closeSeconds)
                     }
                     gameModeHostNotice = "架空ゲームのドア状態を「\(state.rawValue)」に更新しました。物理モデルのドアではありません。"
                 }
@@ -4070,6 +4286,11 @@ final class SimulatorModel: ObservableObject {
         pendingGameModeStationEvent = runtime.pendingGameModeStationEvent.map { ($0.stationID, $0.event) }
         gameModeDoorState = runtime.gameModeDoorState
         gameModeHostNotice = nil
+        // batch108: a restored session starts with no departure
+        // sequence in flight.
+        departureSequenceCloseAt = nil
+        departureBuzzerArmed = false
+        departureBuzzerAt = nil
         crewWorkflow = candidateCrewWorkflow
         incidentMaintenanceEngine = candidateIncidentMaintenance
         incidentTickResult = nil
@@ -4171,6 +4392,9 @@ final class SimulatorModel: ObservableObject {
         gameModeDoorState = .closed
         autoDoorServedStationID = nil
         autoDoorCloseAt = nil
+        departureSequenceCloseAt = nil
+        departureBuzzerArmed = false
+        departureBuzzerAt = nil
         crewWorkflow = CrewWorkflow()
         incidentMaintenanceEngine = Self.makeIncidentMaintenanceEngine(seed: 0x5241494C)
         incidentTickResult = nil

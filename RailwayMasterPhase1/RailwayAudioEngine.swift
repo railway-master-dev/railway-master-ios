@@ -558,6 +558,17 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
         scheduleBundledSample(named: name)?.played ?? false
     }
 
+    /// One-shot playback that also reports the sample's duration
+    /// when it actually sounded (nil otherwise). Callers that
+    /// sequence a follow-up cue after the sample ends use this
+    /// (batch108: the departure buzzer waits for the door-close
+    /// sample to finish).
+    @discardableResult
+    public func playBundledSampleOneShotWithDuration(named name: String) -> TimeInterval? {
+        guard let result = scheduleBundledSample(named: name), result.played else { return nil }
+        return result.duration
+    }
+
     /// batch63: ブレーキ空気音の実録サンプル再生。直近 0.15 秒以内に
     /// 同系統のサンプルが鳴っていれば二重発音として抑止し、その場合も
     /// 「発音済み」として true を返す（呼び出し側が合成フォールバック
@@ -778,13 +789,19 @@ public final class RailwayAudioEngine: NSObject, AVSpeechSynthesizerDelegate {
     /// のテストボタンからしか呼ばれておらず、発車シーケンスには
     /// 一度も接続されていなかった（実機で発車ベルが鳴らない原因）。
     /// SimulatorModel が「停車駅でドアが閉まった瞬間」に呼ぶ。
-    public func playDepartureChime(stationID: String) {
+    /// batch108: メロディ全体の長さ（最後の音の終端までの秒数）を
+    /// 返すよう変更。発車シーケンスはベルが鳴り終わってからドアを
+    /// 閉めるため、その長さを必要とする。
+    @discardableResult
+    public func playDepartureChime(stationID: String) -> TimeInterval {
         // batch60: dsp へ直接投入する経路も、enqueue と同じく
         // 未起動なら開始を再試行してから入れる。
         if isEnabled, !engine.isRunning { start() }
         let key = DepartureMelodyKey(stationID: stationID, directionID: "up", platformID: "platform-1")
+        let definition = melodyCatalog.definition(for: key)
         melodyCatalog.events(for: key, startingAt: latestSnapshot.simulationTime, position: latestSnapshot.trainPosition)
             .forEach { _ = dsp.enqueue($0) }
+        return definition.notes.map { $0.offset + $0.duration }.max() ?? 0
     }
 
     /// batch67: マスコンのノッチ操作音（BVE sound.cfg の
