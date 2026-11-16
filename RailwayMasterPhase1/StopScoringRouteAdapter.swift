@@ -7,12 +7,14 @@ struct PreparedStopScoringSession {
     let activeStops: [RegionalRouteStop]
     let stationDefinitions: [StopScoring.StationStopDefinition]
     let engine: StopScoring.StopScoringEngine
-    /// batch60: the adjusted target for the run origin itself
-    /// (batch74: front-aligned to platformEnd − margin, like
-    /// every scored stop). The origin is never scored, but the
-    /// model places the train there on reset so a run starts
-    /// stopped at the origin platform instead of with the
-    /// consist front on the station centre at chainage 0.
+    /// batch60: the adjusted target for the run origin itself.
+    /// batch121 supersedes the batch74 front-aligned origin
+    /// rule: the origin target now CENTRES the consist in the
+    /// platform span on every line (see the computation in
+    /// prepare), so a run starts with the train standing in
+    /// the middle of the origin platform instead of with its
+    /// front 5 m from the platform end. The origin is never
+    /// scored, but the model places the train there on reset.
     let originTargetM: Double
 }
 
@@ -23,6 +25,9 @@ enum StopScoringRouteAdapter {
     /// margin line is the stop target itself, not just a clamp
     /// on the old centred target (see the scoring loop).
     static let platformEndMarginM = 5.0
+    /// batch116: the length of each depot stop's own zone at
+    /// the spur ends (see the depot branch of bounds(forStop:)).
+    static let depotZoneLengthM = 200.0
     static func prepare(
         trip: RegionalPlayableRoute,
         plan: FictionalOperationsPlan,
@@ -58,26 +63,68 @@ enum StopScoringRouteAdapter {
         // canonical data for a stop is missing.
         func bounds(forStop stop: RegionalRouteStop, index: Int) throws -> (start: Double, end: Double) {
             if trip.variant == .depotTransfer {
-                // A yard stop zone is the canonical 2 km depot spur, not a passenger platform.
-                return (0, routeLengthM)
-            } else if (trip.variant == .zooLine || trip.variant == .parkLine),
-                      stationPlanByID[stop.stationID] == nil {
-                // The zoo / theme park terminals are synthetic stops
-                // outside the canonical plan; score them against a
-                // 200 m terminal platform zone, the same length as
-                // every canonical platform on the network.
-                // batch9 (2026-11-12, static test audit bycatch):
-                // this zone used to be 120 m, but the consist rule
-                // fixes zoo / park services at 8 cars = 156 m, so
-                // the fit guard below threw for every legal
-                // consist and stop scoring silently disabled
-                // itself (stopScoringError) on both lines.
-                // batch60: the synthetic zone now applies only to
-                // stops outside the canonical plan — the zoo / park
-                // ORIGIN is the canonical junction station and must
-                // take the canonical branch below when its own
-                // placement target is computed.
-                return (max(0, routeLengthM - 200), routeLengthM)
+                // batch116 (2026-11-16, IPA #12 device report):
+                // the yard used to be ONE zone for both stops,
+                // so the centred target formula put the origin
+                // target and the final target on the same spot
+                // (1,078 m for an 8-car consist), reset placed
+                // the train exactly on the final target, and the
+                // run completed itself after the 2 s arrival
+                // dwell without the train ever moving. Each
+                // stop now gets its own 200 m zone — the origin
+                // at the spur start, the terminal at the spur
+                // end, the same shape as the zoo / park
+                // synthetic terminal zone below — so the centred
+                // targets split (origin ≈ 178 m, final ≈ 1,978 m
+                // for 8 cars) and the transfer is a real
+                // ~1.8 km drive. The zones key on travel order
+                // (index), like the branch-junction branch
+                // below: route coordinates always run in travel
+                // order, so in the down direction the physical
+                // spur end is the origin and takes the start
+                // zone in route coordinates.
+                if index == trip.stops.count - 1 {
+                    return (max(0, routeLengthM - Self.depotZoneLengthM), routeLengthM)
+                }
+                return (0, min(routeLengthM, Self.depotZoneLengthM))
+            } else if trip.variant == .zooLine || trip.variant == .parkLine {
+                // batch121 (2026-11-16, IPA #12 device reports +
+                // design study §1.6/§2.5): EVERY stop on a zoo /
+                // park route takes a 200 m zone at its own end of
+                // the route, keyed on travel order exactly like
+                // the depot branch above. Two stops used to break
+                // this shape:
+                // - The synthetic terminal (ZOO_END / PARK_END,
+                // outside the canonical plan) took the far-end
+                // zone unconditionally, so in the down direction
+                // — where it is the ORIGIN — its zone sat at the
+                // opposite end of the line from the stop itself.
+                // (batch9: the zone is 200 m, not the old 120 m,
+                // because the consist rule fixes zoo / park
+                // services at 8 cars = 156 m and a shorter zone
+                // made the fit guard throw for every legal
+                // consist.)
+                // - The junction station (大野 S24 / 館川 S26)
+                // fell through to the canonical branch, whose
+                // platform is the station centre ± 100 m in
+                // mainline chainage. At the route end that maps
+                // to a travel-frame range ending 100 m PAST the
+                // route end in the down direction, so the
+                // scoring loop's route-bounds guard threw and
+                // prepare failed wholesale for down zoo / park
+                // sessions — no stop scoring, no adjusted stops,
+                // no origin placement (the train spawned at 0).
+                // The junction platform is therefore projected
+                // onto the route end it sits on, the same
+                // treatment the branch-junction branch below
+                // gives the shuttle's junction and the same
+                // 200 m the scene's canonicalPlatformBounds now
+                // draws for these variants, so the drawn
+                // platform and the stop data agree.
+                if index == trip.stops.count - 1 {
+                    return (max(0, routeLengthM - 200), routeLengthM)
+                }
+                return (0, min(routeLengthM, 200))
             } else if trip.variant == .branchShuttle,
                       stop.stationID == plan.network.branchJunctionStationID {
                 // The junction's canonical platform is on the main line; project its PLACEHOLDER length
@@ -150,9 +197,10 @@ enum StopScoringRouteAdapter {
         }
 
         // batch60: the origin is not scored, but its adjusted
-        // target uses the same bounds and the same centring as
-        // the scored targets below, so a reset can place the
-        // train stopped at the origin platform. The route-bounds
+        // target is computed from the same bounds as the scored
+        // targets below, so a reset can place the train stopped
+        // at the origin platform (batch121: centred in the span
+        // — see the rule inside). The route-bounds
         // guard from the scoring loop (start >= -0.1 etc.) is
         // deliberately NOT applied: at the origin the consist
         // legitimately extends behind chainage 0. When no
@@ -167,18 +215,25 @@ enum StopScoringRouteAdapter {
             let safeLower = originBounds.start + trainLengthMeters
             let safeUpper = originBounds.end
             guard safeLower <= safeUpper else { return origin.positionM }
-            // batch74: the origin placement uses the same
-            // front-aligned target as every scored stop (see the
-            // scoring loop): the front stands on the margin
-            // line, platformEnd − margin. The depot yard zone is
-            // not a passenger platform and keeps the centred
-            // placement it has always used.
+            // batch121 (2026-11-16, design study §2.5 — user
+            // reports on IPA #12: at 海袋 and on the branch the
+            // origin showed only the platform's end slope ahead
+            // of the cab, and on the zoo / park up shuttles the
+            // placed train sat ~95 m from the drawn platform's
+            // centre): the origin placement is its own rule,
+            // unified across ALL lines — the consist is CENTRED
+            // in the platform span (front = span start +
+            // consist length + half the leftover), clamped to
+            // the fit window and to the batch71 margin line at
+            // the span end. batch74's front-aligned origin
+            // (platformEnd − margin, the ARRIVAL rule) is
+            // superseded for origins only; every non-origin
+            // stop below keeps the arrival rule unchanged. The
+            // depot yard already used this centred formula
+            // (batch116) and keeps the identical numbers.
             let targetUpper = originBounds.end - Self.platformEndMarginM
-            if trip.variant == .depotTransfer {
-                let platformCenterM = (originBounds.start + originBounds.end) / 2
-                return min(max(platformCenterM + trainLengthMeters / 2, safeLower), targetUpper)
-            }
-            return max(safeLower, targetUpper)
+            let platformCenterM = (originBounds.start + originBounds.end) / 2
+            return min(max(platformCenterM + trainLengthMeters / 2, safeLower), targetUpper)
         }()
 
         // The first stop is the run origin. Only arrivals after the player begins the service are scored.
@@ -246,6 +301,45 @@ enum StopScoringRouteAdapter {
                 name: stop.name,
                 positionM: target,
                 trackID: stop.trackID
+            )
+        }
+
+        // batch112 (2026-11-16, IPA #12 device report): the
+        // origin stop must carry the same adjusted target as
+        // every other stop. prepare has always computed
+        // originTargetM for train placement (batch60/74), but
+        // adjustedStops[0] kept the raw station position (0),
+        // so the model's 4 m stop-match consumers — the
+        // automatic door cycle, the departure bell and the HUD
+        // schedule line — could never recognise the train as
+        // standing at the origin (195 m away at S01): the
+        // doors never opened there and the whole batch108
+        // departure sequence was skipped. Mirror the target
+        // into index 0, but only where the strict ordering
+        // checked below still holds. On the depot transfer
+        // both stops share the single yard zone and the same
+        // centred formula, so the origin target EQUALS the
+        // second stop's target; the raw origin position is
+        // kept there (the depot has no door sequence by spec,
+        // and its placement still comes from the returned
+        // originTargetM field, which is unchanged).
+        // batch116: the depot zones are split now (see the
+        // depot branch of bounds(forStop:)), so the depot
+        // origin target (178 m) differs from its final target
+        // (1,978 m), the condition below holds, and the write
+        // fires on the depot too — its origin stop carries the
+        // adjusted target like every other route's. The depot
+        // still has no timetable-anchored departure sequence
+        // (it has no timetable selection at all) and
+        // door-procedure scoring still excludes it; placement
+        // still comes from the returned originTargetM field.
+        if adjustedStops.count >= 2, originTargetM < adjustedStops[1].positionM {
+            let origin = adjustedStops[0]
+            adjustedStops[0] = RegionalRouteStop(
+                stationID: origin.stationID,
+                name: origin.name,
+                positionM: originTargetM,
+                trackID: origin.trackID
             )
         }
 
