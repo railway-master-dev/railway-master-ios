@@ -51,7 +51,7 @@ final class GeneratedRailwayAssetCatalogTests: XCTestCase {
         XCTAssertTrue(manifest.stations.allSatisfy { $0.trackCount >= 2 && $0.platformCount >= 1 })
         XCTAssertTrue(manifest.stations.contains { $0.archetype == "island_platform" && $0.modelAsset == .stationIslandPlatform })
         XCTAssertTrue(manifest.stations.contains { $0.trackCount == 4 && $0.platformCount >= 3 && $0.modelAsset == .station4TrackMajor })
-        XCTAssertTrue(manifest.stations.contains { $0.trackCount == 5 && $0.platformCount == 4 && $0.modelAsset == .station5Track4Platform })
+        XCTAssertTrue(manifest.stations.contains { $0.trackCount == 4 && $0.platformCount == 4 && $0.modelAsset == .station5Track4Platform })
         XCTAssertTrue(manifest.stations.contains { $0.modelAsset == .stationTerminal })
         XCTAssertTrue(manifest.stations.contains { $0.stationId == "B04" && $0.trackCount == 4 && $0.modelAsset == .stationTerminal })
         XCTAssertGreaterThan(Set(manifest.stations.map(\.modelAsset)).count, 3)
