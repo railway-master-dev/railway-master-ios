@@ -412,9 +412,28 @@ final class GameSystemsIntegrationTests: XCTestCase {
             }
         }
         _ = try XCTUnwrap(doorsClosedWall, "the batch108 departure sequence must close the doors")
+        // CI #419: the doors close, but 120 s of running after
+        // the close was not enough for the train to exceed the
+        // stopping pattern — the pre-batch108 window's margin
+        // was thin. Wait until the train is actually rolling
+        // (bounded) so the window below measures a running
+        // train, and give it 240 s to reach the approach where
+        // the pattern drops below full power. If the train
+        // never rolls, the departure itself is broken and this
+        // fails here with that message instead.
+        var rollingWall: Double?
+        for _ in 0..<240 {
+            wall += 0.25
+            model.advance(at: wall)
+            if model.telemetry.speedMps > 0.5 {
+                rollingWall = wall
+                break
+            }
+        }
+        _ = try XCTUnwrap(rollingWall, "the train must start moving after the doors close")
         var firstOverspeedWall: Double?
         var brakeWall: Double?
-        for _ in 0..<480 {
+        for _ in 0..<960 {
             wall += 0.25
             model.advance(at: wall)
             guard let snapshot = model.operationsSnapshot else { continue }
