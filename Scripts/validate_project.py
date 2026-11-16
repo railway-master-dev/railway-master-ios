@@ -485,7 +485,7 @@ require("import ProtectionSystems" in protection_host_source and "makeProtection
         "The separate fictional ProtectionSystems demo is not connected to the regional audit adapter")
 
 # Count XCTest methods without executing them; Xcode is required to run the tests.
-# 57 = the 48 suite tests + AudioHarnessTests' single opt-in method
+# 63 = the 48 suite tests + AudioHarnessTests' single opt-in method
 # (skipped unless RM_AUDIO_HARNESS=1; see AUDIO_HARNESS_RUNBOOK.md)
 # + batch81's 3 ATS-intervention regression tests in
 # GameSystemsIntegrationTests (educational ATS deadline / acknowledge
@@ -498,11 +498,28 @@ require("import ProtectionSystems" in protection_host_source and "makeProtection
 # + batch103's 3 depot game-mode tests in
 # GameSystemsIntegrationTests (single co-located yard target,
 # scored-run modes blocked on the depot variant, passenger
-# terminal clause vs depot exception).
+# terminal clause vs depot exception; batch116 rewrote the
+# first two for the split yard zones — split yard targets,
+# scored-run modes available — and kept the third's depot
+# clause at the new half-zone bound)
+# + batch112's origin door-cycle regression test in
+# GameSystemsIntegrationTests (the origin stop record carries
+# the placement target and the doors open after reset)
+# + batch116's depot regression test in
+# GameSystemsIntegrationTests (a depot run does not complete
+# at spawn and arrives at the spur end when driven)
+# + batch119's traffic-clock regression test in
+# GameSystemsIntegrationTests (a scheduled session starts
+# with the 06:00 oncoming diagram trains already en route)
+# + batch121's 3 line-prerequisite regression tests in
+# GameSystemsIntegrationTests (down zoo / park prepare
+# succeeds with a valid origin placement, the origin target
+# is centred in the platform span on every line, and the
+# 上り label means travel toward the origin / junction).
 test_files = list((ROOT / "RailwayMasterPhase1Tests").glob("*.swift"))
 test_source = "\n".join(path.read_text(encoding="utf-8") for path in test_files)
 test_count = len(re.findall(r"\bfunc\s+test[A-Za-z0-9_]*\s*\(", test_source))
-require(test_count == 57, f"Expected 57 XCTest methods, found {test_count}")
+require(test_count == 63, f"Expected 63 XCTest methods, found {test_count}")
 
 scheme = ROOT / "RailwayMasterPhase1.xcodeproj" / "xcshareddata" / "xcschemes" / "RailwayMasterPhase1.xcscheme"
 ET.parse(scheme)
