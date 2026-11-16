@@ -145,6 +145,17 @@ public final class RailwayRealityKitSceneAdapter {
 
     private var albedoTextures: [String: TextureResource] = [:]
 
+    /// batch113: memory-warning eviction for this adapter's
+    /// own surface-texture cache (the second, independent
+    /// cache beside SceneTextureProvider's — the perf
+    /// diagnosis' double-caching note). Same contract as
+    /// SceneTextureProvider.purgeCache: live materials keep
+    /// their textures; only the cache's hold is dropped, and
+    /// albedoTexture(for:) re-loads on the next build.
+    public func purgeTextureCache() {
+        albedoTextures.removeAll()
+    }
+
     private func makeMaterial(for style: SceneMaterialStyle, weather: SceneSurfaceWeather) -> SimpleMaterial {
         let (color, roughness, metallic) = materialParameters(for: style, weather: weather)
         var material = SimpleMaterial(color: color, roughness: .init(floatLiteral: roughness), isMetallic: metallic)
@@ -359,5 +370,19 @@ public enum SceneTextureProvider {
               let texture = try? TextureResource.load(contentsOf: url) else { return nil }
         cache[name] = texture
         return texture
+    }
+
+    /// batch113: memory-warning eviction. The cache used to
+    /// hold every texture it had ever loaded for the whole
+    /// session (the bundled set is ~296 MB with mipmaps, and
+    /// the app had no memory-warning handling at all — the
+    /// jetsam case in the IPA #12 perf diagnosis). Purging
+    /// drops only the cache's own references: materials keep
+    /// any texture they are using alive, so nothing on
+    /// screen changes; textures nothing references are free
+    /// to deallocate, and a later texture(named:) re-loads
+    /// from disk on demand.
+    public static func purgeCache() {
+        cache.removeAll()
     }
 }
