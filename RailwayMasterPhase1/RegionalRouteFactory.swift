@@ -37,7 +37,24 @@ enum RegionalTravelDirection: String, CaseIterable, Identifiable, Sendable {
     case down
 
     var id: String { rawValue }
-    var title: String { self == .up ? "上り" : "下り" }
+    /// batch121 (2026-11-16, user decision 「リアリティを大前提に
+    /// 推奨で」): the CASES keep their chainage semantics — .up
+    /// is travel toward increasing canonical chainage, .down
+    /// toward decreasing — because every mechanic (factory
+    /// reversal, track IDs, traffic projection, the batch117
+    /// travel-frame laterals) keys off them. The TITLES follow
+    /// the real-world convention instead: 上り is travel toward
+    /// the line's origin (mainline: toward 海袋, decreasing
+    /// chainage; branch / zoo / park: toward the junction
+    /// station), which is the .down case here. This matches
+    /// the canonical route data, whose operationalDirection
+    /// already pairs INCREASING_CHAINAGE with 下り and
+    /// DECREASING_CHAINAGE with 上り, and the operations
+    /// plan's ServiceDirection, whose .up (decreasing) already
+    /// displays 上り. Before this batch the titles were
+    /// swapped against both, so the picker offered the
+    /// opposite of what the timetable data meant.
+    var title: String { self == .up ? "下り" : "上り" }
 }
 
 struct RegionalRouteStop: Identifiable, Equatable, Sendable {
