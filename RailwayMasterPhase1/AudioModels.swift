@@ -43,6 +43,14 @@ public struct RailwaySimulationSnapshot: Codable, Sendable {
     public var isOnJointedRail: Bool
     public var isOnPoints: Bool
     public var doorsOpen: Bool
+    /// batch106: true while the train is at a station (the
+    /// model's current-station state: set on arrival, cleared
+    /// on departure). Added for the station ambience bed in
+    /// SampledMotorSound, which previously could only see
+    /// doorsOpen — but the door cycle closes the doors 12 s
+    /// after arrival while the train is still at the platform,
+    /// so doorsOpen alone cannot gate a platform bed.
+    public var isAtStation: Bool
     public var weather: RailwayWeather
     public var windMetersPerSecond: Float
     public var trainPosition: AudioVector3
@@ -65,6 +73,7 @@ public struct RailwaySimulationSnapshot: Codable, Sendable {
         isOnJointedRail: Bool = false,
         isOnPoints: Bool = false,
         doorsOpen: Bool = false,
+        isAtStation: Bool = false,
         weather: RailwayWeather = .clear,
         windMetersPerSecond: Float = 0,
         trainPosition: AudioVector3 = .init(),
@@ -86,6 +95,7 @@ public struct RailwaySimulationSnapshot: Codable, Sendable {
         self.isOnJointedRail = isOnJointedRail
         self.isOnPoints = isOnPoints
         self.doorsOpen = doorsOpen
+        self.isAtStation = isAtStation
         self.weather = weather
         self.windMetersPerSecond = windMetersPerSecond
         self.trainPosition = trainPosition

@@ -1658,6 +1658,7 @@ final class SimulatorModel: ObservableObject {
             isOnJointedRail: audioOnJointedRail,
             isOnPoints: audioOnPoints,
             doorsOpen: gameModeDoorState.isOpen,
+            isAtStation: gameModeCurrentStationID != nil,
             weather: audioWeather,
             windMetersPerSecond: Float(environmentSelection.environment.windSpeedMps),
             trainPosition: trainPosition,

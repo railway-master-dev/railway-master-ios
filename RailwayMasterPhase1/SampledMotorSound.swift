@@ -75,6 +75,20 @@ final class SampledMotorSound {
     /// take (flange_0, flange_1, flange_0, ...) for variety.
     private var flangeEntryCount = 0
     private var flangeWasInZone = false
+    /// batch106: dedicated loop player for the station
+    /// ambience bed (ambient_station, a CC0 platform
+    /// recording — see MAPPING.md §14). Like the fan it is
+    /// driven independently of the band crossfade, gated on
+    /// the train being at a station. Unlike the fan file
+    /// (44.1 kHz stereo, carried on the run role's format),
+    /// the bed is mono, so its connection format is resolved
+    /// from its own probe file in preattachIfNeeded — the
+    /// batch94 flange scheme. Attaching it on the stereo run
+    /// format would make playLoop's format guard reject the
+    /// mono buffer and the bed would never sound.
+    private var stationPlayer: AVAudioPlayerNode?
+    private var stationSample: String?
+    private var stationConnectionFormat: AVAudioFormat?
     private var currentFamily: String?
     /// Format each player was connected with (CI #147: scheduling a
     /// buffer whose format differs from the connection raises a
@@ -124,7 +138,7 @@ final class SampledMotorSound {
 
     var statusDescription: String {
         let slots = motorSlotSample.map { $0 ?? "-" }.joined(separator: ",")
-        return "sampled active=\(isActive ? 1 : 0) players=\(motorPlayers.count) curves=\(curves.keys.sorted().joined(separator: "+")) slots=\(slots) want=\(lastDesiredSummary) conv=\(conversionCount) playFail=\(playFailureCount) broken=\(playbackBroken ? 1 : 0) flange=\(flangeSample ?? "-")"
+        return "sampled active=\(isActive ? 1 : 0) players=\(motorPlayers.count) curves=\(curves.keys.sorted().joined(separator: "+")) slots=\(slots) want=\(lastDesiredSummary) conv=\(conversionCount) playFail=\(playFailureCount) broken=\(playbackBroken ? 1 : 0) flange=\(flangeSample ?? "-") station=\(stationSample ?? "-")"
     }
 
     /// True only when the sampled path can actually sound: curves
@@ -259,6 +273,9 @@ final class SampledMotorSound {
         if flangeConnectionFormat == nil, let probe = loadFileBuffer(named: "flange_0") {
             flangeConnectionFormat = probe.format
         }
+        if stationConnectionFormat == nil, let probe = loadFileBuffer(named: "ambient_station") {
+            stationConnectionFormat = probe.format
+        }
         let motorFormat = motorConnectionFormat ?? Self.codeGeneratedMotorFormat
         let runFormat = runConnectionFormat ?? Self.codeGeneratedRunFormat
         for _ in 0..<3 {
@@ -291,6 +308,16 @@ final class SampledMotorSound {
         attachHandler(flange, flangeFormat)
         attachedFormats[ObjectIdentifier(flange)] = flangeFormat
         flangePlayer = flange
+        // batch106: station ambience player on the mono format
+        // resolved from its own probe (see the property note),
+        // falling back to the run role's format if the probe
+        // cannot load (in which case the bed stays silent via
+        // buffer(named:) returning nil, like every other role).
+        let stationFormat = stationConnectionFormat ?? runFormat
+        let station = AVAudioPlayerNode()
+        attachHandler(station, stationFormat)
+        attachedFormats[ObjectIdentifier(station)] = stationFormat
+        stationPlayer = station
     }
 
     /// batch84 (device crash hunt, load hypothesis): warm this
@@ -316,7 +343,7 @@ final class SampledMotorSound {
             }
         }
         for name in names { _ = buffer(named: name) }
-        for bed in ["run_e231_run6", "run_ballast", "run_tunnel", "run_bridge", "run_prim_tunnel", "run_prim_bridge", "ambient_fan_prim", "flange_0", "flange_1"] {
+        for bed in ["run_e231_run6", "run_ballast", "run_tunnel", "run_bridge", "run_prim_tunnel", "run_prim_bridge", "ambient_fan_prim", "flange_0", "flange_1", "ambient_station"] {
             _ = buffer(named: bed)
         }
     }
@@ -392,6 +419,55 @@ final class SampledMotorSound {
             if player.volume < 0.005, ambientSample != nil {
                 player.stop()
                 ambientSample = nil
+                player.volume = 0
+            }
+        }
+    }
+
+    /// batch106: station ambience bed (the user's standing
+    /// "ambience while stopped" request, platform side — the
+    /// batch102 audit found no usable recording in any bundled
+    /// library, so this bed is a CC0 platform recording sourced
+    /// externally; provenance and loop treatment in
+    /// MAPPING.md §14). It follows the fan's drive pattern
+    /// exactly: an independent loop, started/stopped through
+    /// the approach() gain ramp so there are no clicks, and
+    /// silenced through master == 0 when audio is disabled.
+    ///
+    /// Gate signal: snapshot.isAtStation, plumbed in batch106
+    /// from SimulatorModel's gameModeCurrentStationID (set on
+    /// arrival at a stop, cleared on departure) through the
+    /// existing snapshot/update path — no new channel. The
+    /// alternatives already on the snapshot cannot express
+    /// "at a station": doorsOpen drops 12 s after arrival when
+    /// the door cycle closes, while the train may still be
+    /// dwelling at the platform, and speed < 5 km/h alone (the
+    /// fan's gate) is also true at signals and other mid-line
+    /// stops where a platform bed would be wrong. The speed
+    /// term is kept as a belt-and-braces condition so a stale
+    /// at-station flag can never leak the bed into a run.
+    /// Gain is master × 0.15, deliberately below the fan's
+    /// 0.22: the bed sits under the fan and the cab sounds.
+    private func updateStationAmbience(snapshot: RailwaySimulationSnapshot, master: Float, engineRunning: Bool) {
+        guard let player = stationPlayer else { return }
+        let speedKmh = max(0, snapshot.speedMetersPerSecond) * 3.6
+        let target: Float = snapshot.isAtStation && speedKmh < 5 ? master * 0.15 : 0
+        if target > 0.01 {
+            if stationSample == nil {
+                if engineRunning, playLoop(player, sample: "ambient_station") {
+                    stationSample = "ambient_station"
+                    player.volume = 0
+                }
+            } else if engineRunning, !player.isPlaying {
+                _ = playLoop(player, sample: "ambient_station")
+            }
+            player.volume = approach(player.volume, target)
+            if !engineRunning { startHandler?() }
+        } else {
+            player.volume = approach(player.volume, 0)
+            if player.volume < 0.005, stationSample != nil {
+                player.stop()
+                stationSample = nil
                 player.volume = 0
             }
         }
@@ -481,6 +557,9 @@ final class SampledMotorSound {
         // batch94: the flange-squeal loop is likewise driven
         // before the guard, independent of the band path.
         updateFlangeSqueal(snapshot: snapshot, master: master, engineRunning: engineRunning)
+        // batch106: the station ambience bed is likewise driven
+        // before the guard, independent of the band path.
+        updateStationAmbience(snapshot: snapshot, master: master, engineRunning: engineRunning)
         // batch67: "active" must mean audible (see isActive note).
         // batch77: a latched-broken playback path (notePlayFailure)
         // also reports inactive, so the DSP synth takes over.
