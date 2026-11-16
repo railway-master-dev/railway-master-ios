@@ -92,14 +92,22 @@ public enum FictionalTrackImpactSchedule {
     public static let branchStationChainageM: [Double] = [0, 2_000, 4_000, 6_000, 8_000]
 
     public static let turnouts: [FictionalTurnoutSpan] = {
+        // batch120: the seven placeholder junction/depot
+        // spans that used to head this list are deleted —
+        // depot-throat-main, depot-lead, depot-yard-ladder,
+        // branch-junction-main, branch-junction-branch,
+        // zoo-junction and park-junction all fired point
+        // clatter where no turnout is drawn in the session
+        // world that hears them (depot-throat-main sounded
+        // inside S01's platforms; the depot session world
+        // is a plain single line; no junction geometry is
+        // drawn in the branch/zoo/park worlds). The real
+        // drawn depot lead on the main line (27,715–27,960)
+        // gets its span with the depot-junction work, not
+        // here. What remains registered is exactly what is
+        // drawn: the terminal crossovers, B04's divergence,
+        // and the station throat fans below.
         var spans: [FictionalTurnoutSpan] = [
-            span("depot-throat-main", .main, .depotLead, 18, 42),
-            span("depot-lead", .depotSpur, .depotLead, 14, 40),
-            span("depot-yard-ladder", .depotSpur, .yardLadder, 1_962, 1_988),
-            span("branch-junction-main", .main, .branchJunction, 59_974, 60_000),
-            span("branch-junction-branch", .branch, .branchJunction, 0, 28),
-            span("zoo-junction", .zoo, .branchJunction, 0, 28),
-            span("park-junction", .park, .branchJunction, 0, 28),
             // batch78: the drawn terminal crossovers
             // (buildTerminalThroats) — switch toes 560–690 m
             // from each line end, so the S-curve the bogies
@@ -124,17 +132,18 @@ public enum FictionalTrackImpactSchedule {
         // has a drawn fan, siding or point machine (S05's spans
         // sat inside its island-spread ramps, which are plain
         // running track), so point clatter fired where no
-        // switch exists. S15 stays: its fan IS drawn, and
-        // batch89 deliberately kept these spans (registering
-        // the true fan transitions too would double-fire).
-        // Span count 51 -> 41.
-        let loops: [(String, FictionalTrackLine, Double)] = [
-            ("S15", .main, 30_677)
-        ]
-        for loop in loops {
-            spans.append(span("\(loop.0)-entry", loop.1, .stationConnection, loop.2 - 186, loop.2 - 162))
-            spans.append(span("\(loop.0)-exit", loop.1, .stationConnection, loop.2 + 148, loop.2 + 174))
-        }
+        // switch exists. Span count 51 -> 41.
+        // batch120: S15's placeholder loop spans are deleted
+        // in the same change that registers its true fan
+        // transitions below — the replacement is atomic
+        // because the old exit span [30,825, 30,851] is
+        // nested inside the true convergence [30,817,
+        // 31,117] and the old entry span [30,491, 30,515]
+        // sits just past the true transition [30,237,
+        // 30,477]; keeping either alongside the fan spans
+        // would double-fire every bogie (and break the test
+        // suite's no-overlap invariant). The placeholder
+        // pair fired up to 254 m away from the drawn switch.
         // batch89: the drawn throat fans at the diagram v4
         // passing stations (the scene builder's
         // throatFanSpecs set: PassingWaitPlanner's 15 plus
@@ -147,15 +156,10 @@ public enum FictionalTrackImpactSchedule {
         // (throatFanLateral). The registered span is that
         // transition — the chainage where a bogie is
         // physically on the switch — not the parallel tail,
-        // where the loop is plain separate track. S15 is
-        // the one fan station the placeholder loop spans
-        // above already reach (its exit span sits inside
-        // the transition, its entry span in the parallel
-        // tail just past it), so S15 is not silent today;
-        // registering its transitions too would make every
-        // bogie fire twice per fan (a nest on the exit
-        // side, a second span on the entry side), so S15
-        // stays as it was.
+        // where the loop is plain separate track. batch120
+        // adds S15 to this derivation (its placeholder loop
+        // spans are deleted above in the same change), so
+        // all 15 fan stations now register identically.
         // The terminals fan on one side only: S01's in-fan
         // and S28's out-fan fall outside the line ends and
         // are never drawn, so each terminal gets the single
@@ -172,6 +176,7 @@ public enum FictionalTrackImpactSchedule {
             ("S11", 21_290),
             ("S12", 24_194),
             ("S14", 28_452),
+            ("S15", 30_677),
             ("S17", 35_129),
             ("S19", 39_581),
             ("S22", 46_258),
@@ -243,6 +248,19 @@ public enum FictionalTrackImpactSchedule {
         turnouts.filter { $0.line == line && $0.contains(chainageM) }
     }
 
+    /// Path-aware lookup used by the tracker. batch120:
+    /// S28-crossover is drawn only in the mainline world —
+    /// buildTerminalThroats skips the S28 throat when the
+    /// throughBranch world is built (the station touches
+    /// neither end of that route), so the span must not
+    /// fire on the throughBranch path even though the
+    /// chainage is traversed there.
+    public static func turnouts(containing line: FictionalTrackLine, chainageM: Double, path: FictionalPlayablePath) -> [FictionalTurnoutSpan] {
+        turnouts(containing: line, chainageM: chainageM).filter { span in
+            !(path == .throughBranch && span.id == "S28-crossover")
+        }
+    }
+
     public static func bogieOffsets(carCount: Int, carLengthM: Double = carLengthM) -> [Double] {
         let cars = min(16, max(1, carCount))
         let length = max(8, carLengthM)
@@ -298,7 +316,7 @@ public struct FictionalTrackImpactTracker: Equatable, Sendable {
         for index in offsets.indices {
             let bogieRoute = routePositionM - offsets[index]
             guard let located = FictionalTrackImpactSchedule.locate(path: path, direction: direction, routePositionM: bogieRoute) else { continue }
-            let occupied = Set(FictionalTrackImpactSchedule.turnouts(containing: located.line, chainageM: located.chainageM).map(\.id))
+            let occupied = Set(FictionalTrackImpactSchedule.turnouts(containing: located.line, chainageM: located.chainageM, path: path).map(\.id))
             if !occupied.isEmpty { inside = true }
             if let prior = previous[index] {
                 let seek = abs(bogieRoute - prior.routePositionM) > 40
