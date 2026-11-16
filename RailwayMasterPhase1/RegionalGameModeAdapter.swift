@@ -183,7 +183,7 @@ enum RegionalGameModeAdapter {
                 blockingMessages: ["このプレイスタイルは対応するフリー/異常対応モードでのみ使えます。"]
             )
         }
-        guard validOrderedStops(context.stops, routeLengthM: context.route.distanceM, variant: context.variant) else {
+        guard validOrderedStops(context.stops, routeLengthM: context.route.distanceM, variant: context.variant, originTargetM: context.originTargetM) else {
             return RegionalGameModeScenarioBuildResult(
                 scenario: nil, blockingReason: .missingStops,
                 blockingMessages: ["現在の路線に有効な始発・順序付き停車駅データがありません。"]
@@ -218,6 +218,17 @@ enum RegionalGameModeAdapter {
         // Conductor mode stays available: its scored content is
         // the door procedure performed at the yard target, not
         // travel between targets.
+        // batch116: StopScoringRouteAdapter now splits the
+        // depot zones (origin [0, 200], terminal [1,800,
+        // 2,000]), so the prepared origin target and the final
+        // stop's target no longer coincide and this guard no
+        // longer fires for the standard depot layout — driver
+        // and full-line runs on the spur are scored like any
+        // other two-target route. The guard stays as a safety
+        // net: it keys purely on co-location, so any future
+        // layout that collapses the two targets again is
+        // refused here instead of certifying a run that never
+        // moved.
         if context.variant == .depotTransfer,
            let finalStop = context.stops.last,
            abs(context.originTargetM - finalStop.positionM) <= 0.1,
@@ -405,9 +416,19 @@ enum RegionalGameModeAdapter {
         }
     }
 
-    private static func validOrderedStops(_ stops: [RegionalRouteStop], routeLengthM: Double, variant: RegionalRouteVariant?) -> Bool {
+    private static func validOrderedStops(_ stops: [RegionalRouteStop], routeLengthM: Double, variant: RegionalRouteVariant?, originTargetM: Double) -> Bool {
+        // The first stop in a prepared list is the origin stop
+        // TARGET, not the raw station position: batch112 made
+        // StopScoringRouteAdapter mirror originTargetM into
+        // index 0 (makeStopPlans below has always substituted
+        // it for the origin plan on the same reasoning), so the
+        // validity anchor for the first stop is the prepared
+        // origin target itself. (Before batch116 this clause
+        // demanded ~0, which no prepared list satisfied any
+        // more; the depot's split zones give it a 178 m origin
+        // target, so the depot needs the anchored form too.)
         guard stops.count >= 2,
-              abs(stops[0].positionM) <= 0.1 else { return false }
+              abs(stops[0].positionM - originTargetM) <= 0.1 else { return false }
         // Follow-up to batch71: the final stop in the prepared
         // stop list is the terminal stop TARGET, not the route
         // end itself. StopScoringRouteAdapter places the front
@@ -420,18 +441,23 @@ enum RegionalGameModeAdapter {
         // end on every passenger variant, so the legitimate
         // shortfall is exactly that margin; a larger shortfall
         // means the stop list does not reach the terminal.
-        // The depot transfer is the one exception: its yard
-        // zone is the whole 2 km spur and the service end is
-        // the zone's centred target (StopScoringRouteAdapter's
-        // depot branch), ~900 m short of the spur end by
-        // design, so the shortfall test carries no validity
-        // signal there and is skipped; the ordering and range
-        // checks below still apply.
-        if variant != .depotTransfer {
-            let terminalShortfallM = routeLengthM - stops[stops.count - 1].positionM
-            guard terminalShortfallM >= -0.1,
-                  terminalShortfallM <= StopScoringRouteAdapter.platformEndMarginM + 0.1 else { return false }
-        }
+        // The depot transfer's terminal target is centred in
+        // its own 200 m end zone (batch116; it used to be
+        // centred in the whole 2 km spur, ~900 m short, and
+        // the shortfall test was skipped there entirely
+        // because it carried no signal). A centred target's
+        // shortfall is half the zone minus half the consist,
+        // bounded by half the zone length, so the depot gets
+        // that bound instead of the passenger margin: the
+        // test carries a validity signal again — a collapsed
+        // or misplaced depot target fails here — while the
+        // ordering and range checks below apply as before.
+        let terminalShortfallM = routeLengthM - stops[stops.count - 1].positionM
+        let maximumShortfallM = variant == .depotTransfer
+            ? StopScoringRouteAdapter.depotZoneLengthM / 2 + 0.1
+            : StopScoringRouteAdapter.platformEndMarginM + 0.1
+        guard terminalShortfallM >= -0.1,
+              terminalShortfallM <= maximumShortfallM else { return false }
         for index in stops.indices {
             let stop = stops[index]
             guard !stop.stationID.isEmpty, stop.positionM.isFinite,
